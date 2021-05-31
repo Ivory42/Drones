@@ -92,7 +92,7 @@ native void CD_SetWeaponReloading(int drone, int weapon, float delay);
  * @param3 plugin_name - Name of plugin defined in config
  */
 
-//forward void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name);
+forward void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name);
 
 /**
  * Forward called after a drone is removed
@@ -102,7 +102,7 @@ native void CD_SetWeaponReloading(int drone, int weapon, float delay);
  * @param3 plugin_name - Name of plugin defined in config
  */
 
-//forward void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name);
+forward void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name);
 
 /**
  * Forward called after a drone switches weapons
@@ -113,7 +113,7 @@ native void CD_SetWeaponReloading(int drone, int weapon, float delay);
  * @param4 plugin_name - Name of plugin defined in config
  */
 
-//forward void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[] plugin_name);
+forward void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[] plugin_name);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
@@ -126,4 +126,4 @@ native void CD_SetWeaponReloading(int drone, int weapon, float delay);
  *
  */
 
-//forward Action CD_OnDroneDestroyed(int drone, int owner, int attacker, float damage, const char[] plugin_name);
+forward Action CD_OnDroneDestroyed(int drone, int owner, int attacker, float damage, const char[] plugin_name);
