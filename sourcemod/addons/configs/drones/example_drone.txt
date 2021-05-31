@@ -1,0 +1,24 @@
+"Drone"
+{
+	"name"				        "Example" 			//Drone name
+	"model"				        "models/combine_scanner.mdl"	//Model to use for drone
+	//"destroyed_model"	  "models/combine_scanner.mdl"	//Optional Model to use for when drone is destroyed
+	"health"		        	"80" 							//Drone Health
+	"speed"			        	"250" 							//Drone Speed
+	"acceleration"	    	"5" 							//Drone Acceleration
+	"movetype"			      "drone_hover"					//Movetype for drone (Options are: drone_hover, drone_fly, drone_ground)
+	"plugin"		        	"example_drone" 				//plugin name to use for drone logic
+	"weapons"
+	{
+		//Weapon names go here:
+		// 	- These define the weapon the drone can use
+		// 	- +attack2 cycles between the weapons in chronological order
+		//	- Use CD_GetActiveWeapon() native to check the current active weapon index in your plugin
+		//		- Check scripting/drones/example_drone.sp for proper usage
+		// 	- Max of 4 weapons (1 through 4)
+		"weapon1"	"Missile Launcher"
+		"weapon2"	"Plasma Launcher"
+		"weapon3"	"Plasma Rifle"
+		"weapon4"	"Rocket Pods"
+	}
+}
