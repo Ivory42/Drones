@@ -153,7 +153,7 @@ public void TryCreateDrone(int client, const char[] drone_name)
 		LogMessage("Found Config %s", FileName);
 	}
 	
-	PrintToChatAll("Unable to find drone %s", drone_name);
+	//PrintToChatAll("Unable to find drone %s", drone_name);
 	CloseHandle(hDir);
 	return;
 }
@@ -355,7 +355,7 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 		//PrintToChatAll("damaged");
 		bool bCrit = false;
 		
-		if (damagetype |= DMG_CRIT)
+		if (damagetype |= DMG_CRIT && attacker != drone)
 			bCrit = true;
 		
 		if (attacker != hDroneOwner[drone])
@@ -364,12 +364,16 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 			SendDamageEvent(drone, attacker, damage, weapon, false);
 		}
 		
+		if (attacker == drone) //significantly reduce damage if the drone damages itself
+		{
+			damage *= 0.25; //Should probably be a convar
+		}
+		
 		flDroneHealth[drone] -= damage;
 		if (flDroneHealth[drone] <= 0.0)
 		{
 			//PrintToChatAll("Drone destroyed");
 			flDroneExplodeDelay[drone] = GetEngineTime() + 3.0;
-			ResetClientView(hDroneOwner[drone]);
 			CreateParticle(drone, "burningplayer_flyingbits", true);
 			Call_StartForward(g_DroneDestroy);
 			
@@ -381,8 +385,6 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 			
 			Call_Finish();
 		}
-		
-		//PrintToChatAll("Sequence Completed");
 	}
 }
 
@@ -427,7 +429,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			int iDroneHP;
 			int hDrone = hDroneEntity[client];
 			iDroneHP = RoundFloat(flDroneHealth[hDrone]);
-			float vPos[3], vAngles[3], vVel[3], vVel2[3], vVel3[3], vVel4[3], vVel5[3], vVel6[3], vAbsVel[3];
+			float vPos[3], vAngles[3], vVel[3], vVel2[3], vVel3[3], vVel4[3], vVel5[3], vVel6[3], vAbsVel[3]; //need to condense these into a single 2d array
 			char sAmmoType[64], sIsReady[64];
 			float flMaxSpeed = flDroneMaxSpeed[hDrone];
 			if (iDroneHP > 0)
@@ -544,49 +546,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						flRoll[client] = ClampFloat(flRoll[client], 30.0, -30.0);
 						vAngles[2] = flRoll[client];
 					}
-					case DroneMove_Fly:
+					case DroneMove_Fly: //drone is spawned as a rocket, so we will control it as if it's a rocket
 					{
-						GetAngleVectors(vAngles, vVel, NULL_VECTOR, NULL_VECTOR);
+						//specific variables for flying drones
+						float forwardVec[3];
 						
-						if (buttons & IN_FORWARD)
-						{
-							flSpeed[client][0] += flDroneAcceleration[hDrone];
-						}
-						else
-						{
-							flSpeed[client][0] -= flDroneAcceleration[hDrone];
-						}
+						GetAngleVectors(vAngles, forwardVec, NULL_VECTOR, NULL_VECTOR);
 						
-						vVel[0] *= flSpeed[client][0];
-						vVel[1] *= flSpeed[client][0];
-						vVel[2] *= flSpeed[client][0];
-						
-						GetAngleVectors(vAngles, vVel3, NULL_VECTOR, NULL_VECTOR);
-						if (buttons & IN_BACK)
-						{
-							flSpeed[client][2] += flDroneAcceleration[hDrone];
-						}
-						else
-						{
-							flSpeed[client][2] -= flDroneAcceleration[hDrone];
-						}
-						
-						vVel3[0] *= -flSpeed[client][2];
-						vVel3[1] *= -flSpeed[client][2];
-						vVel3[2] *= -flSpeed[client][2];
-						
-						AddVectors(vVel, vVel3, vAbsVel);
-						
-						for (int v = 0; v < 6; v++)
-						{
-							flSpeed[client][v] = ClampFloat(flSpeed[client][v], flMaxSpeed);
-						}
-						
-						//if (!ClientSideMovement(client, buttons) && (flRoll[client] > 0.6 || flRoll[client] < 0.6))
-						//	flRoll[client] = SetRollTowardsZero(flRoll[client]);
-						
-						//flRoll[client] = ClampFloat(flRoll[client], 30.0, -30.0);
-						//vAngles[2] = flRoll[client];
+						flSpeed[client][0] = ClampFloat(flSpeed[client][0], FlyMinSpeed, flMaxspeed);
 					}
 					case DroneMove_Ground:
 					{
@@ -618,6 +585,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			else if (flDroneExplodeDelay[hDrone] <= GetEngineTime())
 			{
 				flDroneExplodeDelay[hDrone] = FAR_FUTURE;
+				ResetClientView(hDroneOwner[drone]);
 				ExplodeDrone(hDrone);
 				TryRemoveDrone(hDroneOwner[hDrone]);
 			}
