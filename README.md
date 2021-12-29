@@ -16,7 +16,7 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
     - Ground
 
 
-### Flying Drones
+### Flying Drones (WIP)
   - Flying drones can only move forward
   - Requires constant movement to stay in the air
   - More agile than other drones
