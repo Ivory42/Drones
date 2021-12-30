@@ -105,7 +105,26 @@ native float CD_GetParamFloat(const char[] config, const char[] key, int weapon 
  *
  */
 
-native float CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
+native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
+
+/**
+ * Spawns a rocket based projectile for drones to fire
+ *
+ * @param1 owner - Player owning the drone
+ * @param2 drone - Drone entity index
+ * @param3 projectile - Type of rocket to spawn
+ * @param4 damage - Damage of the rocket
+ * @param5 speed - Speed of the rocket
+ * @param6 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
+ * @param7 overrideY - Right position to offset rocket by
+ * @param8 overrideZ - Up position to offset rocket by
+ * @param8 inaccuracy - random variance added to projectile angles
+ *
+ * @return entity index of spawned rocket
+ *
+ */
+
+native int CD_SpawnRocket(int owner, int drone, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
 
 /****************************************************************
 
@@ -121,7 +140,7 @@ native float CD_GetParamInteger(const char[] config, const char[] key, int weapo
  * @param3 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name);
+forward void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a drone is removed
@@ -173,98 +192,6 @@ forward void CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plu
 STOCKS
 
 *************/
-
-// Spawns a projectile using a rocket as the base for a drone to fire, this projectile will spawn slightly ahead of the drone by default to prevent it from colliding
-//  - depending on the size of your drone, you may want to increase overrideX
-// override variables will adjust the rocket position relative to the drone's forward vector
-stock int CD_SpawnRocket(int owner, int drone, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0)
-{
-	float pos[3], angle[3], spawnPos[3], velocity[3], aimAngle[3];
-	char netname[64], classname[64];
-	
-	//Get Spawn Position
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);				//adjust position based on the physical weapon being used on the drone
-	GetEntPropVector(drone, Prop_Data, "m_angRotation", angle);
-	GetClientEyeAngles(owner, aimAngle);
-	GetForwardPos(pos, angle, overrideX, overrideY, overrideZ, spawnPos);
-	
-	int rocket;
-	CDDmgType dType;
-	
-	GetAngleVectors(angle, velocity, NULL_VECTOR, NULL_VECTOR);
-	
-	switch (projectile)
-	{
-		case DroneProj_Rocket:
-		{
-			Format(classname, sizeof classname, "tf_projectile_rocket");
-			Format(netname, sizeof netname, "CTFProjectile_Rocket");
-		}
-		case DroneProj_Energy:
-		{
-			Format(classname, sizeof classname, "tf_projectile_energy_ball");
-			Format(netname, sizeof netname, "CTFProjectile_EnergyBall");
-		}
-		case DroneProj_Sentry:
-		{
-			Format(classname, sizeof classname, "tf_projectile_sentryrocket");
-			Format(netname, sizeof netname, "CTFProjectile_SentryRocket");
-		}
-	}
-	
-	rocket = CreateEntityByName(classname);
-	ScaleVector(velocity, speed);
-	SetEntPropVector(rocket, Prop_Send, "m_vInitialVelocity", velocity);
-	int team = GetClientTeam(owner);
-	
-	//Get where our drone is aiming and direct the rocket towards that angle
-	float aimPos[3], aimVec[3];
-	CD_GetDroneAimPosition(drone, pos, aimAngle, aimPos);
-	MakeVectorFromPoints(pos, aimPos, aimVec);
-	GetVectorAngles(aimVec, angle);
-	
-	if (inaccuracy)
-	{
-		angle[0] += GetRandomFloat((inaccuracy * -1), inaccuracy);
-		angle[1] += GetRandomFloat((inaccuracy * -1), inaccuracy);
-	}
-	
-	//teleport to proper position and then spawn
-	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
-	TeleportEntity(rocket, spawnPos, angle, velocity);
-	
-	SetVariantInt(team);
-	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
-
-	SetVariantInt(team);
-	AcceptEntityInput(rocket, "SetTeam", -1, -1, 0);
-	
-	DispatchSpawn(rocket);
-	
-	SetEntDataFloat(rocket, FindSendPropInfo(netname, "m_iDeflected") + 4, damage); //Set Damage for rocket
-	
-	return rocket;
-}
-
-stock void CD_GetDroneAimPosition(int drone, float pos[3, float angle[3], float buffer[3])
-{
-	Handle trace = TR_TraceRayFilterEx(pos, angle, MASK_SHOT, RayType_Infinite, FilterDrone, drone);
-	if (TR_DidHit(trace))
-	{
-		TR_GetEndPosition(buffer, trace);
-		CloseHandle(trace);
-		return;
-	}
-	CloseHandle(trace);
-}
-
-stock bool FilterDrone(int entity, int mask, int exclude)
-{
-	if (entity == exclude)
-		return false;
-		
-	return true;
-}
 
 stock void GetForwardPos(float origin[3], float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
 {
