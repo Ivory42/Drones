@@ -16,7 +16,7 @@ GlobalForward g_DroneCreated;
 GlobalForward g_DroneExplode;
 GlobalForward g_DroneDestroy;
 GlobalForward g_DroneChangeWeapon;
-//GlobalForward g_DroneTakeDamage;
+GlobalForward g_DroneAttack;
 
 CDMoveType dMoveType[2048];
 
@@ -39,6 +39,7 @@ float flDroneHealth[2048];
 float flDroneMaxHealth[2048];
 float flDroneMaxSpeed[2048];
 float flDroneAcceleration[2048];
+float BaseFireDelay[2048];
 
 char sDroneWeapon1[2048][PLATFORM_MAX_PATH];
 char sDroneWeapon2[2048][PLATFORM_MAX_PATH];
@@ -79,6 +80,7 @@ public void OnPluginStart()
 	g_DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, plugin
 	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 	g_DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
+	g_DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -622,6 +624,19 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					Call_PushCell(iWeaponNumber[hDrone]);
 					Call_PushString(sPluginName[hDrone]);
 
+					Call_Finish();
+				}
+				if (buttons & IN_ATTACK && BaseFireDelay[hDrone] <= GetEngineTime()) //TODO - Change this to fire rates defined in the drone config
+				{
+					BaseFireDelay[hDrone] = GetEngineTime() + 0.1;
+					
+					Call_StartForward(g_DroneAttack);
+					
+					Call_PushCell(hDrone);
+					Call_PushCell(client);
+					Call_PushCell(dActiveWeapon[hDrone]);
+					Call_PushString(sPluginName[hDrone]);
+					
 					Call_Finish();
 				}
 				TeleportEntity(hDrone, NULL_VECTOR, vAngles, vAbsVel);
