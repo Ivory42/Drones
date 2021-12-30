@@ -20,6 +20,7 @@ bool Attributed[2048] = false;
 bool IsDrone[2048] = false;
 
 char sPluginName[2048][PLATFORM_MAX_PATH];
+char sConfig[2048][PLATFORM_MAX_PATH];
 
 //Physical Weapons
 int hDroneRWeapon[2048];
@@ -30,6 +31,7 @@ int hLastWeaponFired[2048];
 float flFireDelay[2048][MAXWEAPONS+1];
 float flRocketFireDelay[2048] = FAR_FUTURE;
 int iRocketCount[2048];
+int BarrageMaxCount[2048];
 bool bIsDroneRocket[2048];
 
 //Weapon function variables
@@ -53,28 +55,17 @@ public void OnPluginStart()
 		if (IsValidClient(i))
 			OnClientPutInServer(i);
 	}
-	SetupWeaponStats();
 }
 
-public void SetupWeaponStats()
+void SetupWeaponStats(const char[] config)
 {
-	//Damage
-	flProjDamage[1] = 75.0; //Missile Launcher
-	flProjDamage[2] = 100.0; //Energy Launcher
-	flProjDamage[3] = 15.0; //Energy Rifle
-	flProjDamage[4] = 30.0; //Rocket Pods
-	
-	//Projectile Speed
-	flProjSpeed[1] = 1100.0; //Missile Launcher
-	flProjSpeed[2] = 1700.0; //Energy Launcher
-	flProjSpeed[3] = 2200.0; //Energy Rifle
-	flProjSpeed[4] = 2750.0; //Rocket Pods
-	
-	//Reload Times
-	flWeaponReload[1] = 0.8;
-	flWeaponReload[2] = 1.6;
-	flWeaponReload[3] = 0.15;
-	flWeaponReload[4] = 6.0;
+	for (int i = 1; i <= 4; i++)
+	{
+		flProjDamage[i] = CD_GetParamFloat(config, "damage", i);
+		flProjSpeed[i] = CD_GetParamFloat(config, "speed", i);
+		flWeaponReload[i] = CD_GetParamFloat(config, "reload_time", i);
+	}
+	BarrageMaxCount = CD_GetParamFloat(config, "barrage", 4);
 }
 
 public void OnMapStart()
@@ -114,44 +105,47 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
 	if (IsValidClient(client) && IsValidDrone(ClientDrone[client]))
 	{
-		int hDrone = ClientDrone[client];
-		if (!Attributed[hDrone]) return;
-		
-		int hWeapon = CD_GetDroneActiveWeapon(hDrone);
-		int iDroneHP = CD_GetDroneHealth(hDrone);
-		//PrintCenterText(client, "DroneHP: %i\nDroneWeapon: %i", iDroneHP, hWeapon);
-		if (iDroneHP > 0)
+		int drone = ClientDrone[client];
+		if (!Attributed[drone]) return Plugin_Continue;
+		int droneHP = CD_GetDroneHealth(drone);
+		if (droneHP > 0)
 		{
-			if (buttons & IN_ATTACK && flFireDelay[hDrone][hWeapon] <= GetEngineTime())
-			{
-				//LogMessage("Active Drone Weapon: %i", hWeapon);
-				switch (hWeapon)
-				{
-					case 3: //plasma rifle
-					{
-						//Fire from both weapons
-						FireRocket(client, hDrone, hWeapon, flWeaponReload[hWeapon], hLastWeaponFired[hDrone]);
-						FireRocket(client, hDrone, hWeapon, flWeaponReload[hWeapon], hLastWeaponFired[hDrone]);
-					}
-					case 4: //Rocket pods
-					{
-						FireRocket(client, hDrone, 4, flWeaponReload[4], hLastWeaponFired[hDrone]);
-						iRocketCount[hDrone]++;
-						flRocketFireDelay[hDrone] = GetEngineTime() + 0.15;
-					}
-					default: FireRocket(client, hDrone, hWeapon, flWeaponReload[hWeapon], hLastWeaponFired[hDrone]);
-				}
-			}
-			
 			//Rocket Pods function
-			if (flFireDelay[hDrone][4] > GetEngineTime() && iRocketCount[hDrone] < 12 && flRocketFireDelay[hDrone] <= GetEngineTime())
+			if (flFireDelay[drone][4] > GetEngineTime() && iRocketCount[drone] < 12 && flRocketFireDelay[drone] <= GetEngineTime())
 			{
-				FireRocket(client, hDrone, 4, flWeaponReload[4], hLastWeaponFired[hDrone]);
-				iRocketCount[hDrone]++;
-				flRocketFireDelay[hDrone] = GetEngineTime() + 0.15;
+				FireRocket(client, drone, 4, flWeaponReload[4], hLastWeaponFired[drone]);
+				iRocketCount[drone]++;
+				flRocketFireDelay[drone] = GetEngineTime() + 0.15;
 			}
-			else if (flFireDelay[hDrone][4] <= GetEngineTime())
-				iRocketCount[hDrone] = 0;
+			else if (flFireDelay[drone][4] <= GetEngineTime())
+				iRocketCount[drone] = 0;
+		}
+	}
+	return Plugin_Continue;
+}
+
+public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
+{
+	if (!Attributed[drone]) return;
+
+	if (flFireDelay[drone][weapon] <= GetEngineTime())
+	{
+		//LogMessage("Active Drone Weapon: %i", weapon);
+		switch (weapon)
+		{
+			case 3: //plasma rifle
+			{
+				//Fire from both weapons
+				FireRocket(client, drone, weapon, flWeaponReload[weapon], hLastWeaponFired[drone]);
+				FireRocket(client, drone, weapon, flWeaponReload[weapon], hLastWeaponFired[drone]);
+			}
+			case 4: //Rocket pods
+			{
+				FireRocket(client, drone, 4, flWeaponReload[4], hLastWeaponFired[drone]);
+				iRocketCount[drone]++;
+				flRocketFireDelay[drone] = GetEngineTime() + 0.15;
+			}
+			default: FireRocket(client, drone, weapon, flWeaponReload[weapon], hLastWeaponFired[drone]);
 		}
 	}
 }
@@ -160,84 +154,46 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 //Function for when the drone fires its active weapon
 public void FireRocket(int owner, int drone, int pType, float fireDelay, int fireLoc)
 {
-	float clPos[3], clAng[3], clSpawn[3], velocity[3];
-	char entName[64], classname[64], fireSound[64];
+	char fireSound[64];
 	
 	//Get Spawn Position
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", clPos);
-	float flSide = (fireLoc == 1) ? 15.0 : -15.0;					//adjust position based on the physical weapon being used on the drone
-	GetEntPropVector(drone, Prop_Data, "m_angRotation", clAng);
-	GetForwardPos(clPos, clAng, 60.0, flSide, clSpawn);
+	float sideOffset = (fireLoc == 1) ? 15.0 : -15.0;					//adjust position based on the physical weapon being used on the drone
 	int rocket;
 	CDDmgType dType;
 	
 	float speed = flProjSpeed[pType];
-	float flDamage = flProjDamage[pType];
-	
-	GetAngleVectors(clAng, velocity, NULL_VECTOR, NULL_VECTOR);
+	float damage = flProjDamage[pType];
 
 	//Create Rocket
 	switch (pType)
 	{
 		case 1: //Normal Rockets
 		{
-			Format(entName, sizeof entName, "tf_projectile_rocket");
-			Format(classname, sizeof classname, "CTFProjectile_Rocket");
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, damage, speed, 60.0, sideOffset);
 			Format(fireSound, sizeof fireSound, ROCKETSOUND);
 			dType = DmgType_Missile;
 			
 		}
 		case 2: //Energy Rockets
 		{
-			Format(entName, sizeof entName, "tf_projectile_energy_ball");
-			Format(classname, sizeof classname, "CTFProjectile_EnergyBall");
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Energy, damage, speed, 60.0, sideOffset);
 			Format(fireSound, sizeof fireSound, ENERGY_SOUND);
 			dType = DmgType_Energy;
 		}
 		case 3: //Energy Orbs
 		{
-			Format(entName, sizeof entName, "tf_projectile_rocket");
-			Format(classname, sizeof classname, "CTFProjectile_Rocket");
-			int iSound = GetRandomInt(1, 3);
-			Format(fireSound, sizeof fireSound, "weapons/custom/plasmarifle/shoot%i.mp3", iSound);
-      
-      //Add some inaccuracy
-			clAng[0] += GetRandomFloat(-2.0, 2.0);
-			clAng[1] += GetRandomFloat(-2.0, 2.0);
-			GetAngleVectors(clAng, velocity, NULL_VECTOR, NULL_VECTOR);
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, 1.0);
+			int sound = GetRandomInt(1, 3);
+			Format(fireSound, sizeof fireSound, "weapons/custom/plasmarifle/shoot%i.mp3", sound);
 			dType = DmgType_Plasma;
 		}
 		case 4: //Rocekt Pods
 		{
-			Format(entName, sizeof entName, "tf_projectile_sentryrocket");
-			Format(classname, sizeof classname, "CTFProjectile_SentryRocket");
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, 5.0);
 			Format(fireSound, sizeof fireSound, ROCKETSOUND);
-			clAng[0] += GetRandomFloat(-5.0, 5.0);
-			clAng[1] += GetRandomFloat(-5.0, 5.0);
-			GetAngleVectors(clAng, velocity, NULL_VECTOR, NULL_VECTOR);
 			dType = DmgType_Missile;
 		}
 	}
-	
-	rocket = CreateEntityByName(entName);
-	velocity[0] *= speed;
-	velocity[1] *= speed;
-	velocity[2] *= speed;
-	SetEntPropVector(rocket, Prop_Send, "m_vInitialVelocity", velocity);
-	int iTeam = GetClientTeam(owner);
-	
-	//teleport to proper position and then spawn
-	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
-	TeleportEntity(rocket, clSpawn, clAng, velocity);
-	
-	SetVariantInt(iTeam);
-	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
-
-	SetVariantInt(iTeam);
-	AcceptEntityInput(rocket, "SetTeam", -1, -1, 0);
-	
-	DispatchSpawn(rocket);
-	
 	if (pType == 3) //orbs
 	{
 		SetEntityModel(rocket, "models/weapons/w_models/w_baseball.mdl");
@@ -247,14 +203,12 @@ public void FireRocket(int owner, int drone, int pType, float fireDelay, int fir
 	}
 	
 	dProjDmgType[rocket] = dType;
-	
-	SetEntDataFloat(rocket, FindSendPropInfo(classname, "m_iDeflected") + 4, flDamage); //Set Damage for rocket
 	EmitSoundToAll(fireSound, drone);
-	flFireDelay[drone][pType] = GetEngineTime() + fireDelay;							//Set weapon reloading
-	CD_SetWeaponReloading(drone, pType, fireDelay);										//Sets the weapon as reloading for the hud to display
+	flFireDelay[drone][pType] = GetEngineTime() + fireDelay;						//Set weapon reloading
+	CD_SetWeaponReloading(drone, pType, fireDelay);								//Sets the weapon as reloading for the hud to display
 	bIsDroneRocket[rocket] = true;
 	
-	hLastWeaponFired[drone] = GetNextWeapon(drone);										//Get next physical weapon to fire from
+	hLastWeaponFired[drone] = GetNextWeapon(drone);								//Get next physical weapon to fire from
 }
 
 public Action PlasmaHit(int entity, int victim)
@@ -282,7 +236,19 @@ public Action PlasmaHit(int entity, int victim)
 		{
 			if (GetClientTeam(owner) != GetClientTeam(victim))
 			{
-				SDKHooks_TakeDamage(victim, entity, owner, flProjDamage[3], DMG_ENERGYBEAM);
+				int drone = ClientDrone[owner];
+				float dronePos[3], victimPos[3], distance, damage;
+				damage = flProjDamage[3];
+
+				//Setup distance between drone and target
+				GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
+				GetClientAbsOrigin(client, victimPos);
+				distance = GetVectorDistance(dronePos, victimPos);
+		
+				//Slightly less standard hitscan rampup and falloff
+				float dmgMod = ClampFloat((512.0 / distance), 1.4, 0.85);
+				damage *= dmgMod;
+				SDKHooks_TakeDamage(victim, entity, owner, damage, DMG_ENERGYBEAM);
 			}
 		}
 	}
@@ -316,12 +282,6 @@ public Action PlayerTakeDamage(int client, int &attacker, int &inflictor, float 
 					float dmgMod = ClampFloat((512.0 / flDistance), 1.25, 0.528);
 					damage *= dmgMod;
 				}
-				case DmgType_Plasma: //Energy rifle
-				{
-					//Slightly less standard hitscan rampup and falloff
-					float dmgMod = ClampFloat((512.0 / flDistance), 1.4, 0.85);
-					damage *= dmgMod;
-				}
 			}
 			return Plugin_Changed;
 		}
@@ -343,10 +303,10 @@ public void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[]
 	PrintToChat(owner, "Weapon Changed");
 }
 
-public void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name)
+public void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name, const char[] config)
 {
 	Format(sPluginName[drone], PLATFORM_MAX_PATH, plugin_name);
-	PrintToChat(owner, "Drone plugin: %s", plugin_name);
+	SetupWeaponStats(config);
 	if (StrEqual(plugin_name, "example_drone"))
 	{
 		float vAngles[3], vPos[3];
@@ -358,7 +318,6 @@ public void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name)
 		CreateDroneWeapons(owner, drone, vPos, vAngles);
 		hLastWeaponFired[drone] = 1;
 		IsDrone[drone] = true;
-		PrintToChat(owner, "drone created");
 	}
 }
 
@@ -423,7 +382,7 @@ stock void CreateDroneWeapons(int client, int drone, float spawnPos[3], float sp
 	ActivateEntity(hDroneRWeapon[drone]);
 	
 	flSide = 15.0;
-	GetForwardPos(spawnPos, spawnAngle, 0.0, flSide, rPos);
+	GetForwardPos(spawnPos, spawnAngle, 0.0, flSide, 0.0 rPos);
 	
 	TeleportEntity(hDroneRWeapon[drone], rPos, spawnAngle, NULL_VECTOR);
 	
@@ -438,26 +397,12 @@ stock void CreateDroneWeapons(int client, int drone, float spawnPos[3], float sp
 	ActivateEntity(hDroneLWeapon[drone]);
 	
 	flSide = -15.0;
-	GetForwardPos(spawnPos, spawnAngle, 0.0, flSide, lPos);
+	GetForwardPos(spawnPos, spawnAngle, 0.0, flSide, 0.0 lPos);
 	
 	TeleportEntity(hDroneLWeapon[drone], lPos, spawnAngle, NULL_VECTOR);
 	
 	SetVariantString("!activator");
 	AcceptEntityInput(hDroneLWeapon[drone], "SetParent", drone, hDroneLWeapon[drone], 0);
-}
-
-stock void GetForwardPos(float flOrigin[3], float vAngles[3], float flDistance, float flSideDistance = 0.0, float flBuffer[3])
-{
-	float flDir[3];
-
-	GetAngleVectors(vAngles, flDir, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(flDir, flDistance);
-	AddVectors(flOrigin, flDir, flBuffer);
-
-	GetAngleVectors(vAngles, NULL_VECTOR, flDir, NULL_VECTOR);
-	NegateVector(flDir);
-	ScaleVector(flDir, flSideDistance);
-	AddVectors(flBuffer, flDir, flBuffer);
 }
 
 stock int CreateParticle(int iEntity = 0, char[] sParticle, bool bAttach = false, float pos[3]={0.0, 0.0, 0.0})
