@@ -76,7 +76,7 @@ public void OnPluginStart()
 	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
 
 	//Forwards
-	g_DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, plugin
+	g_DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Cell, Param_Cell, Param_String, Param_String); //drone, owner, plugin, config
 	g_DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, plugin
 	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 	g_DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
@@ -90,6 +90,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneWeapon);
 	CreateNative("CD_SetWeaponReloading", Native_SetWeaponReload);
+	CreateNative("CD_GetParamFloat", Native_GetFloatParam);
+	CreateNative("CD_GetParamInteger", Native_GetIntParam);
 	return APLRes_Success;
 }
 
@@ -135,6 +137,52 @@ public int Native_SetWeaponReload(Handle plugin, int args)
 	float delay = GetNativeCell(3);
 
 	flFireDelay[drone][weapon] = GetEngineTime() + delay;
+}
+
+public any Native_GetFloatParam(Handle plugin, int args)
+{
+	float result;
+	char config[64], key[64], weapon[64];
+	int weaponId = GetNativeCell(3);
+	GetNativeString(1, config, sizeof config);
+	GetNativeString(2, key, sizeof key);
+	
+	KeyValues drone = new KeyValues("Drone");
+	char path[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
+	drone.ImportFromFile(path);
+	
+	if (weaponId)
+	{
+		Format(weapon, sizeof weapon, "weapon%i", weaponId);
+		drone.JumpToKey(weapon);
+	}
+	result = drone.GetFloat(key);
+	delete drone;
+	return result;
+}
+
+public any Native_GetIntParam(Handle plugin, int args)
+{
+	int result;
+	char config[64], key[64], weapon[64];
+	int weaponId = GetNativeCell(3);
+	GetNativeString(1, config, sizeof config);
+	GetNativeString(2, key, sizeof key);
+	
+	KeyValues drone = new KeyValues("Drone");
+	char path[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
+	drone.ImportFromFile(path);
+	
+	if (weaponId)
+	{
+		Format(weapon, sizeof weapon, "weapon%i", weaponId);
+		drone.JumpToKey(weapon);
+	}
+	result = drone.GetNum(key);
+	delete drone;
+	return result;
 }
 
 public void TryCreateDrone(int client, const char[] drone_name)
@@ -801,9 +849,11 @@ stock void SpawnDrone(int client, const char[] drone_name)
 		for (int i = 1; i <= MAXWEAPONS; i++)
 		{
 			Format(sNumber, sizeof sNumber, "weapon%i", i);
-			kv.GetString(sNumber, sWeapon[i], PLATFORM_MAX_PATH, "INVALID_WEAPON");
-
-			if (StrEqual(sWeapon[i], "INVALID_WEAPON", false))
+			if (kv.JumpToKey(sNumber))
+			{
+				kv.GetString("name", sWeapon[i], PLATFORM_MAX_PATH, "INVALID_WEAPON");
+			}
+			else
 			{
 				LogMessage("Found %i weapons for %s", iDroneWeapons[hDrone], drone_name);
 				break;
@@ -848,6 +898,7 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	Call_PushCell(hDrone);
 	Call_PushCell(client);
 	Call_PushString(sPluginName[hDrone]);
+	Call_PushString(drone_name);
 
 	Call_Finish();
 }
