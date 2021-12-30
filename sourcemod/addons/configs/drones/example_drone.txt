@@ -1,24 +1,56 @@
 "Drone"
 {
-	"name"				        "Example" 			//Drone name
-	"model"				        "models/combine_scanner.mdl"	//Model to use for drone
-	//"destroyed_model"	  "models/combine_scanner.mdl"	//Optional Model to use for when drone is destroyed
-	"health"		        	"80" 							//Drone Health
-	"speed"			        	"250" 							//Drone Speed
-	"acceleration"	    	"5" 							//Drone Acceleration
-	"movetype"			      "drone_hover"					//Movetype for drone (Options are: drone_hover, drone_fly, drone_ground)
-	"plugin"		        	"example_drone" 				//plugin name to use for drone logic
+	"name"					"Example Drone" 		//Drone name
+	"model"					"models/combine_scanner.mdl"	//Model to use for drone
+	//"destroyed_model"			"models/combine_scanner.mdl"	//Optional Model to use for when drone is destroyed
+	"health"				"80" 				//Drone Health
+	"speed"					"250" 				//Drone Speed
+	"acceleration"				"5" 				//Drone Acceleration
+	"movetype"				"drone_hover"			//Movetype for drone (Options are: drone_hover, drone_fly, drone_ground)
+	"plugin"				"example_drone" 		//Plugin identifier to use for drone logic
 	"weapons"
 	{
-		//Weapon names go here:
+		//Weapon setup:
 		// 	- These define the weapon the drone can use
 		// 	- +attack2 cycles between the weapons in chronological order
 		//	- Use CD_GetActiveWeapon() native to check the current active weapon index in your plugin
 		//		- Check scripting/drones/example_drone.sp for proper usage
+		//	- Each weapon can have as many parameters as you want
+		//		- Every weapon must at least have a "name" parameter
+		//		- Parameters can be retrieved with the appropriate native functions
 		// 	- Max of 4 weapons (1 through 4)
-		"weapon1"	"Missile Launcher"
-		"weapon2"	"Plasma Launcher"
-		"weapon3"	"Plasma Rifle"
-		"weapon4"	"Rocket Pods"
+		"weapon1"
+		{
+			"name"	"Missile Launcher"
+			
+			"damage"	"75"	//damage of each rocket
+			"speed"		"1100"	//speed of each rocket
+			"reload_time"	"0.8"	//weapon fire rate
+		}
+		"weapon2"
+		{
+			"name"	"Plasma Launcher"
+			
+			"damage"	"100"
+			"speed"		"1700"
+			"reload_time"	"1.4"
+		}
+		"weapon3"
+		{
+			"name"	"Plasma Rifle"
+			
+			"damage"	"15"
+			"speed"		"2200"
+			"reload_time"	"0.15"
+		}
+		"weapon4"
+		{
+			"name"	"Rocket Pods"
+			
+			"damage"	"45"
+			"speed"		"2750"
+			"reload_time"	"6.0"
+			"barrage"	"12"
+		}
 	}
 }
