@@ -63,9 +63,8 @@ void SetupWeaponStats(const char[] config, int drone)
 		flProjDamage[drone][i] = CD_GetParamFloat(config, "damage", i);
 		flProjSpeed[drone][i] = CD_GetParamFloat(config, "speed", i);
 	}
-	BarrageMaxCount[drone] = CD_GetParamInteger(config, "barrage", 4);
-	PrintToChatAll("Barrage count set to: %i", BarrageMaxCount[drone]);
-	BarrageRate[drone] = (60.0 / CD_GetParamFloat(config, "barrage_firerate", 4)); //convert to rounds per minute
+	BarrageMaxCount[drone] = CD_GetParamInteger(config, "burst", 4);
+	BarrageRate[drone] = CD_GetParamFloat(config, "attack_time", 4);
 }
 
 public void OnMapStart()
@@ -112,13 +111,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			if (droneHP > 0)
 			{
 				//Rocket Pods function
-				if (InBarrage[drone] && iRocketCount[drone] < BarrageMaxCount[drone] && flRocketFireDelay[drone] <= GetEngineTime())
+				if (InBarrage[drone] && iRocketCount[drone] > 0 && flRocketFireDelay[drone] <= GetEngineTime())
 				{
-					FireRocket(client, drone, 4, hLastWeaponFired[drone], true);
-					iRocketCount[drone]++;
+					CD_FireActiveWeapon(client, drone);
+					iRocketCount[drone]--;
 					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
 				}
-				else if (iRocketCount[drone] >= BarrageMaxCount[drone])
+				else if (iRocketCount[drone] <= 0)
 				{
 					InBarrage[drone] = false;
 				}
@@ -142,12 +141,14 @@ public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plug
 			}
 			case 4: //Rocket pods
 			{
-				PrintToChat(owner, "barrage\nMax salvos: %i", BarrageMaxCount[drone]);
-				iRocketCount[drone] = 0;
-				FireRocket(owner, drone, 4, hLastWeaponFired[drone], false);
-				iRocketCount[drone]++;
-				flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
-				InBarrage[drone] = true;
+				if (!InBarrage[drone])
+				{
+					iRocketCount[drone] = BarrageMaxCount[drone];
+					FireRocket(owner, drone, 4, hLastWeaponFired[drone], false);
+					iRocketCount[drone]--;
+					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
+					InBarrage[drone] = true;
+				}
 
 			}
 			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone], false);
