@@ -96,6 +96,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_SpawnRocket", Native_SpawnRocket);
 	CreateNative("CD_GetCameraHeight", Native_GetCameraHeight);
 	CreateNative("CD_IsValidDrone", Native_ValidDrone);
+	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
 	return APLRes_Success;
 }
 
@@ -104,6 +105,18 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	NATIVES
 
 ********************************************************************************/
+
+public void Native_DroneTakeDamage(Handle plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	int attacker = GetNativeCell(2);
+	int inflictor = GetNativeCell(3);
+	float damage = GetNativeCell(4);
+	int weapon = GetNativeCell(5);
+	bool crit = view_as<bool>(GetNativeCell(6));
+	
+	DroneTakeDamage(drone, attacker, inflictor, damage, weapon, crit);
+}
 
 public int Native_ValidDrone(Handle plugin, int args)
 {
@@ -565,19 +578,32 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 		if (attacker != hDroneOwner[drone])
 		{
 			//PrintToChatAll("Attacker is not owner");
-			SendDamageEvent(drone, attacker, damage, weapon, false);
+			DroneTakeDamage(drone, attacker, inflictor, damage, false);
 		}
 
-		if (attacker == hDroneOwner[drone]) //significantly reduce damage if the drone damages itself
-		{
-			damage *= 0.25; //Should probably be a convar
-		}
+		
+	}
+}
 
-		flDroneHealth[drone] -= damage;
-		if (flDroneHealth[drone] <= 0.0)
-		{
-			KillDrone(drone, attacker, damage);
-		}
+void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, int &weapon, bool crit)
+{
+	bool sendEvent = true;
+	
+	if (DroneIsDead[drone]) return;
+	
+	if (attacker == hDroneOwner[drone]) //significantly reduce damage if the drone damages itself
+	{
+		damage *= 0.25; //Should probably be a convar
+		sendEvent = false;
+	}
+	
+	if (sendEvent)
+		SendDamageEvent(drone, attacker, damage, weapon, false);
+
+	flDroneHealth[drone] -= damage;
+	if (flDroneHealth[drone] <= 0.0)
+	{
+		KillDrone(drone, attacker, damage);
 	}
 }
 
