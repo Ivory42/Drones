@@ -101,7 +101,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_GetCameraHeight", Native_GetCameraHeight);
 	CreateNative("CD_IsValidDrone", Native_ValidDrone);
 	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
-	CreateNative("CD_FireDroneWeapon", Native_DroneTakeDamage);
+	CreateNative("CD_FireActiveWeapon", Native_DroneTakeDamage);
 	return APLRes_Success;
 }
 
@@ -115,9 +115,8 @@ public void Native_FireWeapon(Handle plugin, int args)
 {
 	int drone = GetNativeCell(1);
 	int owner = GetNativeCell(2);
-	int weapon = GetNativeCell(3);
 	
-	FireWeapon(owner, drone, weapon);
+	FireWeapon(owner, drone, dActiveWeapon[drone]);
 }
 
 public void Native_DroneTakeDamage(Handle plugin, int args)
