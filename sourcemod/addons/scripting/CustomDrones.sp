@@ -112,10 +112,9 @@ public void Native_DroneTakeDamage(Handle plugin, int args)
 	int attacker = GetNativeCell(2);
 	int inflictor = GetNativeCell(3);
 	float damage = GetNativeCell(4);
-	int weapon = GetNativeCell(5);
-	bool crit = view_as<bool>(GetNativeCell(6));
+	bool crit = view_as<bool>(GetNativeCell(5));
 	
-	DroneTakeDamage(drone, attacker, inflictor, damage, weapon, crit);
+	DroneTakeDamage(drone, attacker, inflictor, damage, crit);
 }
 
 public int Native_ValidDrone(Handle plugin, int args)
@@ -585,7 +584,7 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 	}
 }
 
-void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, int &weapon, bool crit)
+void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, bool crit)
 {
 	bool sendEvent = true;
 	
@@ -598,7 +597,7 @@ void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, in
 	}
 	
 	if (sendEvent)
-		SendDamageEvent(drone, attacker, damage, weapon, false);
+		SendDamageEvent(drone, attacker, damage, false);
 
 	flDroneHealth[drone] -= damage;
 	if (flDroneHealth[drone] <= 0.0)
@@ -631,28 +630,21 @@ public void ResetClientView(int client)
 	SetEntityMoveType(client, MOVETYPE_WALK);
 }
 
-public void SendDamageEvent(int victim, int attacker, float damage, int weapon, bool crit)
+public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
 {
-	//PrintToChatAll("Starting Game Event 'npc_hurt'");
 	if (IsValidClient(attacker) && IsValidDrone(victim))
 	{
-		int iDamage = RoundFloat(damage);
-		int iHealth = RoundFloat(flDroneHealth[victim]);
-		Handle PropHurt = CreateEvent("npc_hurt", true);
+		int damageamount = RoundFloat(damage);
+		int health = RoundFloat(flDroneHealth[victim]);
+		Event PropHurt = CreateEvent("npc_hurt", true);
 
 		//setup components for event
-		SetEventInt(PropHurt, "entindex", victim);
-		//SetEventInt(PropHurt, "weaponid", weapon);
-
-		SetEventInt(PropHurt, "attacker_player", GetClientUserId(attacker));
-		SetEventInt(PropHurt, "damageamount", iDamage);
-		SetEventInt(PropHurt, "health", iHealth - iDamage);
-		FireEvent(PropHurt);
-		//PrintToChatAll("Fired Game Event 'npc_hurt'");
-	}
-	else
-	{
-		//PrintToChatAll("Failed to fire Game Event 'npc_hurt'");
+		PropHurt.SetInt("entindex", victim);
+		PropHurt.SetInt("attacker_player", GetClientUserId(attacker));
+		PropHurt.SetInt("damageamount", damageamount);
+		PropHurt.SetInt("health", health - damageamount);
+		
+		PropHurt.FireEvent(false);
 	}
 }
 
