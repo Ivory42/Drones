@@ -221,6 +221,13 @@ public Action PlasmaHit(int entity, int victim)
 {
 	if (!IsValidClient(victim))
 	{
+		if (CD_IsValidDrone(victim))
+		{
+			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+			CD_DroneTakeDamage(victim, owner, entity, flProjDamage[ClientDrone[owner]][3], false);
+			AcceptEntityInput(entity, "Kill");
+			return Plugin_Handled;
+		}
 		char classname[64];
 		GetEntityClassname(victim, classname, sizeof(classname));
 		if (victim == 0 || !StrContains(classname, "prop_", false))
@@ -232,11 +239,8 @@ public Action PlasmaHit(int entity, int victim)
 		{
 			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 			SDKHooks_TakeDamage(victim, entity, owner, flProjDamage[ClientDrone[owner]][3], DMG_ENERGYBEAM);
-		}
-		else if (CD_IsValidDrone(victim))
-		{
-			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-			SDKHooks_TakeDamage(victim, entity, owner, flProjDamage[ClientDrone[owner]][3], DMG_ENERGYBEAM);
+			AcceptEntityInput(entity, "Kill");
+			return Plugin_Handled;
 		}
 		else return Plugin_Continue;
 	}
