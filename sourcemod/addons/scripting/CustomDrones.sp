@@ -101,6 +101,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_GetCameraHeight", Native_GetCameraHeight);
 	CreateNative("CD_IsValidDrone", Native_ValidDrone);
 	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
+	CreateNative("CD_FireDroneWeapon", Native_DroneTakeDamage);
 	return APLRes_Success;
 }
 
@@ -109,6 +110,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	NATIVES
 
 ********************************************************************************/
+
+public void Native_FireWeapon(Handle plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	int owner = GetNativeCell(2);
+	int weapon = GetNativeCell(3);
+	
+	FireWeapon(owner, drone, weapon);
+}
 
 public void Native_DroneTakeDamage(Handle plugin, int args)
 {
@@ -836,24 +846,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 					Call_Finish();
 				}
-				if (buttons & IN_ATTACK && flFireDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] != 0) //TODO - Change this to fire rates defined in the drone config
+				if (buttons & IN_ATTACK && flFireDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] != 0)
 				{
-					flFireDelay[hDrone][activeWeapon] = GetEngineTime() + FireRate[hDrone][activeWeapon];
-
-					Call_StartForward(g_DroneAttack);
-
-					Call_PushCell(hDrone);
-					Call_PushCell(client);
-					Call_PushCell(dActiveWeapon[hDrone]);
-					Call_PushString(sPluginName[hDrone]);
-
-					Call_Finish();
-					
-					AmmoLoaded[hDrone][activeWeapon]--;
-					if (AmmoLoaded[hDrone][activeWeapon] == 0)
-					{
-						StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
-					}
+					FireWeapon(client, hDrone, activeWeapon);
 				}
 				
 				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime() && LoadedAmmo[hDrone][activeWeapon] == 0)
@@ -871,6 +866,26 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				TryRemoveDrone(hDroneOwner[hDrone]);
 			}
 		}
+	}
+}
+
+void FireWeapon(int owner, int drone, int weapon)
+{
+	flFireDelay[drone][weapon] = GetEngineTime() + FireRate[drone][weapon];
+
+	Call_StartForward(g_DroneAttack);
+
+	Call_PushCell(drone);
+	Call_PushCell(owner);
+	Call_PushCell(weapon);
+	Call_PushString(sPluginName[drone]);
+
+	Call_Finish();
+					
+	AmmoLoaded[drone][weapon]--;
+	if (AmmoLoaded[drone][weapon] == 0)
+	{
+		StartWeaponReload(drone, weapon, ReloadTime[drone][weapon]);
 	}
 }
 
