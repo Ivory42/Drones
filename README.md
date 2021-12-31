@@ -10,25 +10,26 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
   - Create your own logic for drones through other plugins (example included)
   - Define a model and destroyed model for each drone
   - Set health, speed, and acceleration for each drone
+  - Set up to 4 weapons with individual parameters
   - Choose how the drone operates:
-    - Fly
+    - Flying
     - Hover
     - Ground
 
 
-### Flying Drones (WIP)
-  - Flying drones can only move forward
-  - Requires constant movement to stay in the air
+### Flying Drones
+  - Flying drones move in the direction the camera is facing
+  - Cannot fly below specific speeds
   - More agile than other drones
 
 ### Hover Drones
   - Hover drones can fly and move in any direction
-  - Will remain airborn even with no movement
+  - Movement input controls drone movement
   - More combat oriented
 
 ### Ground Drones (WIP)
   - Drones limited to ground movement
-  - Can only move forward and/or rotate while moving forward
+  - Not functioning at this time
 
 ## Developers
 This plugin comes with several forwards and natives to use with other plugins. Refer to `scripting/include/customdrones.inc` for more detailed explanations.
@@ -39,15 +40,29 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_SpawnDroneByName` - Spawns a drone for a client from the given config name
   - `CD_GetDroneActiveWeapon` - Returns the index of the current weapon for a given drone
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
+  - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
+  - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile - highly configurable
+  - `CD_GetParamFloat` - Retrieves a float parameter from a drone's config file
+  - `CD_GetParamInteger` - Retrieves an integer parameter from a drone's config file
+  - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
+  - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
 
 ### Forwards
   - `CD_OnDroneCreated` - Called when a drone initially spawns
   - `CD_OnDroneDestroyed` - Called when a drone is destroyed
   - `CD_OnDroneRemoved` - Called when a drone is removed from the world after being destroyed
   - `CD_OnWeaponChanged` - Called when a player cycles weapons on a drone
+  - `CD_OnDroneAttack` - Called when a player presses their attack key while piloting a drone
 
 
 ## Known Issues
   - Drones can phase through geometry at certain speeds
-  - Player view targets are not properly reset if operating a drone when the round resets
   - Ground based drones are not properly tested/functioning at this time
+  - Flying drones turn too sharply
+
+
+## Planned Featurs
+  - Native hitscan attack
+  - Native support abilities (healing, ammo regeneration, etc)
+  - Multiple move type modes for ground based drones
+  - Possible custom lag compensation
