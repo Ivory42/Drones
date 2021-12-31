@@ -25,7 +25,7 @@
 			"name"	"Missile Launcher"
 			
 			"ammo"		"4"	//ammo loaded - defaults to 1
-			"fire_rate"	"80"	//weapon fire rate in rpm
+			"attack_time"	"0.8"	//weapon attack delay
 			"damage"	"75"	//damage of each rocket
 			"speed"		"1100"	//speed of each rocket
 			"reload_time"	"1.2"	//weapon reload time
@@ -43,20 +43,22 @@
 			"name"	"Plasma Rifle"
 			
 			"ammo"		"24"
-			"fire_rate"	"360"
+			"attack_time"	"0.15"
 			"damage"	"10"
 			"speed"		"2200"
 			"reload_time"	"1.5"
+			"inaccuracy"	"1.0"
 		}
 		"weapon4"
 		{
 			"name"	"Rocket Pods"
 			
 			"ammo"		"12"
-			"fire_rate"	"360"
+			"attack_time"	"0.15"
 			"damage"	"65"
 			"speed"		"2750"
 			"reload_time"	"6.0"
+			"inaccuracy"	"5.0"
 		}
 	}
 }
