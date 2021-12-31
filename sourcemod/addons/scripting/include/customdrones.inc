@@ -32,6 +32,17 @@ enum CDDmgType
 	
 ****************************************************************/
 
+/**
+ * Deal damage to the given drone
+ *
+ * @param1 drone - Drone to damage
+ * @param2 attacker - Entity responsible the damage
+ * @param3 inflictor - Entity that dealt the damage
+ * @param4 damage - Damage to deal
+ * @param5 crit - Is this damage critical
+ */
+
+native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
  * Get Drone Active Weapon
