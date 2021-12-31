@@ -39,11 +39,10 @@ enum CDDmgType
  * @param2 attacker - Entity responsible the damage
  * @param3 inflictor - Entity that dealt the damage
  * @param4 damage - Damage to deal
- * @param5 weapon - weapon used for the damage event
- * @param6 crit - Is this damage critical
+ * @param5 crit - Is this damage critical
  */
 
-native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, int weapon, bool crit);
+native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
  * Get Drone Active Weapon
