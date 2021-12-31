@@ -79,11 +79,11 @@ native void CD_SpawnDroneByName(int client, const char[] drone_name);
  *
  * @param1 drone - Ent index of drone firing
  * @param2 weapon - Weapon # that is firing
- * @param3 delay - How long the weapon should take to reload
+ * @param3 override - Override reload time if non-zero
  *
  */
 
-native void CD_SetWeaponReloading(int drone, int weapon, float delay);
+native void CD_SetWeaponReloading(int drone, int weapon, float override = 0.0);
 
 /**
  * Retrieves a float parameter from the given drone config
@@ -118,13 +118,31 @@ native int CD_GetParamInteger(const char[] config, const char[] key, int weapon 
  * @param6 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
  * @param7 overrideY - Right position to offset rocket by
  * @param8 overrideZ - Up position to offset rocket by
- * @param8 inaccuracy - random variance added to projectile angles
+ * @param9 inaccuracy - random variance added to projectile angles
  *
  * @return entity index of spawned rocket
  *
  */
 
 native int CD_SpawnRocket(int owner, int drone, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
+
+/**
+ * Retrieves the camera height for the given drone
+ *
+ * @param1 drone - drone entity index
+ *
+ */
+
+native float CD_GetCameraHeight(int drone);
+
+/**
+ * Determines whether an entity is a drone
+ *
+ * @param1 entity - entity to check
+ *
+ */
+ 
+native bool CD_IsValidDrone(int entity);
 
 /****************************************************************
 
