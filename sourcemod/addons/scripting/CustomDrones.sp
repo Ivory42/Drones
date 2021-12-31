@@ -32,6 +32,7 @@ int ExplosionSprite;
 
 int hDroneEntity[MAXPLAYERS+1];
 int AmmoLoaded[2048][MAXWEAPONS+1];
+int MaxAmmo[2048][MAXWEAPONS+1];
 int hDroneOwner[2048];
 int iDroneWeapons[2048];
 int iWeaponNumber[2048];
@@ -42,6 +43,7 @@ float flDroneMaxHealth[2048];
 float flDroneMaxSpeed[2048];
 float flDroneAcceleration[2048];
 float ReloadTime[2048][MAXWEAPONS+1];
+float ReloadDelay[2048][MAXWEAPONS+1];
 float FireRate[2048][MAXWEAPONS+1];
 
 char sDroneWeapon1[2048][PLATFORM_MAX_PATH];
@@ -556,12 +558,14 @@ stock void GetWeaponName(int drone, int type, char[] buffer, int size)
 	}
 }
 
-stock void IsProjReloaded(int drone, int weapon, char[] buffer, int size)
+void GetAmmoCount(int drone, int weapon, char[] buffer, int size)
 {
-	if (flFireDelay[drone][weapon] <= GetEngineTime())
-		Format(buffer, size, "Ready");
-	else
-		Format(buffer, size, "Reloading...");
+	switch (AmmoLoaded[drone][weapon])
+	{
+		case 0: Format(buffer, size, "Reloading...");
+		case -1: Format(buffer, size, "");
+		default: Format(buffer, size, "Ammo: %i", AmmoLoaded[drone][weapon]);
+	}
 }
 
 public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
@@ -667,12 +671,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			{
 
 				GetWeaponName(hDrone, activeWeapon, sAmmoType, sizeof sAmmoType);
-				IsProjReloaded(hDrone, activeWeapon, activeWeapon, ammo, sizeof ammo);
-				
-				if (AmmoLoaded[hDrone][activeWeapon] == -1)
-				{
-					Format(ammo, sizeof ammo, "");
-				}
+				GetAmmoCount(hDrone, activeWeapon, ammo, sizeof ammo);
 
 				SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
 				char sDroneHp[64];
@@ -853,8 +852,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					AmmoLoaded[hDrone][activeWeapon]--;
 					if (AmmoLoaded[hDrone][activeWeapon] == 0)
 					{
-						StartWeaponReload(hDrone, activeWeapon, ReloadTime);
+						StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
 					}
+				}
+				
+				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime() && LoadedAmmo[hDrone][activeWeapon] == 0)
+				{
+					LoadedAmmo[hDrone][activeWeapon] = MaxAmmo[hDrone][activeWeapon];
+					ReloadDelay[hDrone][activeWeapon] = FAR_FUTURE;
 				}
 				TeleportEntity(hDrone, NULL_VECTOR, vAngles, vAbsVel);
 			}
@@ -1014,9 +1019,11 @@ stock void SpawnDrone(int client, const char[] drone_name)
 			if (kv.JumpToKey(sNumber))
 			{
 				kv.GetString("name", sWeapon[i], PLATFORM_MAX_PATH, "INVALID_WEAPON");
-				ReloadTime[hDrone][i] = kv.GetFloat("reload_time", 0.5);
-				FireRate[hDrone][i] = 60.0 / kv.GetFloat("fire_rate", 100);
+				ReloadTime[hDrone][i] = kv.GetFloat("reload_time", 1.0);
+				FireRate[hDrone][i] = kv.GetFloat("attack_time", 0.5);
 				MaxAmmo[hDrone][i] = kv.GetNum("ammo", 1);
+				if (MaxAmmo[hDrone][i] == 0) MaxAmmo[hDrone][i] = -1;
+				LoadedAmmo[hDrone][i] = MaxAmmo[hDrone][i];
 				kv.GoBack();
 			}
 			else
