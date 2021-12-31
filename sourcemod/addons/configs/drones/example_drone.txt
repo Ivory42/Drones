@@ -59,6 +59,7 @@
 			"speed"		"2750"
 			"reload_time"	"6.0"
 			"inaccuracy"	"5.0"
+			"burst"		"12"
 		}
 	}
 }
