@@ -41,11 +41,12 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_GetDroneActiveWeapon` - Returns the index of the current weapon for a given drone
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
   - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
-  - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile - highly configurable
+  - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile
   - `CD_GetParamFloat` - Retrieves a float parameter from a drone's config file
   - `CD_GetParamInteger` - Retrieves an integer parameter from a drone's config file
   - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
   - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
+  - `CD_OverrideMaxSpeed` - Overrides the max speed for the given drone
 
 ### Forwards
   - `CD_OnDroneCreated` - Called when a drone initially spawns
@@ -58,11 +59,9 @@ This plugin comes with several forwards and natives to use with other plugins. R
 ## Known Issues
   - Drones can phase through geometry at certain speeds
   - Ground based drones are not properly tested/functioning at this time
-  - Flying drones turn too sharply
 
 
 ## Planned Featurs
   - Native hitscan attack
   - Native support abilities (healing, ammo regeneration, etc)
   - Multiple move type modes for ground based drones
-  - Possible custom lag compensation
