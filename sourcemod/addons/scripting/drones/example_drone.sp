@@ -37,6 +37,7 @@ bool InBarrage[2048];
 //Weapon function variables
 float flProjDamage[2048][MAXWEAPONS+1];
 float flProjSpeed[2048][MAXWEAPONS+1];
+float Inaccuracy[2048][MAXWEAPONS+1];
 
 CDDmgType dProjDmgType[2048];
 
@@ -62,10 +63,10 @@ void SetupWeaponStats(const char[] config, int drone)
 	{
 		flProjDamage[drone][i] = CD_GetParamFloat(config, "damage", i);
 		flProjSpeed[drone][i] = CD_GetParamFloat(config, "speed", i);
+		Inaccuracy[drone][i] = CD_GetParamFloat(config, "inaccuracy", i);
 	}
-	BarrageMaxCount[drone] = CD_GetParamInteger(config, "barrage", 4);
-	PrintToChatAll("Barrage count set to: %i", BarrageMaxCount[drone]);
-	BarrageRate[drone] = (60.0 / CD_GetParamFloat(config, "barrage_firerate", 4)); //convert to rounds per minute
+	BarrageMaxCount[drone] = CD_GetParamInteger(config, "burst", 4);
+	BarrageRate[drone] = CD_GetParamFloat(config, "attack_time", 4);
 }
 
 public void OnMapStart()
@@ -112,13 +113,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			if (droneHP > 0)
 			{
 				//Rocket Pods function
-				if (InBarrage[drone] && iRocketCount[drone] < BarrageMaxCount[drone] && flRocketFireDelay[drone] <= GetEngineTime())
+				if (InBarrage[drone] && iRocketCount[drone] > 0 && flRocketFireDelay[drone] <= GetEngineTime())
 				{
-					FireRocket(client, drone, 4, hLastWeaponFired[drone], true);
-					iRocketCount[drone]++;
+					CD_FireActiveWeapon(client, drone);
+					iRocketCount[drone]--;
 					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
 				}
-				else if (iRocketCount[drone] >= BarrageMaxCount[drone])
+				else if (iRocketCount[drone] <= 0)
 				{
 					InBarrage[drone] = false;
 				}
@@ -142,12 +143,14 @@ public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plug
 			}
 			case 4: //Rocket pods
 			{
-				PrintToChat(owner, "barrage\nMax salvos: %i", BarrageMaxCount[drone]);
-				iRocketCount[drone] = 0;
-				FireRocket(owner, drone, 4, hLastWeaponFired[drone], false);
-				iRocketCount[drone]++;
-				flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
-				InBarrage[drone] = true;
+				if (!InBarrage[drone])
+				{
+					iRocketCount[drone] = BarrageMaxCount[drone];
+					FireRocket(owner, drone, 4, hLastWeaponFired[drone], false);
+					iRocketCount[drone]--;
+					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
+					InBarrage[drone] = true;
+				}
 
 			}
 			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone], false);
@@ -187,14 +190,14 @@ public void FireRocket(int owner, int drone, int pType, int fireLoc, bool reload
 		}
 		case 3: //Energy Orbs
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, 1.0);
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
 			int sound = GetRandomInt(1, 3);
 			Format(fireSound, sizeof fireSound, "weapons/custom/plasmarifle/shoot%i.mp3", sound);
 			dType = DmgType_Plasma;
 		}
 		case 4: //Rocekt Pods
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Sentry, damage, speed, 60.0, sideOffset, _, 5.0);
+			rocket = CD_SpawnRocket(owner, drone, DroneProj_Sentry, damage, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
 			Format(fireSound, sizeof fireSound, ROCKETSOUND);
 			dType = DmgType_Missile;
 		}
@@ -319,9 +322,9 @@ public void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[]
 public void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name, const char[] config)
 {
 	Format(sPluginName[drone], PLATFORM_MAX_PATH, plugin_name);
-	SetupWeaponStats(config, drone);
 	if (StrEqual(plugin_name, "example_drone"))
 	{
+		SetupWeaponStats(config, drone);
 		float vAngles[3], vPos[3];
 		GetClientEyeAngles(owner, vAngles);
 		GetClientEyePosition(owner, vPos);
