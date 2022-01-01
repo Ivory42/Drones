@@ -22,6 +22,8 @@ CDMoveType dMoveType[2048];
 
 float FlyMinSpeed = 200.0;
 
+bool SpecDrone[MAXPLAYERS+1];
+
 char sPluginName[2048][PLATFORM_MAX_PATH];
 char sName[2048][PLATFORM_MAX_PATH];
 char sModelName[2048][PLATFORM_MAX_PATH];
@@ -45,6 +47,9 @@ float flDroneAcceleration[2048];
 float ReloadTime[2048][MAXWEAPONS+1];
 float ReloadDelay[2048][MAXWEAPONS+1];
 float FireRate[2048][MAXWEAPONS+1];
+float DroneYaw[2048][2];
+float TurnRate[2048];
+float SpeedOverride[2048];
 
 char sDroneWeapon1[2048][PLATFORM_MAX_PATH];
 char sDroneWeapon2[2048][PLATFORM_MAX_PATH];
@@ -101,6 +106,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_GetCameraHeight", Native_GetCameraHeight);
 	CreateNative("CD_IsValidDrone", Native_ValidDrone);
 	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
+	CreateNative("CD_FireActiveWeapon", Native_FireWeapon);
+	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed);
 	return APLRes_Success;
 }
 
@@ -110,14 +117,32 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 ********************************************************************************/
 
-public void Native_DroneTakeDamage(Handle plugin, int args)
+public int Native_OverrideMaxSpeed(Handle plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	float speed = GetNativeCell(2);
+
+	SpeedOverride[drone] = speed;
+}
+
+public int Native_FireWeapon(Handle plugin, int args)
+{
+	int owner = GetNativeCell(1);
+	int drone = GetNativeCell(2);
+	int weapon = dActiveWeapon[drone];
+
+	if (AmmoLoaded[drone][weapon] != 0)
+		FireWeapon(owner, drone, weapon);
+}
+
+public int Native_DroneTakeDamage(Handle plugin, int args)
 {
 	int drone = GetNativeCell(1);
 	int attacker = GetNativeCell(2);
 	int inflictor = GetNativeCell(3);
 	float damage = GetNativeCell(4);
 	bool crit = view_as<bool>(GetNativeCell(5));
-	
+
 	DroneTakeDamage(drone, attacker, inflictor, damage, crit);
 }
 
@@ -499,12 +524,17 @@ public Action OpenMenu(int client)
 	char FileName[PLATFORM_MAX_PATH];
 
 	FileType type;
-	BuildPath(Path_SM, DroneDir, sizeof(DroneDir), "configs/drones");
+	BuildPath(Path_SM, DroneDir, sizeof DroneDir, "configs/drones");
 	Handle hDir = OpenDirectory(DroneDir);
-	while (ReadDirEntry(hDir, FileName, sizeof(FileName), type))
+	while (ReadDirEntry(hDir, FileName, sizeof FileName, type))
 	{
-		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
-		DroneMenu.AddItem(FileName, FileName);
+		char dirName[PLATFORM_MAX_PATH];
+		Format(dirName, sizeof dirName, "%s/%s", DroneDir, FileName);
+		if (FileExists(dirName))
+		{
+			ReplaceString(FileName, sizeof FileName, ".txt", "", false);
+			DroneMenu.AddItem(FileName, FileName);
+		}
 	}
 	CloseHandle(hDir);
 	DroneMenu.AddItem("-1", "Exit");
@@ -572,12 +602,13 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 {
 	if (IsValidEntity(drone))
 	{
+		damagetype |= DMG_PREVENT_PHYSICS_FORCE;
 		//PrintToChatAll("damaged");
 
 		if ((damagetype & DMG_CRIT) && attacker != drone)
 		{
 			damage *= 3.0; //triple damage for crits
-			damagetype = DMG_ENERGYBEAM; //no damage falloff
+			damagetype = (DMG_ENERGYBEAM|DMG_PREVENT_PHYSICS_FORCE); //no damage falloff
 		}
 
 		if (attacker != hDroneOwner[drone])
@@ -585,25 +616,25 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 			//PrintToChatAll("Attacker is not owner");
 			DroneTakeDamage(drone, attacker, inflictor, damage, false);
 		}
-
-		
+		return Plugin_Changed;
 	}
+	return Plugin_Continue;
 }
 
 void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, bool crit)
 {
 	bool sendEvent = true;
-	
+
 	if (DroneIsDead[drone]) return;
-	
+
 	if (attacker == hDroneOwner[drone]) //significantly reduce damage if the drone damages itself
 	{
 		damage *= 0.25; //Should probably be a convar
 		sendEvent = false;
 	}
-	
+
 	if (sendEvent)
-		SendDamageEvent(drone, attacker, damage, false);
+		SendDamageEvent(drone, attacker, damage, crit);
 
 	flDroneHealth[drone] -= damage;
 	if (flDroneHealth[drone] <= 0.0)
@@ -649,8 +680,9 @@ public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
 		PropHurt.SetInt("attacker_player", GetClientUserId(attacker));
 		PropHurt.SetInt("damageamount", damageamount);
 		PropHurt.SetInt("health", health - damageamount);
-		
-		PropHurt.FireEvent(false);
+		PropHurt.SetBool("crit", crit);
+
+		PropHurt.Fire(false);
 	}
 }
 
@@ -658,111 +690,103 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
 	if (IsValidClient(client))
 	{
+		if (!IsPlayerAlive(client) || GetClientTeam(client) == 1 || GetClientTeam(client) == 0) //player is dead or in spectate
+		{
+			int observerTarget = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
+			if (IsValidClient(observerTarget) && IsValidDrone(hDroneEntity[observerTarget]))
+			{
+				SpecDrone[client] = true;
+				SetClientViewEntity(client, hDroneEntity[observerTarget]);
+			}
+			else if (SpecDrone[client])
+			{
+				SetClientViewEntity(client, client);
+			}
+		}
 		if (IsValidDrone(hDroneEntity[client]))
 		{
 			int iDroneHP;
 			int hDrone = hDroneEntity[client];
 			int activeWeapon = iWeaponNumber[hDrone];
 			iDroneHP = RoundFloat(flDroneHealth[hDrone]);
-			float vPos[3], vAngles[3], vVel[3], vVel2[3], vVel3[3], vVel4[3], vVel5[3], vVel6[3], vAbsVel[3]; //need to condense these into a single 2d array
+			float vPos[3], vAngles[3], cAngles[3], vVel[7][3], vAbsVel[3];// vVel2[3], vVel3[3], vVel4[3], vVel5[3], vVel6[3], vAbsVel[3]; //need to condense these into a single 2d array
 			char sAmmoType[64], ammo[64];
-			float flMaxSpeed = flDroneMaxSpeed[hDrone];
+			float flMaxSpeed = SpeedOverride[hDrone] > 0.0 ? SpeedOverride[hDrone] : flDroneMaxSpeed[hDrone];
 			if (!DroneIsDead[hDrone])
 			{
-
+				float droneAngles[3];
+				GetClientEyeAngles(client, cAngles);
+				vAngles = cAngles;
 				GetWeaponName(hDrone, activeWeapon, sAmmoType, sizeof sAmmoType);
 				GetAmmoCount(hDrone, activeWeapon, ammo, sizeof ammo);
 
 				SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
 				char sDroneHp[64];
-				Format(sDroneHp, sizeof sDroneHp, "Health: %i\nWeapon: %s\n%s", iDroneHP, sAmmoType, sIsReady);
+				Format(sDroneHp, sizeof sDroneHp, "Health: %i\nWeapon: %s\n%s", iDroneHP, sAmmoType, ammo);
 				ShowHudText(client, -1, "%s", sDroneHp);
 
+				DroneYaw[hDrone][1] = DroneYaw[hDrone][0];
 				GetEntPropVector(hDrone, Prop_Data, "m_vecOrigin", vPos);
-				GetClientEyeAngles(client, vAngles);
+				GetEntPropVector(hDrone, Prop_Send, "m_angRotation", droneAngles);
+				DroneYaw[hDrone][0] = droneAngles[1];
 
 				switch (dMoveType[hDrone])
 				{
 					case DroneMove_Hover:
 					{
-						GetAngleVectors(vAngles, vVel, NULL_VECTOR, NULL_VECTOR);
+						GetAngleFromTurnRate(vAngles, vPos, droneAngles, TurnRate[hDrone], hDrone);
 
+						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
 						if (buttons & IN_FORWARD)
-						{
 							flSpeed[client][0] += flDroneAcceleration[hDrone];
-						}
 						else
-						{
 							flSpeed[client][0] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[1], flSpeed[client][0]);
 
-						ScaleVector(vVel, flSpeed[client][0]);
-
-						GetAngleVectors(vAngles, vVel3, NULL_VECTOR, NULL_VECTOR);
+						GetAngleVectors(vAngles, vVel[3], NULL_VECTOR, NULL_VECTOR); //back movement
 						if (buttons & IN_BACK)
-						{
 							flSpeed[client][2] += flDroneAcceleration[hDrone];
-						}
 						else
-						{
 							flSpeed[client][2] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[3], -flSpeed[client][2]);
 
-						ScaleVector(vVel3, -flSpeed[client][2]);
-
-						GetAngleVectors(vAngles, NULL_VECTOR, vVel2, NULL_VECTOR);
+						GetAngleVectors(vAngles, NULL_VECTOR, vVel[2], NULL_VECTOR); //right movement
 						if (buttons & IN_MOVERIGHT)
 						{
 							flSpeed[client][1] += flDroneAcceleration[hDrone];
 							flRoll[client] += flRollRate;
 						}
 						else
-						{
 							flSpeed[client][1] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[2], flSpeed[client][1]);
 
-						ScaleVector(vVel2, flSpeed[client][1]);
-
-						GetAngleVectors(vAngles, NULL_VECTOR, vVel4, NULL_VECTOR);
+						GetAngleVectors(vAngles, NULL_VECTOR, vVel[4], NULL_VECTOR); //left movement
 						if (buttons & IN_MOVELEFT)
 						{
 							flSpeed[client][3] += flDroneAcceleration[hDrone];
 							flRoll[client] -= flRollRate;
 						}
 						else
-						{
 							flSpeed[client][3] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[4], -flSpeed[client][3]);
 
-						ScaleVector(vVel4, -flSpeed[client][3]);
-
-						GetAngleVectors(vAngles, NULL_VECTOR, NULL_VECTOR, vVel5);
+						GetAngleVectors(vAngles, NULL_VECTOR, NULL_VECTOR, vVel[5]); //up movement
 						if (buttons & IN_JUMP)
-						{
 							flSpeed[client][4] += flDroneAcceleration[hDrone];
-						}
 						else
-						{
 							flSpeed[client][4] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[5], flSpeed[client][4]);
 
-						ScaleVector(vVel5, flSpeed[client][4]);
-
-						GetAngleVectors(vAngles, NULL_VECTOR, NULL_VECTOR, vVel6);
+						GetAngleVectors(vAngles, NULL_VECTOR, NULL_VECTOR, vVel[6]); //down movement
 						if (buttons & IN_DUCK)
-						{
 							flSpeed[client][5] += flDroneAcceleration[hDrone];
-						}
 						else
-						{
 							flSpeed[client][5] -= flDroneAcceleration[hDrone];
-						}
+						ScaleVector(vVel[6], -flSpeed[client][5]);
 
-						ScaleVector(vVel6, -flSpeed[client][5]);
+						AddMultipleVectors(vVel[1], vVel[2], vVel[3], vVel[4], vVel[5], vVel[6], vAbsVel);
 
-						AddMultipleVectors(vVel, vVel2, vVel3, vVel4, vVel5, vVel6, vAbsVel);
-
-						for (int v = 0; v < 6; v++)
+						for (int v = 0; v < 6; v++) //clamp our speed
 						{
 							flSpeed[client][v] = ClampFloat(flSpeed[client][v], flMaxSpeed);
 						}
@@ -775,6 +799,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					}
 					case DroneMove_Fly: //flying drones can only move forward
 					{
+						GetAngleFromTurnRate(vAngles, vPos, droneAngles, TurnRate[hDrone], hDrone);
 						//specific variables for flying drones
 						float forwardVec[3];
 
@@ -792,24 +817,22 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						flSpeed[client][0] = ClampFloat(flSpeed[client][0], flMaxSpeed, FlyMinSpeed);
 						ScaleVector(forwardVec, flSpeed[client][0]);
 						vAbsVel = forwardVec;
-						float turnRate = AngleDifference(hDrone, vAngles, turnRate);
-						if (FloatAbs(turnRate) >= 0.45)
+
+						float turnRate = AngleDifference(vAngles, cAngles, turnRate);
+						float diff = DroneYaw[hDrone][1] - DroneYaw[hDrone][0];
+						bool positive = (diff > 0) ? true : false;
+						//PrintCenterText(client, "Turn Rate: %.1f\n%s\nCur: %.1f\nPrev: %.1f\n%.1f", turnRate, positive ? "right" : "left", DroneYaw[hDrone][0], DroneYaw[hDrone][1], diff);
+						if (FloatAbs(turnRate) >= 0.2 && FloatAbs(diff) <= 80.0)
 						{
-							if (turnRate > 0) //Right turn
+							if (positive) //Right turn
 							{
-								flRoll[client] += flRollRate * GetFactorFromSpeed(hDrone, flSpeed[client][0]);
+								flRoll[client] = (turnRate / 1.0);
 							}
 							else
 							{
-								flRoll[client] -= flRollRate * GetFactorFromSpeed(hDrone, flSpeed[client][0]);
+								flRoll[client] = ((turnRate / 1.0) * -1.0);
 							}
 						}
-						else
-							flRoll[client] = SetRollTowardsZero(flRoll[client], true);
-
-						PrintCenterText(client, "Roll: %.1f", flRoll[client]);
-
-						//flRoll[client] = ClampFloat(flRoll[client], 50.0, -50.0);
 						vAngles[2] = flRoll[client];
 					}
 					case DroneMove_Ground:
@@ -818,6 +841,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					}
 				}
 
+				//manual reload
+				if (buttons & IN_RELOAD && AmmoLoaded[hDrone][activeWeapon] > 0)
+				{
+					StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
+				}
+
+				//Swap weapons on alt-fire
 				if (buttons & IN_ATTACK2 && flAmmoChange[hDrone] <= GetEngineTime())
 				{
 					if (iWeaponNumber[hDrone] >= iDroneWeapons[hDrone])
@@ -836,31 +866,22 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 					Call_Finish();
 				}
-				if (buttons & IN_ATTACK && flFireDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] != 0) //TODO - Change this to fire rates defined in the drone config
+
+				//Use active weapon on drone
+				if (buttons & IN_ATTACK && flFireDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] != 0)
 				{
-					flFireDelay[hDrone][activeWeapon] = GetEngineTime() + FireRate[hDrone][activeWeapon];
-
-					Call_StartForward(g_DroneAttack);
-
-					Call_PushCell(hDrone);
-					Call_PushCell(client);
-					Call_PushCell(dActiveWeapon[hDrone]);
-					Call_PushString(sPluginName[hDrone]);
-
-					Call_Finish();
-					
-					AmmoLoaded[hDrone][activeWeapon]--;
-					if (AmmoLoaded[hDrone][activeWeapon] == 0)
-					{
-						StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
-					}
+					FireWeapon(client, hDrone, activeWeapon);
 				}
-				
-				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime() && LoadedAmmo[hDrone][activeWeapon] == 0)
+
+				buttons &= ~IN_ATTACK;
+
+				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] == 0)
 				{
-					LoadedAmmo[hDrone][activeWeapon] = MaxAmmo[hDrone][activeWeapon];
+					AmmoLoaded[hDrone][activeWeapon] = MaxAmmo[hDrone][activeWeapon];
 					ReloadDelay[hDrone][activeWeapon] = FAR_FUTURE;
 				}
+
+				//update drone speed and angles
 				TeleportEntity(hDrone, NULL_VECTOR, vAngles, vAbsVel);
 			}
 			else if (flDroneExplodeDelay[hDrone] <= GetEngineTime())
@@ -874,24 +895,66 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	}
 }
 
+void GetAngleFromTurnRate(float angles[3], float pos[3], float droneAngles[3], float rate, int drone)
+{
+	float forwardPos[3], newDir[3], droneVel[3];
+	GetForwardPos(pos, angles, rate, _, _, forwardPos);
+
+	MakeVectorFromPoints(pos, forwardPos, newDir);
+	GetEntPropVector(drone, Prop_Data, "m_vecAbsVelocity", droneVel);
+	float forwardSpeed = GetVectorLength(droneVel);
+	GetAngleVectors(droneAngles, droneVel, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(droneVel, forwardSpeed);
+	AddVectors(droneVel, newDir, droneVel);
+	NormalizeVector(droneVel, droneVel);
+	GetVectorAngles(droneVel, droneAngles);
+	angles = droneAngles;
+}
+
+void FireWeapon(int owner, int drone, int weapon)
+{
+	flFireDelay[drone][weapon] = GetEngineTime() + FireRate[drone][weapon];
+
+	Call_StartForward(g_DroneAttack);
+
+	Call_PushCell(drone);
+	Call_PushCell(owner);
+	Call_PushCell(weapon);
+	Call_PushString(sPluginName[drone]);
+
+	Call_Finish();
+
+	if (AmmoLoaded[drone][weapon] == -1)
+		return;
+
+	AmmoLoaded[drone][weapon]--;
+	if (AmmoLoaded[drone][weapon] == 0)
+	{
+		StartWeaponReload(drone, weapon, ReloadTime[drone][weapon]);
+	}
+}
+
 void StartWeaponReload(int drone, int weapon, float time)
 {
-	ReloadDelay[drone][weapon] = GetEngineTime() + ReloadTime[drone][weapon];
+	AmmoLoaded[drone][weapon] = 0;
+	ReloadDelay[drone][weapon] = GetEngineTime() + time;
 }
 
-float GetFactorFromSpeed(int drone, float speed)
+float AngleDifference(float droneAngle[3], float aimAngle[3], float turnRate)
 {
-	float factor = speed / flDroneMaxSpeed[drone];
-	factor = ClampFloat(factor * 1.85, 5.0, 0.75);
-	return factor;
-}
+	float forwardVec[3], aimVec[3];
+	float droneAngle2[3]; droneAngle2 = droneAngle;
+	float aimAngle2[3]; aimAngle2 = aimAngle;
 
-float AngleDifference(int drone, float aimAngle[3], float turnRate)
-{
-	float droneAngle[3];
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-	turnRate = droneAngle[1] - aimAngle[1];
+	//zero pitch and roll
+	droneAngle2[0] = 0.0;
+	droneAngle2[2] = 0.0;
+	aimAngle2[0] = 0.0;
+	aimAngle2[2] = 0.0;
+	GetAngleVectors(droneAngle2, forwardVec, NULL_VECTOR, NULL_VECTOR);
+	GetAngleVectors(aimAngle2, aimVec, NULL_VECTOR, NULL_VECTOR);
 
+	turnRate = RadToDeg(ArcCosine(GetVectorDotProduct(forwardVec, aimVec) / GetVectorLength(forwardVec, true)));
 	return turnRate;
 }
 
@@ -923,13 +986,13 @@ stock bool ClientSideMovement(int client, int &buttons)
 	return false;
 }
 
-stock float SetRollTowardsZero(float roll, bool flying = false)
+stock float SetRollTowardsZero(float roll)
 {
 	if (roll > 0.0)
-		roll -= flying ? flRollRate * 2.5 : flRollRate;
+		roll -= flRollRate;
 
 	if (roll < 0.0)
-		roll += flying ? flRollRate * 2.5 : flRollRate;
+		roll += flRollRate;
 
 	return roll;
 }
@@ -1002,6 +1065,8 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	flDroneMaxHealth[hDrone] = kv.GetFloat("health", 100.0);
 	flDroneMaxSpeed[hDrone] = kv.GetFloat("speed", 300.0);
 	flDroneAcceleration[hDrone] = kv.GetFloat("acceleration", 5.0);
+	SpeedOverride[hDrone] = 0.0;
+	TurnRate[hDrone] = kv.GetFloat("turn_rate", 80.0);
 	kv.GetString("movetype", sMoveType[hDrone], PLATFORM_MAX_PATH, "drone_hover");
 	kv.GetString("plugin", sPluginName[hDrone], PLATFORM_MAX_PATH, "INVALID_PLUGIN");
 	float height = kv.GetFloat("camera_height", 30.0);
@@ -1019,11 +1084,11 @@ stock void SpawnDrone(int client, const char[] drone_name)
 			if (kv.JumpToKey(sNumber))
 			{
 				kv.GetString("name", sWeapon[i], PLATFORM_MAX_PATH, "INVALID_WEAPON");
+				MaxAmmo[hDrone][i] = kv.GetNum("ammo_loaded", 1);
 				ReloadTime[hDrone][i] = kv.GetFloat("reload_time", 1.0);
 				FireRate[hDrone][i] = kv.GetFloat("attack_time", 0.5);
-				MaxAmmo[hDrone][i] = kv.GetNum("ammo", 1);
 				if (MaxAmmo[hDrone][i] == 0) MaxAmmo[hDrone][i] = -1;
-				LoadedAmmo[hDrone][i] = MaxAmmo[hDrone][i];
+				AmmoLoaded[hDrone][i] = MaxAmmo[hDrone][i];
 				kv.GoBack();
 			}
 			else
@@ -1102,25 +1167,6 @@ void SetupViewPosition(int client, int drone, const float pos[3], const float an
 
 	SetClientViewEntity(client, camera);
 }
-
-/*
-Action OnFlyingDroneTouch(int drone, int victim)
-{
-	if (!IsValidClient(victim))
-	{
-		char classname[64];
-		GetEntityClassname(victim, classname, sizeof(classname));
-		if (victim == 0 || !StrContains(classname, "prop_", false) || !StrContains(classname, "func_door", false) || !StrContains(classname, "obj_", false))
-		{
-			return Plugin_Handled;
-		}
-	}
-	else
-		return Plugin_Handled;
-
-	return Plugin_Continue;
-}
-*/
 
 stock CDMoveType GetMoveType(const char[] movetype)
 {

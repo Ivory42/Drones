@@ -2,6 +2,7 @@
 {
 	"name"					"Example Drone" 		//Drone name
 	"camera_height"				"30"				//Vertical offset for camera position
+	"turn_rate"				"20"				//Rate at which the drone can turn
 	"model"					"models/combine_scanner.mdl"	//Model to use for drone
 	//"destroyed_model"			"models/combine_scanner.mdl"	//Optional Model to use for when drone is destroyed
 	"health"				"80" 				//Drone Health
@@ -24,11 +25,11 @@
 		{
 			"name"	"Missile Launcher"
 			
-			"ammo"		"4"	//ammo loaded - defaults to 1
+			"ammo_loaded"	"4"		//ammo for this weapon
 			"attack_time"	"0.8"	//weapon attack delay
 			"damage"	"75"	//damage of each rocket
 			"speed"		"1100"	//speed of each rocket
-			"reload_time"	"1.2"	//weapon reload time
+			"reload_time"	"1.8"	//weapon reload time
 		}
 		"weapon2"
 		{
@@ -42,24 +43,24 @@
 		{
 			"name"	"Plasma Rifle"
 			
-			"ammo"		"24"
+			"ammo_loaded"	"24"
 			"attack_time"	"0.15"
 			"damage"	"10"
 			"speed"		"2200"
-			"reload_time"	"1.5"
+			"reload_time"	"2.1"
 			"inaccuracy"	"1.0"
 		}
 		"weapon4"
 		{
 			"name"	"Rocket Pods"
 			
-			"ammo"		"12"
+			"ammo_loaded"		"12"
 			"attack_time"	"0.15"
 			"damage"	"65"
 			"speed"		"2750"
 			"reload_time"	"6.0"
 			"inaccuracy"	"5.0"
-			"burst"		"12"
+			"burst_count"		"12"
 		}
 	}
 }
