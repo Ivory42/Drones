@@ -35,6 +35,15 @@ enum CDDmgType
 /**
  * Fire the current drone's active weapon
  *
+ * @param1 drone - Drone to override speed of
+ * @param2 speed - Speed override
+ */
+
+native void CD_OverrideMaxSpeed(int drone, float speed);
+
+/**
+ * Fire the current drone's active weapon
+ *
  * @param1 owner - client owning the drone
  * @param2 drone - Drone to damage
  */
