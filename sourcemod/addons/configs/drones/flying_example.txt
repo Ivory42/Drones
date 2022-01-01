@@ -1,0 +1,38 @@
+"Drone"
+{
+	"name"				"Flying Drone" 						//Drone name
+	"camera_height"			"45.0"							//camera height above drone
+	"turn_rate"			"35"
+	"model"				"models/combine_scanner.mdl"				//Model to use for drone
+	"health"			"100" 							//Drone Health
+	"speed"				"600" 							//Drone Speed
+	"acceleration"			"8"							//Drone Acceleration
+	"movetype"			"drone_fly"						//Movetype for drone (Options are: drone_hover, drone_fly, drone_ground)
+	"plugin"			"flying_example"					//plugin name to use for drone logic
+	
+	//Plugin specific parameter for overriding speed
+	"boost_speed"			"1000"
+	
+	//Drone Weapons
+	"weapons"
+	{
+		"weapon1"
+		{
+			"name"	"Plasma Rifles"
+			
+			"ammo_loaded"		"-1" //gives bottomless clip
+			"attack_time"		"0.15"
+			"damage"	"4.0"
+			"speed"		"2200.0"
+			"inaccuracy"	"0.8"
+		}
+		"weapon2"
+		{
+			"name"	"Energy Rocket"
+			
+			"damage"	"215.0"
+			"speed"		"1000.0"
+			"reload_time"	"3.5"
+		}
+	}
+}
