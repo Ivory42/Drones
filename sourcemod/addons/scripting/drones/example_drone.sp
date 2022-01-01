@@ -10,6 +10,7 @@
 
 #define ENERGY_SOUND "weapons/cow_mangler_main_shot.wav"
 #define ROCKETSOUND "weapons/sentry_rocket.wav"
+#define PLASMASOUND "weapons/pomson_fire_01.wav"
 #define PODMODEL "models/weapons/c_models/c_blackbox/c_blackbox.mdl"
 #define MISSILEMODEL "models/weapons/c_models/c_rocketlauncher/c_rocketlauncher.mdl"
 #define ENERGYMODEL "models/weapons/c_models/c_drg_cowmangler/c_drg_cowmangler.mdl"
@@ -65,7 +66,7 @@ void SetupWeaponStats(const char[] config, int drone)
 		flProjSpeed[drone][i] = CD_GetParamFloat(config, "speed", i);
 		Inaccuracy[drone][i] = CD_GetParamFloat(config, "inaccuracy", i);
 	}
-	BarrageMaxCount[drone] = CD_GetParamInteger(config, "burst", 4);
+	BarrageMaxCount[drone] = CD_GetParamInteger(config, "burst_count", 4);
 	BarrageRate[drone] = CD_GetParamFloat(config, "attack_time", 4);
 }
 
@@ -77,9 +78,7 @@ public void OnMapStart()
 	PrecacheModel(PLASMAMODEL);
 	PrecacheSound(ROCKETSOUND);
 	PrecacheSound(ENERGY_SOUND);
-	PrecacheSound("weapons/custom/plasmarifle/shoot1.mp3");
-	PrecacheSound("weapons/custom/plasmarifle/shoot2.mp3");
-	PrecacheSound("weapons/custom/plasmarifle/shoot3.mp3");
+	PrecacheSound(PLASMASOUND);
 }
 
 public void OnClientPutInServer(int client)
@@ -113,10 +112,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			if (droneHP > 0)
 			{
 				//Rocket Pods function
+				if (InBarrage[drone] && CD_GetDroneActiveWeapon(drone) != 4)
+				{
+					InBarrage[drone] = false;
+				}
 				if (InBarrage[drone] && iRocketCount[drone] > 0 && flRocketFireDelay[drone] <= GetEngineTime())
 				{
 					CD_FireActiveWeapon(client, drone);
-					iRocketCount[drone]--;
 					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
 				}
 				else if (iRocketCount[drone] <= 0)
@@ -132,35 +134,40 @@ public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plug
 {
 	if (Attributed[drone])
 	{
-		//LogMessage("Active Drone Weapon: %i", weapon);
 		switch (weapon)
 		{
 			case 3: //plasma rifle
 			{
 				//Fire from both weapons
-				FireRocket(owner, drone, weapon, hLastWeaponFired[drone], false);
-				FireRocket(owner, drone, weapon, hLastWeaponFired[drone], false);
+				FireRocket(owner, drone, weapon, hLastWeaponFired[drone]);
+				FireRocket(owner, drone, weapon, hLastWeaponFired[drone]);
 			}
 			case 4: //Rocket pods
 			{
 				if (!InBarrage[drone])
 				{
 					iRocketCount[drone] = BarrageMaxCount[drone];
-					FireRocket(owner, drone, 4, hLastWeaponFired[drone], false);
+					FireRocket(owner, drone, 4, hLastWeaponFired[drone]);
 					iRocketCount[drone]--;
 					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
 					InBarrage[drone] = true;
 				}
+				else
+				{
+					FireRocket(owner, drone, 4, hLastWeaponFired[drone]);
+					iRocketCount[drone]--;
+					flRocketFireDelay[drone] = GetEngineTime() + BarrageRate[drone];
+				}
 
 			}
-			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone], false);
+			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone]);
 		}
 	}
 }
 
 
 //Function for when the drone fires its active weapon
-public void FireRocket(int owner, int drone, int pType, int fireLoc, bool reload)
+public void FireRocket(int owner, int drone, int pType, int fireLoc)
 {
 	char fireSound[64];
 
@@ -191,8 +198,7 @@ public void FireRocket(int owner, int drone, int pType, int fireLoc, bool reload
 		case 3: //Energy Orbs
 		{
 			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
-			int sound = GetRandomInt(1, 3);
-			Format(fireSound, sizeof fireSound, "weapons/custom/plasmarifle/shoot%i.mp3", sound);
+			Format(fireSound, sizeof fireSound, PLASMASOUND);
 			dType = DmgType_Plasma;
 		}
 		case 4: //Rocekt Pods
@@ -213,9 +219,6 @@ public void FireRocket(int owner, int drone, int pType, int fireLoc, bool reload
 	dProjDmgType[rocket] = dType;
 	EmitSoundToAll(fireSound, drone);
 	bIsDroneRocket[rocket] = true;
-
-	if (reload)
-		CD_SetWeaponReloading(drone, pType);
 
 	hLastWeaponFired[drone] = GetNextWeapon(drone);	//Get next physical weapon to fire from
 }
@@ -321,9 +324,9 @@ public void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[]
 
 public void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name, const char[] config)
 {
-	Format(sPluginName[drone], PLATFORM_MAX_PATH, plugin_name);
 	if (StrEqual(plugin_name, "example_drone"))
 	{
+		Format(sPluginName[drone], PLATFORM_MAX_PATH, plugin_name);
 		SetupWeaponStats(config, drone);
 		float vAngles[3], vPos[3];
 		GetClientEyeAngles(owner, vAngles);
