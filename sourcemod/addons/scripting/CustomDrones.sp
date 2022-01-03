@@ -22,7 +22,11 @@ CDMoveType dMoveType[2048];
 
 float FlyMinSpeed = 200.0;
 
+int PlayerSpecCamera[MAXPLAYERS+1];
+int PlayerSpecCameraAnchor[MAXPLAYERS+1];
+int PlayerSpecDrone[MAXPLAYERS+1]; //drone being spectated
 bool SpecDrone[MAXPLAYERS+1];
+bool FirstPersonSpec[MAXPLAYERS+1];
 
 char sPluginName[2048][PLATFORM_MAX_PATH];
 char sName[2048][PLATFORM_MAX_PATH];
@@ -39,6 +43,7 @@ int hDroneOwner[2048];
 int iDroneWeapons[2048];
 int iWeaponNumber[2048];
 int dActiveWeapon[2048];
+int DroneCamera[2049];
 float CameraHeight[2048];
 float flDroneHealth[2048];
 float flDroneMaxHealth[2048];
@@ -80,9 +85,12 @@ public Plugin MyInfo = {
 public void OnPluginStart()
 {
 	RegAdminCmd("sm_drone", CmdDrone, ADMFLAG_ROOT);
-	HookEvent("player_death", OnPlayerDeath);
+	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
+	HookEvent("player_spawn", OnPlayerSpawn);
 	HookEvent("teamplay_round_start", OnRoundStart);
-
+	AddCommandListener(ChangeSpec, "spec_next");
+	AddCommandListener(ChangeSpec, "spec_prev");
+	AddCommandListener(ChangeSpecMode, "spec_mode");
 	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
 
 	//Forwards
@@ -91,6 +99,29 @@ public void OnPluginStart()
 	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 	g_DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
 	g_DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
+}
+
+Action ChangeSpec(int client, const char[] command, int args)
+{
+	RemoveSpecCamera(client);
+}
+
+Action ChangeSpecMode(int client, const char[] command, int args)
+{
+	if (SpecDrone[client] && !FirstPersonSpec[client])
+	{
+		int camera = GetDroneCamera(PlayerSpecDrone[client]);
+		if (IsValidEntity(camera) && camera > MaxClients)
+		{
+			SetClientViewEntity(client, camera);
+			FirstPersonSpec[client] = true;
+		}
+	}
+	else if (SpecDrone[client] && FirstPersonSpec[client])
+	{
+		SetClientViewEntity(client, PlayerSpecCamera[client]);
+		FirstPersonSpec[client] = false;
+	}
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -361,6 +392,66 @@ bool FilterDrone(int entity, int mask, int exclude)
 	return true;
 }
 
+public Action OnPlayerSpawn(Event event, const char[] name, bool dBroad)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+
+	RemoveSpecCamera(client);
+}
+
+public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
+{
+	int client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
+	int attacker = GetClientOfUserId(GetEventInt(hEvent, "attacker"));
+	if (IsValidClient(client) && bIsInDrone[client])
+	{
+		bIsInDrone[client] = false;
+		KillDrone(hDroneEntity[client], attacker, 0.0);
+		ResetClientView(client);
+	}
+	if (bIsInDrone[attacker] && IsValidDrone(hDroneEntity[attacker] && attacker != client))
+	{
+		CreateSpecCamera(client, hDroneEntity[attacker]);
+	}
+}
+
+void CreateSpecCamera(int client, int drone)
+{
+	//spawn the camera anchor
+	int cameraAnchor = CreateEntityByName("prop_dynamic_override");
+	DispatchKeyValue(cameraAnchor, "model", "models/empty.mdl");
+
+	DispatchSpawn(cameraAnchor);
+	ActivateEntity(cameraAnchor);
+
+	float pos[3], angle[3];
+	GetClientEyeAngles(client, angle);
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+	TeleportEntity(cameraAnchor, pos, angle, NULL_VECTOR);
+	SetVariantString("!activator");
+	AcceptEntityInput(cameraAnchor, "SetParent", drone, cameraAnchor, 0);
+	PlayerSpecCameraAnchor[client] = cameraAnchor;
+
+	//Now setup the actual camera
+	int camera = CreateEntityByName("prop_dynamic_override");
+	DispatchKeyValue(camera, "model", "models/empty.mdl");
+
+	DispatchSpawn(camera);
+	ActivateEntity(camera);
+
+	float forwardVec[3];
+	GetAngleVectors(angle, forwardVec, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(forwardVec, -200.0);
+	AddVectors(pos, forwardVec, pos);
+	TeleportEntity(camera, pos, angle, NULL_VECTOR);
+	SetVariantString("!activator");
+	AcceptEntityInput(camera, "SetParent", cameraAnchor, camera, 0);
+	SetClientViewEntity(client, camera);
+	PlayerSpecCamera[client] = camera;
+	SpecDrone[client] = true;
+	PlayerSpecDrone[client] = drone;
+}
+
 public void TryCreateDrone(int client, const char[] drone_name)
 {
 	char Directory[PLATFORM_MAX_PATH];
@@ -456,18 +547,6 @@ public Action OnRoundStart(Event event, const char[] name, bool dBroad)
 			ResetClientView(i);
 			hDroneEntity[i] = INVALID_ENT_REFERENCE;
 		}
-	}
-}
-
-public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
-{
-	int client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
-	int attacker = GetClientOfUserId(GetEventInt(hEvent, "attacker"));
-	if (IsValidClient(client) && bIsInDrone[client])
-	{
-		bIsInDrone[client] = false;
-		KillDrone(hDroneEntity[client], attacker, 0.0);
-		ResetClientView(client);
 	}
 }
 
@@ -686,6 +765,20 @@ public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
 	}
 }
 
+void RemoveSpecCamera(client)
+{
+	if (IsValidEntity(PlayerSpecCamera[client]) && PlayerSpecCamera[client] > MaxClients)
+	{
+		AcceptEntityInput(PlayerSpecCamera[client], "Kill");
+	}
+	if (IsValidEntity(PlayerSpecCameraAnchor[client]) && PlayerSpecCameraAnchor[client] > MaxClients)
+	{
+		AcceptEntityInput(PlayerSpecCameraAnchor[client], "Kill");
+	}
+	SetClientViewEntity(client, client);
+	SpecDrone[client] = false;
+}
+
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
 	if (IsValidClient(client))
@@ -693,15 +786,20 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		if (!IsPlayerAlive(client) || GetClientTeam(client) == 1 || GetClientTeam(client) == 0) //player is dead or in spectate
 		{
 			int observerTarget = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
-			if (IsValidClient(observerTarget) && IsValidDrone(hDroneEntity[observerTarget]))
+			if (IsValidClient(observerTarget) && IsValidDrone(hDroneEntity[observerTarget]) && observerTarget != client && !SpecDrone[client])
 			{
-				SpecDrone[client] = true;
-				SetClientViewEntity(client, hDroneEntity[observerTarget]);
+				CreateSpecCamera(client, hDroneEntity[observerTarget]);
 			}
-			else if (SpecDrone[client])
+			else if (!SpecDrone[client])
 			{
-				SetClientViewEntity(client, client);
+				RemoveSpecCamera(client);
 			}
+		}
+		if (IsValidEntity(PlayerSpecCameraAnchor[client]))
+		{
+			float angle[3];
+			GetClientEyeAngles(client, angle);
+			TeleportEntity(PlayerSpecCameraAnchor[client], NULL_VECTOR, angle, NULL_VECTOR);
 		}
 		if (IsValidDrone(hDroneEntity[client]))
 		{
@@ -1131,6 +1229,9 @@ stock void SpawnDrone(int client, const char[] drone_name)
 
 	bIsInDrone[client] = true;
 
+	SetVariantInt(1);
+	AcceptEntityInput(client, "SetForcedTauntCam");
+
 	Call_StartForward(g_DroneCreated);
 
 	Call_PushCell(hDrone);
@@ -1148,7 +1249,6 @@ void SetupViewPosition(int client, int drone, const float pos[3], const float an
 	Format(sTargetName, sizeof sTargetName, "camerapos%d", drone);
 	DispatchKeyValue(drone, "targetname", sTargetName);
 
-	//Right weapon
 	int camera = CreateEntityByName("prop_dynamic_override");
 	DispatchKeyValue(camera, "model", "models/empty.mdl");
 
@@ -1166,6 +1266,7 @@ void SetupViewPosition(int client, int drone, const float pos[3], const float an
 	AcceptEntityInput(camera, "SetParent", drone, camera, 0);
 
 	SetClientViewEntity(client, camera);
+	DroneCamera[drone] = camera;
 }
 
 stock CDMoveType GetMoveType(const char[] movetype)
@@ -1203,6 +1304,15 @@ stock bool TryRemoveDrone(int client)
 		return true;
 	}
 	return false;
+}
+
+int GetDroneCamera(int drone)
+{
+	if (IsValidDrone(drone))
+	{
+		return DroneCamera[drone];
+	}
+	return -1;
 }
 
 stock int CreateParticle(int iEntity = 0, char[] sParticle, bool bAttach = false, float pos[3]={0.0, 0.0, 0.0})
