@@ -45,6 +45,15 @@ enum CDWeaponType
 ****************************************************************/
 
 /**
+ * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
+ *
+ * @param1 drone - Drone to toggle view lock on
+ * @return new view lock value
+ */
+
+native bool CD_ToggleViewLocked(int drone);
+
+/**
  * Fire a hitscan attack from a drone's weapon
  *
  * @param1 owner - Client index who owns the drone
