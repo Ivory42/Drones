@@ -1,5 +1,4 @@
 #pragma semicolon 1
-#include <sourcemod>
 #include <tf2>
 #include <tf2_stocks>
 #include <sdkhooks>
@@ -138,6 +137,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_IsValidDrone", Native_ValidDrone);
 	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
 	CreateNative("CD_FireActiveWeapon", Native_FireWeapon);
+	CreateNative("CD_FireBullet", Native_HitscanAttack);
 	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed);
 	return APLRes_Success;
 }
@@ -280,6 +280,117 @@ public any Native_GetIntParam(Handle plugin, int args)
 	return result;
 }
 
+public any Native_HitscanAttack(Handle plugin, int args)
+{
+	int owner = GetNativeCell(1);
+	int drone = GetNativeCell(2);
+	float damage = GetNativeCell(3);
+	float pos[3];
+	GetNativeArray(4, pos, sizeof pos);
+	float forwardAngle[3];
+	GetNativeArray(5, forwardAngle, sizeof forwardAngle);
+	float offset[3];
+	GetNativeArray(6, offset, sizeof offset);
+	float inaccuracy = GetNativeCell(7);
+	float maxAngle[2];
+	GetNativeArray(8, maxAngle, sizeof maxAngle);
+	CDDmgType dmgType = view_as<CDDmgType>(GetNativeCell(9));
+	int color[4];
+	GetNativeArray(10, color, sizeof color);
+	CDWeaponType type = view_as<CDWeaponType>(GetNativeCell(11));
+	if (IsValidClient(owner) && IsValidDrone(drone))
+	{
+		float angle[3];
+		GetClientEyeAngles(owner, angle);
+		if (angle[0] >= forwardAngle[0] + maxAngle[0]) angle[0] = forwardAngle[0] + maxAngle[0];
+		if (angle[0] >= forwardAngle[0] - maxAngle[0]) angle[0] = forwardAngle[0] - maxAngle[0];
+		if (angle[1] >= forwardAngle[1] + maxAngle[1]) angle[1] = forwardAngle[1] + maxAngle[1];
+		if (angle[1] >= forwardAngle[1] - maxAngle[1]) angle[1] = forwardAngle[1] - maxAngle[1];
+
+		if (inaccuracy)
+		{
+			angle[0] += ((inaccuracy * -1.0), inaccuracy);
+			angle[1] += ((inaccuracy * -1.0), inaccuracy);
+		}
+
+		GetForwardPos(pos, forwardAngle, offset[0], offset[1], offset[2], pos);
+
+		Handle bullet = TR_TraceRayFilterEx(pos, angle, MASK_SHOT, RayType_Infinite, FilterDroneShoot, drone);
+		if (TR_DidHit(bullet))
+		{
+			int victim = TR_GetEntityIndex(bullet);
+			bool isDrone = IsValidDrone(victim);
+			float endPos[3];
+
+			TR_GetEndPosition(endPos, bullet);
+			switch (type)
+			{
+				case CDWeapon_Auto:
+				{
+					if (GetRandomInt(1, 4) == 1) //one in four attacks will have a tracer
+					{
+						TE_SetupBeamPoints(pos, endPos, PrecacheModel("materials/sprites/laser.vmt"), PrecacheModel("materials/sprites/laser.vmt"), 0, 1, 0.1, 5.0, 0.1, 10, 0.0, color, 10);
+						TE_SendToAll();
+					}
+				}
+				case CDWeapon_Laser:
+				{
+					TE_SetupBeamPoints(pos, endPos, PrecacheModel("materials/sprites/laser.vmt"), PrecacheModel("materials/sprites/laser.vmt"), 0, 1, 0.3, 7.0, 0.1, 10, 0.0, color, 10);
+					TE_SendToAll();
+				}
+				case CDWeapon_SlowFire:
+				{
+					TE_SetupBeamPoints(pos, endPos, PrecacheModel("materials/sprites/laser.vmt"), PrecacheModel("materials/sprites/laser.vmt"), 0, 1, 0.1, 5.0, 0.1, 10, 0.0, color, 10);
+					TE_SendToAll();
+				}
+			}
+
+			switch (dmgType)
+			{
+				case DmgType_Rangeless: //no damage falloff
+				{
+					if (isDrone)
+						DroneTakeDamage(victim, owner, drone, damage, false);
+					else
+						SDKHooks_TakeDamage(victim, owner, drone, damage, DMG_ENERGYBEAM);
+				}
+				default:
+				{
+					damage = Damage_Hitscan(victim, drone, damage);
+					SDKHooks_TakeDamage(victim, owner, drone, damage, DMG_ENERGYBEAM);
+				}
+			}
+		}
+	}
+}
+
+bool FilterDroneShoot(int entity, int mask, int drone)
+{
+	int owner = hDroneOwner[drone];
+	if (IsValidClient(entity) && GetClientTeam(entity) == GetClientTeam(owner)) //ignore teammates
+		return false;
+
+	if (entity == drone)
+		return false;
+
+	return true;
+}
+
+float Damage_Hitscan(int victim, int drone, float baseDamage)
+{
+	float dronePos[3], vicPos[3], distance;
+
+	//Setup distance between drone and target
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
+	GetClientAbsOrigin(victim, vicPos);
+	distance = GetVectorDistance(dronePos, vicPos);
+	float dmgMod = ClampFloat((512.0 / distance), 1.5, 0.528);
+	baseDamage *= dmgMod;
+
+	return baseDamage;
+}
+
+
 public any Native_SpawnRocket(Handle Plugin, int args)
 {
 	int owner = GetNativeCell(1);
@@ -406,7 +517,7 @@ public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
 	if (IsValidClient(client) && bIsInDrone[client])
 	{
 		bIsInDrone[client] = false;
-		KillDrone(hDroneEntity[client], attacker, 0.0);
+		KillDrone(hDroneEntity[client], attacker, 0.0, 0);
 		ResetClientView(client);
 	}
 	if (bIsInDrone[attacker] && IsValidDrone(hDroneEntity[attacker] && attacker != client))
@@ -552,6 +663,7 @@ public Action OnRoundStart(Event event, const char[] name, bool dBroad)
 
 public Action CmdDrone(int client, int args)
 {
+	if (!CanOpenMenu(client)) return Plugin_Continue;
 	char arg1[32];
 	GetCmdArg(1, arg1, sizeof(arg1));
 	char target_name[MAX_TARGET_LENGTH];
@@ -586,12 +698,17 @@ public Action CmdDrone(int client, int args)
 	}
 	else
 	{
-		if (IsPlayerAlive(client) && IsValidClient(client))
+		if (IsPlayerAlive(client) && IsValidClient(client) && CanOpenMenu(client))
 		{
 			OpenMenu(client);
 		}
 	}
 	return Plugin_Handled;
+}
+
+bool CanOpenMenu(int client)
+{
+	return true; //temp
 }
 
 public Action OpenMenu(int client)
@@ -681,11 +798,13 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 {
 	if (IsValidEntity(drone))
 	{
+		bool crit = false;
 		damagetype |= DMG_PREVENT_PHYSICS_FORCE;
 		//PrintToChatAll("damaged");
 
 		if ((damagetype & DMG_CRIT) && attacker != drone)
 		{
+			crit = true;
 			damage *= 3.0; //triple damage for crits
 			damagetype = (DMG_ENERGYBEAM|DMG_PREVENT_PHYSICS_FORCE); //no damage falloff
 		}
@@ -693,14 +812,14 @@ public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &da
 		if (attacker != hDroneOwner[drone])
 		{
 			//PrintToChatAll("Attacker is not owner");
-			DroneTakeDamage(drone, attacker, inflictor, damage, false);
+			DroneTakeDamage(drone, attacker, inflictor, damage, crit);
 		}
 		return Plugin_Changed;
 	}
 	return Plugin_Continue;
 }
 
-void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, bool crit)
+stock void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, bool crit, int weapon = 0)
 {
 	bool sendEvent = true;
 
@@ -718,15 +837,16 @@ void DroneTakeDamage(int drone, int &attacker, int &inflictor, float &damage, bo
 	flDroneHealth[drone] -= damage;
 	if (flDroneHealth[drone] <= 0.0)
 	{
-		KillDrone(drone, attacker, damage);
+		KillDrone(drone, attacker, damage, weapon);
 	}
 }
 
-void KillDrone(int drone, int attacker, float damage)
+stock void KillDrone(int drone, int attacker, float damage, int weapon)
 {
 	flDroneHealth[drone] = 0.0;
 	DroneIsDead[drone] = true;
 	flDroneExplodeDelay[drone] = GetEngineTime() + 3.0;
+	SendKillEvent(drone, attacker, weapon);
 	CreateParticle(drone, "burningplayer_flyingbits", true);
 	Call_StartForward(g_DroneDestroy);
 
@@ -744,6 +864,21 @@ public void ResetClientView(int client)
 	SetClientViewEntity(client, client);
 	bIsInDrone[client] = false;
 	SetEntityMoveType(client, MOVETYPE_WALK);
+}
+
+void SendKillEvent(int drone, int attacker, int weapon)
+{
+	if (IsValidDrone(drone))
+	{
+		Event DroneDeath = CreateEvent("rd_robot_killed", true);
+
+		DroneDeath.SetInt("userid", GetClientUserId(hDroneOwner[drone]));
+		DroneDeath.SetInt("victim_entindex", drone);
+		DroneDeath.SetInt("inflictor_entindex", attacker);
+		DroneDeath.SetInt("attacker", GetClientUserId(attacker));
+
+		DroneDeath.Fire(false);
+	}
 }
 
 public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
