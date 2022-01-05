@@ -20,9 +20,21 @@ enum CDMoveType
 
 enum CDDmgType
 {
+	//damagetypes for custom plugins
 	DmgType_Missile,
 	DmgType_Energy,
-	DmgType_Plasma
+	DmgType_Plasma,
+	
+	//default damage types used by main plugin
+	DmgType_Rangeless, 	//hitscan damage with no falloff
+	DmgType_Generic		//hitscan generic damage
+};
+
+enum CDWeaponType
+{
+	CDWeapon_Auto,		//high fire rate weapons
+	CDWeapon_SlowFire,	//slow fire weapons
+	CDWeapon_Laser		//laser weapons
 };
 
 
@@ -31,6 +43,24 @@ enum CDDmgType
 	NATIVES
 	
 ****************************************************************/
+
+/**
+ * Fire a hitscan attack from a drone's weapon
+ *
+ * @param1 owner - Client index who owns the drone
+ * @param2 drone - Drone firing the attack
+ * @param3 damage - Damage to deal on successful hit
+ * @param4 origin - Position to fire trace from
+ * @param5 forwardAngle - Forward direction of attack to check angle from
+ * @param6 offset - Position to offset trace origin from
+ * @param7 inaccuracy - Variation to add onto trace angle
+ * @param8 maxAngle - Maximum angle from forward angle that the attack can angle towards
+ * @param9 dmgType - Drone damage type to use for attack | CDDmgType
+ * @param10 color - Color to use for bullet tracer
+ * @param11 type - Drone weapon type this bullet is fire from | CDWeaponType
+ */
+
+native void CD_FireBullet(int owner, int drone, float damage, const float[] origin, const float[] forwardAngle, const float[] offset, float inaccuracy, const float[] maxAngle, CDDmgType dmgType, const int[] color, CDWeaponType type);
 
 /**
  * Fire the current drone's active weapon
