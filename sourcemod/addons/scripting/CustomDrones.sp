@@ -587,7 +587,7 @@ public void TryCreateDrone(int client, const char[] drone_name)
 	while (ReadDirEntry(hDir, FileName, sizeof(FileName), type))
 	{
 		if (type != FileType_File) continue;
-		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
+		ReplaceString(FileName, sizeof FileName, ".cfg", "", false);
 		if (StrEqual(drone_name, FileName))
 		{
 			//PrintToChatAll("Found drone %s", drone_name);
@@ -741,7 +741,7 @@ public Action OpenMenu(int client)
 		Format(dirName, sizeof dirName, "%s/%s", DroneDir, FileName);
 		if (FileExists(dirName))
 		{
-			ReplaceString(FileName, sizeof FileName, ".txt", "", false);
+			ReplaceString(FileName, sizeof FileName, ".cfg", "", false);
 			DroneMenu.AddItem(FileName, FileName);
 		}
 	}
@@ -1304,7 +1304,7 @@ stock void SpawnDrone(int client, const char[] drone_name)
 {
 	KeyValues kv = new KeyValues("Drone");
 	char sPath[64];
-	BuildPath(Path_SM, sPath, sizeof sPath, "configs/drones/%s.txt", drone_name);
+	BuildPath(Path_SM, sPath, sizeof sPath, "configs/drones/%s.cfg", drone_name);
 
 	if (!FileExists(sPath))
 	{
