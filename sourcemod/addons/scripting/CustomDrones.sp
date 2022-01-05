@@ -70,6 +70,7 @@ float flAmmoChange[2048];
 float flSpeed[MAXPLAYERS+1][6];
 float flRoll[MAXPLAYERS+1];
 bool DroneIsDead[2049];
+bool ViewLocked[2049];
 
 bool bIsInDrone[MAXPLAYERS+1];
 bool IsDrone[2048];
@@ -139,6 +140,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_FireActiveWeapon", Native_FireWeapon);
 	CreateNative("CD_FireBullet", Native_HitscanAttack);
 	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed);
+	CreateNative("CD_ToggleViewLocked", Native_ViewLock);
 	return APLRes_Success;
 }
 
@@ -147,6 +149,17 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	NATIVES
 
 ********************************************************************************/
+
+public any Native_ViewLock(Handle plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	if (IsValidDrone(drone))
+		ViewLocked[drone] = !ViewLocked[drone];
+	else
+		ThrowNativeError(017, "Entity index %i is not a valid drone", drone);
+	
+	return ViewLocked[drone];
+}
 
 public int Native_OverrideMaxSpeed(Handle plugin, int args)
 {
@@ -942,14 +955,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			int hDrone = hDroneEntity[client];
 			int activeWeapon = iWeaponNumber[hDrone];
 			iDroneHP = RoundFloat(flDroneHealth[hDrone]);
-			float vPos[3], vAngles[3], cAngles[3], vVel[7][3], vAbsVel[3];// vVel2[3], vVel3[3], vVel4[3], vVel5[3], vVel6[3], vAbsVel[3]; //need to condense these into a single 2d array
+			float vPos[3], vAngles[3], cAngles[3], vVel[7][3], vAbsVel[3];
 			char sAmmoType[64], ammo[64];
 			float flMaxSpeed = SpeedOverride[hDrone] > 0.0 ? SpeedOverride[hDrone] : flDroneMaxSpeed[hDrone];
 			if (!DroneIsDead[hDrone])
 			{
 				float droneAngles[3];
 				GetClientEyeAngles(client, cAngles);
-				vAngles = cAngles;
 				GetWeaponName(hDrone, activeWeapon, sAmmoType, sizeof sAmmoType);
 				GetAmmoCount(hDrone, activeWeapon, ammo, sizeof ammo);
 
@@ -961,13 +973,15 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				DroneYaw[hDrone][1] = DroneYaw[hDrone][0];
 				GetEntPropVector(hDrone, Prop_Data, "m_vecOrigin", vPos);
 				GetEntPropVector(hDrone, Prop_Send, "m_angRotation", droneAngles);
+				vAngles = droneAngles;
 				DroneYaw[hDrone][0] = droneAngles[1];
 
 				switch (dMoveType[hDrone])
 				{
 					case DroneMove_Hover:
 					{
-						GetAngleFromTurnRate(vAngles, vPos, droneAngles, TurnRate[hDrone], hDrone);
+						if (ViewLocked[hDrone])
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, TurnRate[hDrone], hDrone, vAngles);
 
 						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
 						if (buttons & IN_FORWARD)
@@ -1032,7 +1046,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					}
 					case DroneMove_Fly: //flying drones can only move forward
 					{
-						GetAngleFromTurnRate(vAngles, vPos, droneAngles, TurnRate[hDrone], hDrone);
+						if (ViewLocked[hDrone]) //only adjust angles if our view is locked to our client view angles
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, TurnRate[hDrone], hDrone, vAngles);
+						
 						//specific variables for flying drones
 						float forwardVec[3];
 
@@ -1068,9 +1084,24 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						}
 						vAngles[2] = flRoll[client];
 					}
-					case DroneMove_Ground:
+					case DroneMove_Ground: //TODO - add support to rotate wheel models
 					{
-
+						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
+						if (buttons & IN_FORWARD)
+							flSpeed[client][0] += flDroneAcceleration[hDrone];
+						if (buttons & IN_BACK)
+							flSpeed[client][0] -= flDroneAcceleration[hDrone];
+							
+						flSpeed[client][0] = ClampFloat(flSpeed[client][0], flMaxSpeed);
+						ScaleVector(vVel[1], flSpeed[client][0]);
+						
+						if (FloatAbs(flSpeed[client][0]) >= 50.0) //only steer if we have enough speed
+						{
+							if (buttons & IN_MOVERIGHT)
+								vAngles[1] += TurnRate[hDrone];
+							if (buttons & IN_MOVELEFT)
+								vAngles[2] -= TurnRate[hDrone];
+						}
 					}
 				}
 
@@ -1130,7 +1161,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 void GetAngleFromTurnRate(float angles[3], float pos[3], float droneAngles[3], float rate, int drone)
 {
-	float forwardPos[3], newDir[3], droneVel[3];
+	float forwardPos[3], newDir[3], droneVel[3], bufferAngle[3];
 	GetForwardPos(pos, angles, rate, _, _, forwardPos);
 
 	MakeVectorFromPoints(pos, forwardPos, newDir);
@@ -1140,8 +1171,8 @@ void GetAngleFromTurnRate(float angles[3], float pos[3], float droneAngles[3], f
 	ScaleVector(droneVel, forwardSpeed);
 	AddVectors(droneVel, newDir, droneVel);
 	NormalizeVector(droneVel, droneVel);
-	GetVectorAngles(droneVel, droneAngles);
-	angles = droneAngles;
+	GetVectorAngles(droneVel, bufferAngle);
+	angles = bufferAngle;
 }
 
 void FireWeapon(int owner, int drone, int weapon)
@@ -1305,6 +1336,20 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	float height = kv.GetFloat("camera_height", 30.0);
 
 	dMoveType[hDrone] = GetMoveType(sMoveType[hDrone]);
+	
+	switch (dMoteType[hDrone])
+	{
+		case DroneMove_Ground:
+		{
+			ViewLocked[hDrone] = false;
+			SetEntityGravity(hDrone, 1.0);
+		}
+		default:
+		{
+			ViewLocked[hDrone] = true;
+			SetEntityGravity(hDrone, 0.01);
+		}
+	}
 
 	//Find total number of weapons for this drone
 	iDroneWeapons[hDrone] = 0;
@@ -1353,7 +1398,6 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	hDroneOwner[hDrone] = client;
 	SetEntityMoveType(client, MOVETYPE_NONE);
 	IsDrone[hDrone] = true;
-	SetEntityGravity(hDrone, 0.01);
 	SetupViewPosition(client, hDrone, vPos, vAngles, height);
 	SDKHook(hDrone, SDKHook_OnTakeDamage, OnDroneDamaged);
 
