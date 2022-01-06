@@ -270,18 +270,19 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  * @param2 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
  * @param3 angle - Angle to use for offsetting positions
  * @param4 damage - Damage of the bomb
- * @param5 speed - Speed applied to the bomb
- * @param6 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
- * @param7 overrideY - Right position to offset rocket by
- * @param8 overrideZ - Up position to offset rocket by
- * @param9 inaccuracy - random variance added to projectile angles
- * @param10 bomb - buffer to store bomb struct
+ * @param5 modelname - Model for bomb to use
+ * @param6 speed - Speed applied to the bomb
+ * @param7 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
+ * @param8 overrideY - Right position to offset rocket by
+ * @param9 overrideZ - Up position to offset rocket by
+ * @param10 inaccuracy - random variance added to projectile angles
+ * @param11 bomb - buffer to store bomb struct
  *
  * @return true on success
  *
  */
 
-native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, float speed = 0.0, float overrideX = 0.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0, any bomb[sizeof BombEnt]);
+native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, const char[] modelname, float speed = 0.0, float overrideX = 0.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0, any bomb[sizeof BombEnt]);
 
 
 /**
