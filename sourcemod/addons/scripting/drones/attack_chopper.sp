@@ -113,7 +113,10 @@ void FireRocket(int owner, int drone, int type, int fireLoc)
 
 	float speed = MissileSpeed[drone];
 	float damage = WeaponDamage[drone][type];
-	CD_SpawnRocket(owner, drone, DroneProj_Rocket, damage, speed, 150.0, sideOffset, -80.0, Inaccuracy[drone][type]);
+	float pos[3], angle[3];
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
+	CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Rocket, damage, speed, 125.0, sideOffset, -80.0, Inaccuracy[drone][type]);
 
 	LastWeaponFired[drone] = (LastWeaponFired[drone] == 1) ? 0 : 1;	//Get next physical weapon to fire from
 }
@@ -123,7 +126,20 @@ void SpawnBomb(int owner, int drone, int weapon)
 	float pos[3], angle[3], newPos[3];
 	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-	//
+	
+	GetForwardPos(pos, angle, _, _, -60.0, pos);
+	
+	DroneBomb bombEnt;
+	bombEnt.create(owner, BombModel[drone], WeaponDamage[drone][weapon], BombFuseTime[drone], pos);
+	CreateTimer(bomb.fuse, DetonateBomb, bombEnt, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+Action DetonateBomb(Handle timer, DroneBomb bombEnt)
+{
+	if (IsValidEntity(bombEnt.bomb) && bombEnt.bomb > MaxClients)
+	{
+		bombEnt.detonate();
+	}
 }
 
 public void OnEntityDestroyed(int entity)
