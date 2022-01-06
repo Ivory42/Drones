@@ -130,18 +130,8 @@ void SpawnBomb(int owner, int drone, int weapon)
 	GetForwardPos(pos, angle, _, _, -60.0, pos);
 	
 	DroneBomb bombEnt;
-	CD_SpawnDroneBomb(drone, pos, angle, WeaponDamage[drone][weapon], BombModel[drone], _, _, _, _, _, bombEnt);
-	//bombEnt.create(owner, BombModel[drone], WeaponDamage[drone][weapon], BombFuseTime[drone], pos, NULL_VECTOR, NULL_VECTOR);
-	//CreateTimer(bomb.fuse, DetonateBomb, bombEnt, TIMER_FLAG_NO_MAPCHANGE);
+	CD_SpawnDroneBomb(drone, pos, angle, ProjType_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], _, _, _, _, _, bombEnt);
 }
-
-//Action DetonateBomb(Handle timer, DroneBomb bombEnt)
-//{
-//	if (IsValidEntity(bombEnt.bomb) && bombEnt.bomb > MaxClients)
-//	{
-//		bombEnt.detonate();
-//	}
-//}
 
 public void OnEntityDestroyed(int entity)
 {
