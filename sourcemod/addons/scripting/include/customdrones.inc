@@ -4,11 +4,21 @@
 #define _customdrones_included
 #define MAXWEAPONS 6
 
+//Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
 enum ProjType
 {
-	DroneProj_Rocket,
-	DroneProj_Energy,
-	DroneProj_Sentry
+	//rockets
+	DroneProj_Rocket,	//Default rocket
+	DroneProj_Energy,	//Cow mangler rocket
+	DroneProj_Sentry,	//Sentry rocket salvo
+	
+	//Bombs
+	DroneProj_Bomb,		//Default bomb, detonates on fuse timer which begins upon spawn
+	DroneProj_BombDelayed,	//Fuse timer starts after touching a surface
+	DroneProj_BombImpact,	//Bomb detonates upon impact rather than a fuse timer
+	
+	//misc
+	DroneProj_Custom	//Custom projectile type for defining logic within sub plugins
 };
 
 enum CDMoveType
@@ -249,13 +259,13 @@ native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] 
  * @param2 drone - Drone entity index
  * @param3 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
  * @param4 angle - Angle to use for offsetting positions
- * @param4 projectile - Type of rocket to spawn
- * @param5 damage - Damage of the rocket
- * @param6 speed - Speed of the rocket
- * @param7 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
- * @param8 overrideY - Right position to offset rocket by
- * @param9 overrideZ - Up position to offset rocket by
- * @param10 inaccuracy - random variance added to projectile angles
+ * @param5 projectile - Type of rocket to spawn
+ * @param6 damage - Damage of the rocket
+ * @param7 speed - Speed of the rocket
+ * @param8 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
+ * @param9 overrideY - Right position to offset rocket by
+ * @param10 overrideZ - Up position to offset rocket by
+ * @param11 inaccuracy - random variance added to projectile angles
  *
  * @return entity index of spawned rocket
  *
@@ -275,8 +285,7 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  * @param7 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
  * @param8 overrideY - Right position to offset rocket by
  * @param9 overrideZ - Up position to offset rocket by
- * @param10 inaccuracy - random variance added to projectile angles
- * @param11 bomb - buffer to store bomb struct
+ * @param10 bomb - buffer to store bomb struct
  *
  * @return true on success
  *
