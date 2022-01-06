@@ -37,6 +37,44 @@ enum CDWeaponType
 	CDWeapon_Laser		//laser weapons
 };
 
+//should probably be a methodmap
+enum struct DroneBomb
+{
+	int bomb;
+	int owner;
+	int explosion;
+	float fuseTime;
+	float detPos[3];
+	char damage[8];
+	char radius[8];
+	
+	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
+	{
+		this.bomb = CreateEntityByName("prop_physics_override");
+		this.owner = ownerEnt;
+		DispatchKeyValue(this.bomb, "Model", model);
+		Format(this.damage, 8, "%.1f", baseDamage);
+		Format(this.radius, 8, "%.1f", dmgRadius);
+		this.fuseTime = fuse;
+		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
+		DispatchSpawn(this.bomb);
+		ActivateEntity(this.bomb);
+	}
+	void detonate() //detonate our bomb
+	{
+		GetEntPropVector(this.bomb, Prop_Data, "m_vecOrigin", detPos);
+		AcceptEntityInput(this.bomb, "Kill");
+		this.explosion = CreateEntityByName("env_explosion");
+		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", this.owner);
+		DispatchKeyValue(this.explosion, "iMagnitude", this.damage);
+		DispatchKeyValue(this.explosion, "iRadiusOverride", this.radius);
+		TeleportEntity(this.explosion, detPos, NULL_VECTOR, NULL_VECTOR);
+		DispatchSpawn(this.explosion);
+		ActivateEntity(this.explosion);
+		AcceptEntityInput(this.Explosion, "Explode");
+	}
+}
+
 
 /****************************************************************
 
