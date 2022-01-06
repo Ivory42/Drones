@@ -79,7 +79,7 @@ public Plugin MyInfo = {
 	name 			= 	"Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for players",
-	version 		= 	"1.0"
+	version 		= 	"1.2.6"
 };
 
 public void OnPluginStart()
@@ -351,7 +351,6 @@ public any Native_AttackSound(Handle plugin, int args)
 	return false;
 }
 
-
 public any Native_HitscanAttack(Handle plugin, int args)
 {
 	int owner = GetNativeCell(1);
@@ -371,24 +370,22 @@ public any Native_HitscanAttack(Handle plugin, int args)
 	CDWeaponType type = view_as<CDWeaponType>(GetNativeCell(12));
 	if (IsValidClient(owner) && IsValidDrone(drone))
 	{
-		//Get where our drone is aiming and direct the rocket towards that angle
 		float angle[3], aimPos[3], aimVec[3], aimAngle[3], cameraPos[3];
 		GetClientEyeAngles(owner, aimAngle);
 		cameraPos = pos;
-		GetForwardPos(cameraPos, forwardAngle, 0.0, 0.0, CameraHeight[drone], cameraPos);
+		GetForwardPos(cameraPos, forwardAngle, 0.0, 0.0, CameraHeight[drone], cameraPos); //Get our camera height relative to our drone's forward vector
 		if (inaccuracy)
 		{
 			aimAngle[0] += GetRandomFloat((inaccuracy * -1.0), inaccuracy);
 			aimAngle[1] += GetRandomFloat((inaccuracy * -1.0), inaccuracy);
 		}
-		CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);
-		GetForwardPos(pos, forwardAngle, overrideX, overrideY, overrideZ, pos);
+		CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);	//find where the client is aiming at in relation to the drone
+		GetForwardPos(pos, forwardAngle, overrideX, overrideY, overrideZ, pos); //offset start position of trace
 
-		MakeVectorFromPoints(pos, aimPos, aimVec);
+		MakeVectorFromPoints(pos, aimPos, aimVec); //draw vector from offset position to our aim position
 		GetVectorAngles(aimVec, angle);
-		float offsetPos[3];
-		GetForwardPos(pos, angle, 3000.0, _, _, offsetPos);
 
+		//restrict angle at which projectiles can be fired, not yet working
 		//if (angle[0] >= forwardAngle[0] + maxAngle[0]) angle[0] = forwardAngle[0] + maxAngle[0];
 		//if (angle[0] >= forwardAngle[0] - maxAngle[0]) angle[0] = forwardAngle[0] - maxAngle[0];
 		//if (angle[1] >= forwardAngle[1] + maxAngle[1]) angle[1] = forwardAngle[1] + maxAngle[1];
@@ -433,7 +430,10 @@ public any Native_HitscanAttack(Handle plugin, int args)
 					if (victim > 0)
 					{
 						damage = Damage_Hitscan(victim, drone, damage);
-						SDKHooks_TakeDamage(victim, owner, owner, damage, DMG_ENERGYBEAM);
+						if (isDrone)
+							DroneTakeDamage(victim, owner, drone, damage, false);
+						else
+							SDKHooks_TakeDamage(victim, owner, owner, damage, DMG_ENERGYBEAM);
 					}
 				}
 			}
@@ -441,9 +441,10 @@ public any Native_HitscanAttack(Handle plugin, int args)
 	}
 }
 
+//create a visual bullet tracer
 void CreateTracer(float start[3], float end[3])
 {
-	int target = CreateEntityByName("prop_dynamic_override");
+	int target = CreateEntityByName("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
 	char targetname[64];
 	Format(targetname, sizeof targetname, "target%i", target);
 	DispatchKeyValue(target, "targetname", targetname);
@@ -451,7 +452,7 @@ void CreateTracer(float start[3], float end[3])
 	DispatchSpawn(target);
 	TeleportEntity(target, end, NULL_VECTOR, NULL_VECTOR);
 
-	int tracer = CreateEntityByName("env_gunfire");
+	int tracer = CreateEntityByName("env_gunfire"); //create the actual tracer
 	DispatchKeyValue(tracer, "target", targetname);
 	DispatchKeyValue(tracer, "minburstsize", "1");
 	DispatchKeyValue(tracer, "maxburstsize", "1");
@@ -465,6 +466,8 @@ void CreateTracer(float start[3], float end[3])
 	ActivateEntity(tracer);
 
 	TeleportEntity(tracer, start, NULL_VECTOR, NULL_VECTOR);
+	
+	//remove our tracer and target shortly after
 	CreateTimer(0.5, RemoveTarget, target);
 	CreateTimer(0.5, RemoveTracer, tracer);
 }
@@ -511,18 +514,21 @@ float Damage_Hitscan(int victim, int drone, float baseDamage)
 	return baseDamage;
 }
 
-
 public any Native_SpawnRocket(Handle Plugin, int args)
 {
 	int owner = GetNativeCell(1);
 	int drone = GetNativeCell(2);
-	ProjType projectile = GetNativeCell(3);
-	float damage = GetNativeCell(4);
-	float speed = GetNativeCell(5);
-	float overrideX = GetNativeCell(6);
-	float overrideY = GetNativeCell(7);
-	float overrideZ = GetNativeCell(8);
-	float inaccuracy = GetNativeCell(9);
+	float pos[3];
+	GetNativeArray(3, pos, sizeof pos);
+	float angle[3];
+	GetNativeArray(4, angle, sizeof angle);
+	ProjType projectile = GetNativeCell(4);
+	float damage = GetNativeCell(5);
+	float speed = GetNativeCell(6);
+	float overrideX = GetNativeCell(7);
+	float overrideY = GetNativeCell(8);
+	float overrideZ = GetNativeCell(9);
+	float inaccuracy = GetNativeCell(10);
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
@@ -530,8 +536,8 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 	char netname[64], classname[64];
 
 	//Get Spawn Position
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);				//adjust position based on the physical weapon being used on the drone
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
+	//GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);				//adjust position based on the physical weapon being used on the drone
+	//GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
 	GetClientEyeAngles(owner, aimAngle);
 	GetForwardPos(pos, angle, overrideX, overrideY, overrideZ, spawnPos);
 
