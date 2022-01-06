@@ -48,7 +48,7 @@ enum struct DroneBomb
 	char damage[8];
 	char radius[8];
 	
-	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
+	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3], float angle[3], float vel[3])
 	{
 		this.bomb = CreateEntityByName("prop_physics_override");
 		this.owner = ownerEnt;
@@ -56,7 +56,7 @@ enum struct DroneBomb
 		Format(this.damage, 8, "%.1f", baseDamage);
 		Format(this.radius, 8, "%.1f", dmgRadius);
 		this.fuseTime = fuse;
-		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(this.bomb, pos, angle, vel);
 		DispatchSpawn(this.bomb);
 		ActivateEntity(this.bomb);
 	}
@@ -71,7 +71,7 @@ enum struct DroneBomb
 		TeleportEntity(this.explosion, detPos, NULL_VECTOR, NULL_VECTOR);
 		DispatchSpawn(this.explosion);
 		ActivateEntity(this.explosion);
-		AcceptEntityInput(this.Explosion, "Explode");
+		AcceptEntityInput(this.explosion, "Explode");
 	}
 }
 
