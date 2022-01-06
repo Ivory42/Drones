@@ -122,7 +122,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	}
 }
 
-public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
 {
 	if (Attributed[drone] && !Boosting[drone])
 	{
@@ -137,6 +137,7 @@ public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plug
 			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone], true);
 		}
 	}
+	return Plugin_Continue;
 }
 
 //Function for when the drone fires its active weapon
