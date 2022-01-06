@@ -143,6 +143,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_ToggleViewLocked", Native_ViewLock);
 	CreateNative("CD_GetWeaponAttackSound", Native_AttackSound);
 	CreateNative("CD_GetParamString", Native_GetString);
+	CreateNative("CD_SpawnDroneBomb", Native_SpawnBomb);
 	return APLRes_Success;
 }
 
@@ -538,6 +539,89 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 	//Get Spawn Position
 	//GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);				//adjust position based on the physical weapon being used on the drone
 	//GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
+	GetClientEyeAngles(owner, aimAngle);
+	GetForwardPos(pos, angle, overrideX, overrideY, overrideZ, spawnPos);
+
+	//Get where our drone is aiming and direct the rocket towards that angle
+	float aimPos[3], aimVec[3], cameraPos[3];
+	cameraPos = pos;
+	cameraPos[2] += CameraHeight[drone];
+	CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);
+
+	//TE_SetupBeamPoints(pos, aimPos, PrecacheModel("materials/sprites/laser.vmt"), PrecacheModel("materials/sprites/laser.vmt"), 0, 1, 1.0, 5.0, 5.0, 10, 0.0, {255, 0, 0, 255}, 10);
+	//TE_SendToClient(owner);
+
+	MakeVectorFromPoints(spawnPos, aimPos, aimVec);
+	GetVectorAngles(aimVec, angle);
+
+	int rocket;
+
+	if (inaccuracy)
+	{
+		angle[0] += GetRandomFloat((inaccuracy * -1), inaccuracy);
+		angle[1] += GetRandomFloat((inaccuracy * -1), inaccuracy);
+	}
+
+	GetAngleVectors(angle, velocity, NULL_VECTOR, NULL_VECTOR);
+
+	switch (projectile)
+	{
+		case DroneProj_Rocket:
+		{
+			Format(classname, sizeof classname, "tf_projectile_rocket");
+			Format(netname, sizeof netname, "CTFProjectile_Rocket");
+		}
+		case DroneProj_Energy:
+		{
+			Format(classname, sizeof classname, "tf_projectile_energy_ball");
+			Format(netname, sizeof netname, "CTFProjectile_EnergyBall");
+		}
+		case DroneProj_Sentry:
+		{
+			Format(classname, sizeof classname, "tf_projectile_sentryrocket");
+			Format(netname, sizeof netname, "CTFProjectile_SentryRocket");
+		}
+	}
+
+	rocket = CreateEntityByName(classname);
+	ScaleVector(velocity, speed);
+	SetEntPropVector(rocket, Prop_Send, "m_vInitialVelocity", velocity);
+	int team = GetClientTeam(owner);
+
+	//teleport to proper position and then spawn
+	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
+	TeleportEntity(rocket, spawnPos, angle, velocity);
+
+	SetVariantInt(team);
+	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
+
+	SetVariantInt(team);
+	AcceptEntityInput(rocket, "SetTeam", -1, -1, 0);
+
+	DispatchSpawn(rocket);
+
+	SetEntDataFloat(rocket, FindSendPropInfo(netname, "m_iDeflected") + 4, damage); //Set Damage for rocket
+
+	return rocket;
+}
+
+public any Native_SpawnBomb(Handle Plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	float pos[3];
+	GetNativeArray(2, pos, sizeof pos);
+	float angle[3];
+	GetNativeArray(3, angle, sizeof angle);
+	float damage = GetNativeCell(4);
+	float fuse = GetNativeCell(5);
+	float overrideX = GetNativeCell(6);
+	float overrideY = GetNativeCell(7);
+	float overrideZ = GetNativeCell(8);
+	float inaccuracy = GetNativeCell(9);
+
+	float spawnPos[3], velocity[3], aimAngle[3];
+	char netname[64], classname[64];
+
 	GetClientEyeAngles(owner, aimAngle);
 	GetForwardPos(pos, angle, overrideX, overrideY, overrideZ, spawnPos);
 
