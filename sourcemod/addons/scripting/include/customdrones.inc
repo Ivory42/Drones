@@ -61,15 +61,16 @@ native bool CD_ToggleViewLocked(int drone);
  * @param3 damage - Damage to deal on successful hit
  * @param4 origin - Position to fire trace from
  * @param5 forwardAngle - Forward direction of attack to check angle from
- * @param6 offset - Position to offset trace origin from
- * @param7 inaccuracy - Variation to add onto trace angle
- * @param8 maxAngle - Maximum angle from forward angle that the attack can angle towards
- * @param9 dmgType - Drone damage type to use for attack | CDDmgType
- * @param10 color - Color to use for bullet tracer
- * @param11 type - Drone weapon type this bullet is fire from | CDWeaponType
+ * @param6 overrideX - Forward position to offset trace origin from
+ * @param7 overrideY - Side position to offset trace origin from
+ * @param8 overrideZ - Vertical position to offset trace origin from
+ * @param9 inaccuracy - Variation to add onto trace angle
+ * @param10 maxAngle - Maximum angle from forward angle that the attack can angle towards
+ * @param11 dmgType - Drone damage type to use for attack | CDDmgType
+ * @param12 type - Drone weapon type this bullet is fire from | CDWeaponType
  */
 
-native void CD_FireBullet(int owner, int drone, float damage, const float[] origin, const float[] forwardAngle, const float[] offset, float inaccuracy, const float[] maxAngle, CDDmgType dmgType, const int[] color, CDWeaponType type);
+native void CD_FireBullet(int owner, int drone, float damage, const float[] origin, const float[] forwardAngle, float overrideX, float overrideY, float overrideZ, float inaccuracy, const float[] maxAngle, CDDmgType dmgType, CDWeaponType type);
 
 /**
  * Fire the current drone's active weapon
@@ -177,6 +178,33 @@ native float CD_GetParamFloat(const char[] config, const char[] key, int weapon 
 native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
 
 /**
+ * Retrieves an string parameter from the given drone config
+ *
+ * @param1 config - config file to check
+ * @param2 key - subkey to retrieve value from
+ * @param3 weapon - if non-zero, pull attribute for this weapon index
+ * @param4 buffer - buffer to store string in
+ * @param5 size - buffer size
+ *
+ * @return true on success
+ */
+
+native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
+
+/**
+ * Retrieves the attack sound for the given weapon
+ *
+ * @param1 config - config file to check
+ * @param2 weapon - if non-zero, pull attribute for this weapon index
+ * @param3 buffer - buffer to store string in
+ * @param4 size - buffer size
+ *
+ * @return true on success
+ */
+
+native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] buffer, int size);
+
+/**
  * Spawns a rocket based projectile for drones to fire
  *
  * @param1 owner - Player owning the drone
@@ -272,7 +300,7 @@ forward void CD_OnDroneDestroyed(int drone, int owner, int attacker, float damag
  * @param4 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plugin_name);
+forward Action CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plugin_name);
 
 /*************
 
@@ -280,7 +308,7 @@ STOCKS
 
 *************/
 
-stock void GetForwardPos(float origin[3], float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
+stock void GetForwardPos(float origin[3], const float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
 {
 	float dir[3];
 
@@ -296,4 +324,12 @@ stock void GetForwardPos(float origin[3], float angles[3], float distance, float
 	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
 	ScaleVector(dir, upDistance);
 	AddVectors(buffer, dir, buffer);
+}
+
+stock bool IsValidClient(int client)
+{
+    if (!( 1 <= client <= MaxClients ) || !IsClientInGame(client))
+        return false;
+
+    return true;
 }
