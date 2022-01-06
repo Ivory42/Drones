@@ -130,7 +130,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	}
 }
 
-public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
@@ -474,12 +474,4 @@ stock bool IsValidDrone(int drone)
 	}
 
 	return false;
-}
-
-stock bool IsValidClient(int client)
-{
-    if (!( 1 <= client <= MaxClients ) || !IsClientInGame(client))
-        return false;
-
-    return true;
 }
