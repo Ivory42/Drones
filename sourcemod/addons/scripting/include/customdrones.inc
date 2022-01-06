@@ -48,7 +48,7 @@ enum struct DroneBomb
 	char damage[8];
 	char radius[8];
 	
-	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3], float angle[3], float vel[3])
+	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
 	{
 		this.bomb = CreateEntityByName("prop_physics_override");
 		this.owner = ownerEnt;
@@ -56,7 +56,7 @@ enum struct DroneBomb
 		Format(this.damage, 8, "%.1f", baseDamage);
 		Format(this.radius, 8, "%.1f", dmgRadius);
 		this.fuseTime = fuse;
-		TeleportEntity(this.bomb, pos, angle, vel);
+		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
 		DispatchSpawn(this.bomb);
 		ActivateEntity(this.bomb);
 	}
@@ -271,7 +271,7 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  * @param3 angle - Angle to use for offsetting positions
  * @param4 damage - Damage of the bomb
  * @param5 modelname - Model for bomb to use
- * @param6 speed - Speed applied to the bomb
+ * @param6 fuse - Fuse time on bomb
  * @param7 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
  * @param8 overrideY - Right position to offset rocket by
  * @param9 overrideZ - Up position to offset rocket by
@@ -282,7 +282,7 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  *
  */
 
-native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, const char[] modelname, float speed = 0.0, float overrideX = 0.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0, any bomb[sizeof BombEnt]);
+native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, const char[] modelname, float fuse = 6.0, float overrideX = 0.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0, any bomb[sizeof BombEnt]);
 
 
 /**
