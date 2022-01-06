@@ -293,7 +293,7 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  *
  */
 
-native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof BombEnt]);
+native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, ProjType projectile, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof BombEnt]);
 
 
 /**
