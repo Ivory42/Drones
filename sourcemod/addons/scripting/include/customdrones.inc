@@ -53,10 +53,13 @@ enum struct DroneBomb
 	int bomb;
 	int owner;
 	int explosion;
+	bool touched;
 	float fuseTime;
+	float detTime;
 	float detPos[3];
 	char damage[8];
 	char radius[8];
+	ProjType type;
 	
 	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
 	{
