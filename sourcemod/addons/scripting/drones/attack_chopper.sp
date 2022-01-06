@@ -126,11 +126,10 @@ void SpawnBomb(int owner, int drone, int weapon)
 	float pos[3], angle[3], newPos[3];
 	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-	
-	GetForwardPos(pos, angle, _, _, -60.0, pos);
+	newPos = {0.0, 0.0, -60.0};
 	
 	DroneBomb bombEnt;
-	CD_SpawnDroneBomb(drone, pos, angle, ProjType_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], _, _, _, _, _, bombEnt);
+	CD_SpawnDroneBomb(drone, pos, angle, DroneProj_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], offset, bombEnt);
 }
 
 public void OnEntityDestroyed(int entity)
