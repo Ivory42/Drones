@@ -209,19 +209,21 @@ native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] 
  *
  * @param1 owner - Player owning the drone
  * @param2 drone - Drone entity index
- * @param3 projectile - Type of rocket to spawn
- * @param4 damage - Damage of the rocket
- * @param5 speed - Speed of the rocket
- * @param6 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
- * @param7 overrideY - Right position to offset rocket by
- * @param8 overrideZ - Up position to offset rocket by
- * @param9 inaccuracy - random variance added to projectile angles
+ * @param3 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
+ * @param4 angle - Angle to use for offsetting positions
+ * @param4 projectile - Type of rocket to spawn
+ * @param5 damage - Damage of the rocket
+ * @param6 speed - Speed of the rocket
+ * @param7 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
+ * @param8 overrideY - Right position to offset rocket by
+ * @param9 overrideZ - Up position to offset rocket by
+ * @param10 inaccuracy - random variance added to projectile angles
  *
  * @return entity index of spawned rocket
  *
  */
 
-native int CD_SpawnRocket(int owner, int drone, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
+native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
 
 /**
  * Retrieves the camera height for the given drone
