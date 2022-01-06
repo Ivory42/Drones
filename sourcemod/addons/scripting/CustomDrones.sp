@@ -79,7 +79,7 @@ public Plugin MyInfo = {
 	name 			= 	"Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for players",
-	version 		= 	"1.2.6"
+	version 		= 	"1.2.7"
 };
 
 public void OnPluginStart()
@@ -523,13 +523,13 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 	GetNativeArray(3, pos, sizeof pos);
 	float angle[3];
 	GetNativeArray(4, angle, sizeof angle);
-	ProjType projectile = GetNativeCell(4);
-	float damage = GetNativeCell(5);
-	float speed = GetNativeCell(6);
-	float overrideX = GetNativeCell(7);
-	float overrideY = GetNativeCell(8);
-	float overrideZ = GetNativeCell(9);
-	float inaccuracy = GetNativeCell(10);
+	ProjType projectile = GetNativeCell(5);
+	float damage = GetNativeCell(6);
+	float speed = GetNativeCell(7);
+	float overrideX = GetNativeCell(8);
+	float overrideY = GetNativeCell(9);
+	float overrideZ = GetNativeCell(10);
+	float inaccuracy = GetNativeCell(11);
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
@@ -566,11 +566,6 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	switch (projectile)
 	{
-		case DroneProj_Rocket:
-		{
-			Format(classname, sizeof classname, "tf_projectile_rocket");
-			Format(netname, sizeof netname, "CTFProjectile_Rocket");
-		}
 		case DroneProj_Energy:
 		{
 			Format(classname, sizeof classname, "tf_projectile_energy_ball");
@@ -580,6 +575,11 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 		{
 			Format(classname, sizeof classname, "tf_projectile_sentryrocket");
 			Format(netname, sizeof netname, "CTFProjectile_SentryRocket");
+		}
+		default:
+		{
+			Format(classname, sizeof classname, "tf_projectile_rocket");
+			Format(netname, sizeof netname, "CTFProjectile_Rocket");
 		}
 	}
 
@@ -605,6 +605,9 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 	return rocket;
 }
 
+/*
+	Drone Bomb Functions
+*/
 public any Native_SpawnBomb(Handle Plugin, int args)
 {
 	int drone = GetNativeCell(1);
@@ -612,80 +615,81 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 	GetNativeArray(2, pos, sizeof pos);
 	float angle[3];
 	GetNativeArray(3, angle, sizeof angle);
-	float damage = GetNativeCell(4);
-	float fuse = GetNativeCell(5);
-	float overrideX = GetNativeCell(6);
-	float overrideY = GetNativeCell(7);
-	float overrideZ = GetNativeCell(8);
-	float inaccuracy = GetNativeCell(9);
+	ProjType projectile = GetNativeCell(4);
+	float damage = GetNativeCell(5);
+	char modelname[256];
+	GetNativeString(6, modelname, sizeof modelname);
+	float fuse = GetNativeCell(7);
+	float offset[3];
+	GetNativeArray(8, offset, sizeof offset);
 
-	float spawnPos[3], velocity[3], aimAngle[3];
-	char netname[64], classname[64];
+	float spawnPos[3];
 
-	GetClientEyeAngles(owner, aimAngle);
-	GetForwardPos(pos, angle, overrideX, overrideY, overrideZ, spawnPos);
-
-	//Get where our drone is aiming and direct the rocket towards that angle
-	float aimPos[3], aimVec[3], cameraPos[3];
-	cameraPos = pos;
-	cameraPos[2] += CameraHeight[drone];
-	CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);
-
-	//TE_SetupBeamPoints(pos, aimPos, PrecacheModel("materials/sprites/laser.vmt"), PrecacheModel("materials/sprites/laser.vmt"), 0, 1, 1.0, 5.0, 5.0, 10, 0.0, {255, 0, 0, 255}, 10);
-	//TE_SendToClient(owner);
-
-	MakeVectorFromPoints(spawnPos, aimPos, aimVec);
-	GetVectorAngles(aimVec, angle);
-
-	int rocket;
-
-	if (inaccuracy)
-	{
-		angle[0] += GetRandomFloat((inaccuracy * -1), inaccuracy);
-		angle[1] += GetRandomFloat((inaccuracy * -1), inaccuracy);
-	}
-
-	GetAngleVectors(angle, velocity, NULL_VECTOR, NULL_VECTOR);
-
+	GetForwardPos(pos, angle, offset[0], offset[1], offset[2], spawnPos);
+	DroneBomb bombEnt;
+	bombEnt.create(owner, BombModel[drone], WeaponDamage[drone][weapon], BombFuseTime[drone], pos);
+	bombEnt.type = projectile;
 	switch (projectile)
 	{
-		case DroneProj_Rocket:
+		case DroneProj_BombDelayed:
 		{
-			Format(classname, sizeof classname, "tf_projectile_rocket");
-			Format(netname, sizeof netname, "CTFProjectile_Rocket");
+			BombInfo[bombEnt.bomb] = bombEnt;
+			SDKHook(bombEnt.bomb, SDKHook_VPhysicsUpdate, BombDelayUpdate);
 		}
-		case DroneProj_Energy:
+		case DroneProj_BombImpact:
 		{
-			Format(classname, sizeof classname, "tf_projectile_energy_ball");
-			Format(netname, sizeof netname, "CTFProjectile_EnergyBall");
+			BombInfo[bombEnt.bomb] = bombEnt;
+			SDKHook(bombEnt.bomb, SDKHook_VPhysicsUpdate, BombImpactUpdate);
 		}
-		case DroneProj_Sentry:
+		default:
 		{
-			Format(classname, sizeof classname, "tf_projectile_sentryrocket");
-			Format(netname, sizeof netname, "CTFProjectile_SentryRocket");
+			CreateTimer(bomb.fuse, DetonateBombTimer, bombEnt, TIMER_FLAG_NO_MAPCHANGE);
 		}
 	}
+	SetNativeArray(9, bombEnt, sizeof bombEnt);
+	return IsValidEntity(bombEnt.bomb);
+}
 
-	rocket = CreateEntityByName(classname);
-	ScaleVector(velocity, speed);
-	SetEntPropVector(rocket, Prop_Send, "m_vInitialVelocity", velocity);
-	int team = GetClientTeam(owner);
+Action DetonateBombTimer(Handle timer, DroneBomb bombEnt)
+{
+	if (IsValidEntity(bombEnt.bomb) && bombEnt.bomb > MaxClients)
+	{
+		bombEnt.detonate();
+	}
+}
 
-	//teleport to proper position and then spawn
-	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
-	TeleportEntity(rocket, spawnPos, angle, velocity);
+Action BombDelayUpdate(int bomb)
+{
+	if (IsValidEntity(bomb))
+	{
+		if (BombInfo[bomb].type == DroneProj_BombDelay)
+		{
+			if (!BombInfo[bomb].touched && GetEntProp(bomb, Prop_Send, "m_bTouched"))
+			{
+				BombInfo[bomb].detTime = GetEngineTime() + BombInfo[bomb].fuseTime;
+				BombInfo[bomb].touched = true;
+			}
+			else if (BombInfo[bomb].touched && BombInfo[bomb].detTime <= GetEngineTime())
+			{
+				BombInfo[bomb].detonate();
+			}
+		}
+	}
+}
 
-	SetVariantInt(team);
-	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
-
-	SetVariantInt(team);
-	AcceptEntityInput(rocket, "SetTeam", -1, -1, 0);
-
-	DispatchSpawn(rocket);
-
-	SetEntDataFloat(rocket, FindSendPropInfo(netname, "m_iDeflected") + 4, damage); //Set Damage for rocket
-
-	return rocket;
+Action BombImpactUpdate(int bomb)
+{
+	if (IsValidEntity(bomb))
+	{
+		if (BombInfo[bomb].type == DroneProj_BombImpact)
+		{
+			if (!BombInfo[bomb].touched && GetEntProp(bomb, Prop_Send, "m_bTouched"))
+			{
+				BombInfo[bomb].touched = true;
+				BombInfo[bomb].detonate();
+			}
+		}
+	}
 }
 
 public any Native_GetCameraHeight(Handle plugin, int args)
