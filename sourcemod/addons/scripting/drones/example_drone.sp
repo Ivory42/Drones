@@ -179,31 +179,34 @@ public void FireRocket(int owner, int drone, int pType, int fireLoc)
 	float speed = flProjSpeed[drone][pType];
 	float damage = flProjDamage[drone][pType];
 
+	float pos[3], angle[3];
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
 	//Create Rocket
 	switch (pType)
 	{
 		case 1: //Normal Rockets
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, damage, speed, 60.0, sideOffset);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Rocket, damage, speed, 60.0, sideOffset);
 			Format(fireSound, sizeof fireSound, ROCKETSOUND);
 			dType = DmgType_Missile;
 
 		}
 		case 2: //Energy Rockets
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Energy, damage, speed, 60.0, sideOffset);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Energy, damage, speed, 60.0, sideOffset);
 			Format(fireSound, sizeof fireSound, ENERGY_SOUND);
 			dType = DmgType_Energy;
 		}
 		case 3: //Energy Orbs
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Rocket, 0.0, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
 			Format(fireSound, sizeof fireSound, PLASMASOUND);
 			dType = DmgType_Plasma;
 		}
 		case 4: //Rocekt Pods
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Sentry, damage, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Sentry, damage, speed, 60.0, sideOffset, _, Inaccuracy[drone][pType]);
 			Format(fireSound, sizeof fireSound, ROCKETSOUND);
 			dType = DmgType_Missile;
 		}
