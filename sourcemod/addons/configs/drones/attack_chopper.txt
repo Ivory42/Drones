@@ -1,0 +1,51 @@
+"Drone"
+{
+	"name"	"Hunter Chopper"
+	"model"	"models/combine_helicopter.mdl"
+	"camera_height"	"50"
+	"turn_rate"	"15"
+	"health"	"400"
+	"speed"		"350"
+	"acceleration"	"5"
+	"movetype"	"drone_hover"
+	"plugin"	"attack_chopper"
+	"weapons"
+	{
+		"weapon1"
+		{
+			"name"		"Chaingun"
+			
+			"sound"		"weapons/ar2/npc_ar2_altfire.wav"
+			"ammo_loaded"	"-1"
+			"damage"	"15.0"
+			"attack_time"	"0.08"
+			"inaccuracy"	"1.5"
+			
+			"attack_acceleration"	"0.2" //rate at which attack speed increases while attacking
+			"attack_start_rate"	"0.5"  //beginning attack speed
+		}
+		"weapon2"
+		{
+			"name"		"Missiles"
+			
+			"sound"		"weapons/stinger_fire1.wav"
+			"damage"	"60.0"
+			"attack_time"	"0.4"
+			"ammo_loaded"	"12"
+			"reload_time"	"8.0"
+			"speed"			"1200.0"
+			"inaccuracy"	"2.0"
+		}
+		"weapon3"
+		{
+			"name"		"Bombs"
+			
+			"ammo_loaded"	"6"
+			"attack_time"	"0.8"
+			"damage"	"120.0"
+			"reload_time"	"6.0"
+			"fuse"		"1.25"
+			"model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
+		}
+	}
+}

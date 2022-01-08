@@ -10,7 +10,7 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
   - Create your own logic for drones through other plugins (example included)
   - Define a model and destroyed model for each drone
   - Set health, speed, and acceleration for each drone
-  - Set up to 4 weapons with individual parameters
+  - Set up to 6 weapons with individual parameters
   - Choose how the drone operates:
     - Flying
     - Hover

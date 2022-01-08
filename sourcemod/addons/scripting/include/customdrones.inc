@@ -4,11 +4,24 @@
 #define _customdrones_included
 #define MAXWEAPONS 6
 
+#include <sdktools>
+#include <entity>
+
+//Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
 enum ProjType
 {
-	DroneProj_Rocket,
-	DroneProj_Energy,
-	DroneProj_Sentry
+	//rockets
+	DroneProj_Rocket,	//Default rocket
+	DroneProj_Energy,	//Cow mangler rocket
+	DroneProj_Sentry,	//Sentry rocket salvo
+	
+	//Bombs
+	DroneProj_Bomb,		//Default bomb, detonates on fuse timer which begins upon spawn
+	DroneProj_BombDelayed,	//Fuse timer starts after touching a surface
+	DroneProj_BombImpact,	//Bomb detonates upon impact rather than a fuse timer
+	
+	//misc
+	DroneProj_Custom	//Custom projectile type for defining logic within sub plugins
 };
 
 enum CDMoveType
@@ -20,10 +33,75 @@ enum CDMoveType
 
 enum CDDmgType
 {
+	//damagetypes for custom plugins
 	DmgType_Missile,
 	DmgType_Energy,
-	DmgType_Plasma
+	DmgType_Plasma,
+	
+	//default damage types used by main plugin
+	DmgType_Rangeless, 	//hitscan damage with no falloff
+	DmgType_Generic		//hitscan generic damage
 };
+
+enum CDWeaponType
+{
+	CDWeapon_Auto,		//high fire rate weapons
+	CDWeapon_SlowFire,	//slow fire weapons
+	CDWeapon_Laser		//laser weapons
+};
+
+//should probably be a methodmap
+enum struct DroneBomb
+{
+	int bomb;
+	int drone;
+	int explosion;
+	bool touched;
+	bool primed;
+	bool isBomb;
+	float fuseTime;
+	float tickTime;
+	char damage[8];
+	char radius[8];
+	ProjType type;
+	
+	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
+	{
+		this.bomb = CreateEntityByName("prop_physics_override");
+		SetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity", ownerEnt);
+		DispatchKeyValue(this.bomb, "Model", model);
+		Format(this.damage, 8, "%.1f", baseDamage);
+		Format(this.radius, 8, "%.1f", dmgRadius);
+		this.fuseTime = fuse;
+		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
+		DispatchSpawn(this.bomb);
+		ActivateEntity(this.bomb);
+		//SetEntityModel(this.bomb, model);
+		SetEntProp(this.bomb, Prop_Data, "m_nNextThinkTick", -1);
+	}
+	void detonate() //detonate our bomb
+	{
+		float detPos[3];
+		GetEntPropVector(this.bomb, Prop_Data, "m_vecOrigin", detPos);
+		int ownerPlayer = GetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity");
+		AcceptEntityInput(this.bomb, "Kill");
+		
+		//clear variables
+		this.isBomb = false;
+		this.touched = false;
+		this.primed = false;
+		
+		//setup explosion
+		this.explosion = CreateEntityByName("env_explosion");
+		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", ownerPlayer);
+		DispatchKeyValue(this.explosion, "iMagnitude", this.damage);
+		DispatchKeyValue(this.explosion, "iRadiusOverride", this.radius);
+		TeleportEntity(this.explosion, detPos, NULL_VECTOR, NULL_VECTOR);
+		DispatchSpawn(this.explosion);
+		ActivateEntity(this.explosion);
+		AcceptEntityInput(this.explosion, "Explode");
+	}
+}
 
 
 /****************************************************************
@@ -31,6 +109,34 @@ enum CDDmgType
 	NATIVES
 	
 ****************************************************************/
+
+/**
+ * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
+ *
+ * @param1 drone - Drone to toggle view lock on
+ * @return new view lock value
+ */
+
+native bool CD_ToggleViewLocked(int drone);
+
+/**
+ * Fire a hitscan attack from a drone's weapon
+ *
+ * @param1 owner - Client index who owns the drone
+ * @param2 drone - Drone firing the attack
+ * @param3 damage - Damage to deal on successful hit
+ * @param4 origin - Position to fire trace from
+ * @param5 forwardAngle - Forward direction of attack to check angle from
+ * @param6 overrideX - Forward position to offset trace origin from
+ * @param7 overrideY - Side position to offset trace origin from
+ * @param8 overrideZ - Vertical position to offset trace origin from
+ * @param9 inaccuracy - Variation to add onto trace angle
+ * @param10 maxAngle - Maximum angle from forward angle that the attack can angle towards
+ * @param11 dmgType - Drone damage type to use for attack | CDDmgType
+ * @param12 type - Drone weapon type this bullet is fire from | CDWeaponType
+ */
+
+native void CD_FireBullet(int owner, int drone, float damage, const float[] origin, const float[] forwardAngle, float overrideX, float overrideY, float overrideZ, float inaccuracy, const float[] maxAngle, CDDmgType dmgType, CDWeaponType type);
 
 /**
  * Fire the current drone's active weapon
@@ -138,23 +244,72 @@ native float CD_GetParamFloat(const char[] config, const char[] key, int weapon 
 native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
 
 /**
+ * Retrieves an string parameter from the given drone config
+ *
+ * @param1 config - config file to check
+ * @param2 key - subkey to retrieve value from
+ * @param3 weapon - if non-zero, pull attribute for this weapon index
+ * @param4 buffer - buffer to store string in
+ * @param5 size - buffer size
+ *
+ * @return true on success
+ */
+
+native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
+
+/**
+ * Retrieves the attack sound for the given weapon
+ *
+ * @param1 config - config file to check
+ * @param2 weapon - if non-zero, pull attribute for this weapon index
+ * @param3 buffer - buffer to store string in
+ * @param4 size - buffer size
+ *
+ * @return true on success
+ */
+
+native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] buffer, int size);
+
+/**
  * Spawns a rocket based projectile for drones to fire
  *
  * @param1 owner - Player owning the drone
  * @param2 drone - Drone entity index
- * @param3 projectile - Type of rocket to spawn
- * @param4 damage - Damage of the rocket
- * @param5 speed - Speed of the rocket
- * @param6 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
- * @param7 overrideY - Right position to offset rocket by
- * @param8 overrideZ - Up position to offset rocket by
- * @param9 inaccuracy - random variance added to projectile angles
+ * @param3 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
+ * @param4 angle - Angle to use for offsetting positions
+ * @param5 projectile - Type of rocket to spawn
+ * @param6 damage - Damage of the rocket
+ * @param7 speed - Speed of the rocket
+ * @param8 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
+ * @param9 overrideY - Right position to offset rocket by
+ * @param10 overrideZ - Up position to offset rocket by
+ * @param11 inaccuracy - random variance added to projectile angles
  *
  * @return entity index of spawned rocket
  *
  */
 
-native int CD_SpawnRocket(int owner, int drone, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
+native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
+
+/**
+ * Spawns a physics prop to use as a bomb projectile
+ *
+ * @param1 drone - Drone firing the projectile
+ * @param2 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
+ * @param3 angle - Angle to use for offsetting positions
+ * @param4 projectile - Projectile type to use for this bomb
+ * @param5 damage - Damage of the bomb
+ * @param6 modelname - Model for bomb to use
+ * @param7 fuse - Fuse time on bomb
+ * @param8 offset - Position to offset spawn by
+ * @param9 bomb - buffer to store bomb struct
+ *
+ * @return true on success
+ *
+ */
+
+native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof DroneBomb]);
+
 
 /**
  * Retrieves the camera height for the given drone
@@ -233,7 +388,7 @@ forward void CD_OnDroneDestroyed(int drone, int owner, int attacker, float damag
  * @param4 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plugin_name);
+forward Action CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plugin_name);
 
 /*************
 
@@ -241,7 +396,7 @@ STOCKS
 
 *************/
 
-stock void GetForwardPos(float origin[3], float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
+stock void GetForwardPos(float origin[3], const float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
 {
 	float dir[3];
 
@@ -257,4 +412,12 @@ stock void GetForwardPos(float origin[3], float angles[3], float distance, float
 	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
 	ScaleVector(dir, upDistance);
 	AddVectors(buffer, dir, buffer);
+}
+
+stock bool IsValidClient(int client)
+{
+    if (!( 1 <= client <= MaxClients ) || !IsClientInGame(client))
+        return false;
+
+    return true;
 }

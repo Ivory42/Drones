@@ -122,7 +122,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	}
 }
 
-public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
 {
 	if (Attributed[drone] && !Boosting[drone])
 	{
@@ -137,6 +137,7 @@ public void CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plug
 			default: FireRocket(owner, drone, weapon, hLastWeaponFired[drone], true);
 		}
 	}
+	return Plugin_Continue;
 }
 
 //Function for when the drone fires its active weapon
@@ -151,18 +152,21 @@ public void FireRocket(int owner, int drone, int pType, int fireLoc, bool playSo
 
 	float speed = ProjSpeed[drone][pType];
 	float damage = ProjDamage[drone][pType];
+	float pos[3], angle[3];
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
 
 	switch (pType)
 	{
 		case 1: //plasma
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Rocket, 0.0, speed, forwardPos, side, _, Inaccuracy[drone]);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Rocket, 0.0, speed, forwardPos, side, _, Inaccuracy[drone]);
 			Format(fireSound, sizeof fireSound, PLASMASOUND);
 			dType = DmgType_Plasma;
 		}
 		case 2: //fuelrod
 		{
-			rocket = CD_SpawnRocket(owner, drone, DroneProj_Energy, damage, speed, forwardPos, _, -15.0, Inaccuracy[drone]);
+			rocket = CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Energy, damage, speed, forwardPos, _, -15.0, Inaccuracy[drone]);
 			Format(fireSound, sizeof fireSound, FUELRODSOUND);
 			dType = DmgType_Missile;
 		}
