@@ -1,7 +1,7 @@
 "Drone"
 {
 	"name"	"Hunter Chopper"
-	"model"	"models/combine_helicopter.mdl" //need to look this up
+	"model"	"models/combine_helicopter.mdl"
 	"camera_height"	"50"
 	"turn_rate"	"15"
 	"health"	"400"
@@ -16,10 +16,9 @@
 			"name"		"Chaingun"
 			
 			"sound"		"weapons/ar2/npc_ar2_altfire.wav"
+			"ammo_loaded"	"-1"
 			"damage"	"15.0"
 			"attack_time"	"0.08"
-			"ammo_loaded"	"120"
-			"reload_time"	"5.0"
 			"inaccuracy"	"1.5"
 			
 			"attack_acceleration"	"0.2" //rate at which attack speed increases while attacking
@@ -41,9 +40,11 @@
 		{
 			"name"		"Bombs"
 			
+			"ammo_loaded"	"6"
+			"attack_time"	"0.8"
 			"damage"	"120.0"
-			"reload_time"	"4.0"
-			"fuse"		"5.0"
+			"reload_time"	"6.0"
+			"fuse"		"1.25"
 			"model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
 		}
 	}
