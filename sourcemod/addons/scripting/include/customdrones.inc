@@ -4,6 +4,9 @@
 #define _customdrones_included
 #define MAXWEAPONS 6
 
+#include <sdktools>
+#include <entity>
+
 //Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
 enum ProjType
 {
@@ -51,12 +54,13 @@ enum CDWeaponType
 enum struct DroneBomb
 {
 	int bomb;
-	int owner;
+	int drone;
 	int explosion;
 	bool touched;
+	bool primed;
+	bool isBomb;
 	float fuseTime;
-	float detTime;
-	float detPos[3];
+	float tickTime;
 	char damage[8];
 	char radius[8];
 	ProjType type;
@@ -64,7 +68,7 @@ enum struct DroneBomb
 	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
 	{
 		this.bomb = CreateEntityByName("prop_physics_override");
-		this.owner = ownerEnt;
+		SetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity", ownerEnt);
 		DispatchKeyValue(this.bomb, "Model", model);
 		Format(this.damage, 8, "%.1f", baseDamage);
 		Format(this.radius, 8, "%.1f", dmgRadius);
@@ -72,13 +76,24 @@ enum struct DroneBomb
 		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
 		DispatchSpawn(this.bomb);
 		ActivateEntity(this.bomb);
+		//SetEntityModel(this.bomb, model);
+		SetEntProp(this.bomb, Prop_Data, "m_nNextThinkTick", -1);
 	}
 	void detonate() //detonate our bomb
 	{
+		float detPos[3];
 		GetEntPropVector(this.bomb, Prop_Data, "m_vecOrigin", detPos);
+		int ownerPlayer = GetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity");
 		AcceptEntityInput(this.bomb, "Kill");
+		
+		//clear variables
+		this.isBomb = false;
+		this.touched = false;
+		this.primed = false;
+		
+		//setup explosion
 		this.explosion = CreateEntityByName("env_explosion");
-		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", this.owner);
+		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", ownerPlayer);
 		DispatchKeyValue(this.explosion, "iMagnitude", this.damage);
 		DispatchKeyValue(this.explosion, "iRadiusOverride", this.radius);
 		TeleportEntity(this.explosion, detPos, NULL_VECTOR, NULL_VECTOR);
@@ -282,8 +297,8 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  * @param1 drone - Drone firing the projectile
  * @param2 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
  * @param3 angle - Angle to use for offsetting positions
- * @param4 damage - Damage of the bomb
- * @param5 projectile - Projectile type to use for this bomb
+ * @param4 projectile - Projectile type to use for this bomb
+ * @param5 damage - Damage of the bomb
  * @param6 modelname - Model for bomb to use
  * @param7 fuse - Fuse time on bomb
  * @param8 offset - Position to offset spawn by
@@ -293,7 +308,7 @@ native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[]
  *
  */
 
-native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, float damage, ProjType projectile, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof BombEnt]);
+native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof DroneBomb]);
 
 
 /**
