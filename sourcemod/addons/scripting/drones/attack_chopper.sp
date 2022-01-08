@@ -97,7 +97,7 @@ public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] pl
 			}
 			case 3:
 			{
-				SpawnBomb(owner, drone, weapon);
+				SpawnBomb(drone, weapon);
 			}
 		}
 		if (hasSound)
@@ -121,15 +121,15 @@ void FireRocket(int owner, int drone, int type, int fireLoc)
 	LastWeaponFired[drone] = (LastWeaponFired[drone] == 1) ? 0 : 1;	//Get next physical weapon to fire from
 }
 
-void SpawnBomb(int owner, int drone, int weapon)
+void SpawnBomb(int drone, int weapon)
 {
-	float pos[3], angle[3], newPos[3];
+	float pos[3], angle[3];
 	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-	newPos = {0.0, 0.0, -60.0};
-	
+	float offset[3] = {0.0, 0.0, -60.0};
+
 	DroneBomb bombEnt;
-	CD_SpawnDroneBomb(drone, pos, angle, DroneProj_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], offset, bombEnt);
+	CD_SpawnDroneBomb(drone, pos, angle, DroneProj_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], BombFuseTime[drone], offset, bombEnt);
 }
 
 public void OnEntityDestroyed(int entity)
@@ -167,7 +167,7 @@ public void CD_OnDroneCreated(int drone, int owner, const char[] plugin, const c
 	}
 }
 
-public void OnDroneRemoved(int drone, int owner, const char[] plugin)
+public void OnDroneDestroyed(int drone, int owner, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
