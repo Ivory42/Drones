@@ -21,6 +21,8 @@ CDMoveType dMoveType[2048];
 
 float FlyMinSpeed = 200.0;
 
+DroneBomb BombInfo[2049];
+
 int PlayerSpecCamera[MAXPLAYERS+1];
 int PlayerSpecCameraAnchor[MAXPLAYERS+1];
 int PlayerSpecDrone[MAXPLAYERS+1]; //drone being spectated
@@ -467,7 +469,7 @@ void CreateTracer(float start[3], float end[3])
 	ActivateEntity(tracer);
 
 	TeleportEntity(tracer, start, NULL_VECTOR, NULL_VECTOR);
-	
+
 	//remove our tracer and target shortly after
 	CreateTimer(0.5, RemoveTarget, target);
 	CreateTimer(0.5, RemoveTracer, tracer);
@@ -533,7 +535,7 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
-	float pos[3], angle[3], spawnPos[3], velocity[3], aimAngle[3];
+	float spawnPos[3], velocity[3], aimAngle[3];
 	char netname[64], classname[64];
 
 	//Get Spawn Position
@@ -611,6 +613,7 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 public any Native_SpawnBomb(Handle Plugin, int args)
 {
 	int drone = GetNativeCell(1);
+	int owner = hDroneOwner[drone];
 	float pos[3];
 	GetNativeArray(2, pos, sizeof pos);
 	float angle[3];
@@ -627,8 +630,11 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 
 	GetForwardPos(pos, angle, offset[0], offset[1], offset[2], spawnPos);
 	DroneBomb bombEnt;
-	bombEnt.create(owner, BombModel[drone], WeaponDamage[drone][weapon], BombFuseTime[drone], pos);
+	bombEnt.create(owner, modelname, damage, fuse, 200.0, spawnPos);
+	SetEntPropEnt(bombEnt.bomb, Prop_Send, "m_hOwnerEntity", owner);
 	bombEnt.type = projectile;
+	bombEnt.isBomb = true;
+	bombEnt.drone = drone;
 	switch (projectile)
 	{
 		case DroneProj_BombDelayed:
@@ -643,18 +649,19 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 		}
 		default:
 		{
-			CreateTimer(bomb.fuse, DetonateBombTimer, bombEnt, TIMER_FLAG_NO_MAPCHANGE);
+			BombInfo[bombEnt.bomb] = bombEnt;
+			CreateTimer(bombEnt.fuseTime, DetonateBombTimer, bombEnt.bomb, TIMER_FLAG_NO_MAPCHANGE);
 		}
 	}
 	SetNativeArray(9, bombEnt, sizeof bombEnt);
 	return IsValidEntity(bombEnt.bomb);
 }
 
-Action DetonateBombTimer(Handle timer, DroneBomb bombEnt)
+Action DetonateBombTimer(Handle timer, int bomb)//
 {
-	if (IsValidEntity(bombEnt.bomb) && bombEnt.bomb > MaxClients)
+	if (IsValidEntity(bomb) && bomb > MaxClients)
 	{
-		bombEnt.detonate();
+		BombInfo[bomb].detonate();
 	}
 }
 
@@ -662,16 +669,13 @@ Action BombDelayUpdate(int bomb)
 {
 	if (IsValidEntity(bomb))
 	{
-		if (BombInfo[bomb].type == DroneProj_BombDelay)
+		if (BombInfo[bomb].type == DroneProj_BombDelayed)
 		{
-			if (!BombInfo[bomb].touched && GetEntProp(bomb, Prop_Send, "m_bTouched"))
+			if (!BombInfo[bomb].primed && BombCollision(bomb))
 			{
-				BombInfo[bomb].detTime = GetEngineTime() + BombInfo[bomb].fuseTime;
-				BombInfo[bomb].touched = true;
-			}
-			else if (BombInfo[bomb].touched && BombInfo[bomb].detTime <= GetEngineTime())
-			{
-				BombInfo[bomb].detonate();
+				CreateTimer(BombInfo[bomb].fuseTime, DetonateBombTimer, bomb, TIMER_FLAG_NO_MAPCHANGE);
+				BombInfo[bomb].primed = true;
+				SDKUnhook(bomb, SDKHook_VPhysicsUpdate, BombDelayUpdate);
 			}
 		}
 	}
@@ -683,13 +687,46 @@ Action BombImpactUpdate(int bomb)
 	{
 		if (BombInfo[bomb].type == DroneProj_BombImpact)
 		{
-			if (!BombInfo[bomb].touched && GetEntProp(bomb, Prop_Send, "m_bTouched"))
+			if (!BombInfo[bomb].primed && BombCollision(bomb))
 			{
 				BombInfo[bomb].touched = true;
 				BombInfo[bomb].detonate();
 			}
 		}
 	}
+}
+
+//SDKHook_Touch does not reliable detect when physics props collide with the world.. so we have to check manually
+bool BombCollision(int bomb)
+{
+	bool result = false;
+	if (BombInfo[bomb].isBomb && BombInfo[bomb].tickTime <= GetEngineTime())
+	{
+		BombInfo[bomb].tickTime = GetEngineTime() + 0.1;
+		float min[3], max[3], pos[3];
+		GetEntPropVector(bomb, Prop_Data, "m_vecOrigin", pos);
+		GetEntPropVector(bomb, Prop_Send, "m_vecMins", min);
+		GetEntPropVector(bomb, Prop_Send, "m_vecMaxs", max);
+
+		Handle hull = TR_TraceHullFilterEx(pos, pos, min, max, MASK_SOLID, BombTraceFilter, bomb);
+		if (TR_DidHit(hull))
+			result = true;
+
+		CloseHandle(hull);
+	}
+	return result;
+}
+
+bool BombTraceFilter(int entity, int mask, int bomb)
+{
+	if (BombInfo[bomb].isBomb)
+	{
+		if (entity == bomb || entity == BombInfo[bomb].drone)
+			return false;
+
+		return true;
+	}
+	return false;
 }
 
 public any Native_GetCameraHeight(Handle plugin, int args)
