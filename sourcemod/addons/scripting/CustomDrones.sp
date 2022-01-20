@@ -406,7 +406,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			{
 				case CDWeapon_Auto:
 				{
-					CreateTracer(pos, endPos);
+					CreateTracer(drone, pos, endPos);
 				}
 				case CDWeapon_Laser:
 				{
@@ -415,7 +415,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 				}
 				case CDWeapon_SlowFire:
 				{
-					CreateTracer(pos, endPos);
+					CreateTracer(drone, pos, endPos);
 				}
 			}
 
@@ -445,8 +445,11 @@ public any Native_HitscanAttack(Handle plugin, int args)
 }
 
 //create a visual bullet tracer
-void CreateTracer(float start[3], float end[3])
+void CreateTracer(int owner, float start[3], float end[3])
 {
+	if (!IsDrone[owner]) return;
+	
+	PrintToServer("[DRONES] ********** HITSCAN ATTACK ****************");
 	int target = CreateEntityByName("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
 	char targetname[64];
 	Format(targetname, sizeof targetname, "target%i", target);
@@ -471,20 +474,24 @@ void CreateTracer(float start[3], float end[3])
 	TeleportEntity(tracer, start, NULL_VECTOR, NULL_VECTOR);
 
 	//remove our tracer and target shortly after
-	CreateTimer(0.5, RemoveTarget, target);
-	CreateTimer(0.5, RemoveTracer, tracer);
+	int targRef = EntIndexToEntRef(target);
+	CreateTimer(0.5, RemoveTarget, targRef);
+	int traceRef = EntIndexToEntRef(tracer);
+	CreateTimer(0.5, RemoveTracer, traceRef);
 }
 
-Action RemoveTarget(Handle timer, int target)
+Action RemoveTarget(Handle timer, any ref)
 {
+	int target = EntRefToEntIndex(ref);
 	if (IsValidEntity(target) && target > MaxClients)
 	{
 		AcceptEntityInput(target, "Kill");
 	}
 }
 
-Action RemoveTracer(Handle timer, int tracer)
+Action RemoveTracer(Handle timer, any ref)
 {
+	int tracer = EntRefToEntIndex(ref);
 	if (IsValidEntity(tracer) && tracer > MaxClients)
 	{
 		AcceptEntityInput(tracer, "Kill");
@@ -780,6 +787,8 @@ public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
 
 void CreateSpecCamera(int client, int drone)
 {
+	if (!IsDrone[drone]) return;
+	
 	//spawn the camera anchor
 	int cameraAnchor = CreateEntityByName("prop_dynamic_override");
 	DispatchKeyValue(cameraAnchor, "model", "models/empty.mdl");
@@ -793,7 +802,7 @@ void CreateSpecCamera(int client, int drone)
 	TeleportEntity(cameraAnchor, pos, angle, NULL_VECTOR);
 	SetVariantString("!activator");
 	AcceptEntityInput(cameraAnchor, "SetParent", drone, cameraAnchor, 0);
-	PlayerSpecCameraAnchor[client] = cameraAnchor;
+	PlayerSpecCameraAnchor[client] = EntIndexToEntRef(cameraAnchor);
 
 	//Now setup the actual camera
 	int camera = CreateEntityByName("prop_dynamic_override");
@@ -810,7 +819,7 @@ void CreateSpecCamera(int client, int drone)
 	SetVariantString("!activator");
 	AcceptEntityInput(camera, "SetParent", cameraAnchor, camera, 0);
 	SetClientViewEntity(client, camera);
-	PlayerSpecCamera[client] = camera;
+	PlayerSpecCamera[client] = EntIndexToEntRef(camera);
 	SpecDrone[client] = true;
 	PlayerSpecDrone[client] = drone;
 }
@@ -1025,6 +1034,11 @@ public void OnClientPutInServer(int client)
 	hDroneEntity[client] = -1;
 }
 
+public void OnClientDisconnect(int client)
+{
+	TryRemoveDrone(client);
+}
+
 stock void GetWeaponName(int drone, int type, char[] buffer, int size)
 {
 	switch (type)
@@ -1098,7 +1112,7 @@ stock void KillDrone(int drone, int attacker, float damage, int weapon)
 	flDroneHealth[drone] = 0.0;
 	DroneIsDead[drone] = true;
 	flDroneExplodeDelay[drone] = GetEngineTime() + 3.0;
-	SendKillEvent(drone, attacker, weapon);
+	//SendKillEvent(drone, attacker, weapon);
 	CreateParticle(drone, "burningplayer_flyingbits", true);
 	Call_StartForward(g_DroneDestroy);
 
@@ -1118,6 +1132,7 @@ public void ResetClientView(int client)
 	SetEntityMoveType(client, MOVETYPE_WALK);
 }
 
+/*
 void SendKillEvent(int drone, int attacker, int weapon)
 {
 	if (IsValidDrone(drone))
@@ -1132,6 +1147,7 @@ void SendKillEvent(int drone, int attacker, int weapon)
 		DroneDeath.Fire(false);
 	}
 }
+*/
 
 public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
 {
@@ -1154,13 +1170,15 @@ public void SendDamageEvent(int victim, int attacker, float damage, bool crit)
 
 void RemoveSpecCamera(client)
 {
-	if (IsValidEntity(PlayerSpecCamera[client]) && PlayerSpecCamera[client] > MaxClients)
+	int camera = EntRefToEntIndex(PlayerSpecCamera[client]);
+	if (IsValidEntity(camera) && camera > MaxClients)
 	{
-		AcceptEntityInput(PlayerSpecCamera[client], "Kill");
+		AcceptEntityInput(camera, "Kill");
 	}
-	if (IsValidEntity(PlayerSpecCameraAnchor[client]) && PlayerSpecCameraAnchor[client] > MaxClients)
+	int anchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+	if (IsValidEntity(anchor) && anchor > MaxClients)
 	{
-		AcceptEntityInput(PlayerSpecCameraAnchor[client], "Kill");
+		AcceptEntityInput(anchor, "Kill");
 	}
 	SetClientViewEntity(client, client);
 	SpecDrone[client] = false;
@@ -1182,11 +1200,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				RemoveSpecCamera(client);
 			}
 		}
-		if (IsValidEntity(PlayerSpecCameraAnchor[client]))
+		int cameraAnchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+		if (IsValidEntity(cameraAnchor) && cameraAnchor > MaxClients)
 		{
 			float angle[3];
 			GetClientEyeAngles(client, angle);
-			TeleportEntity(PlayerSpecCameraAnchor[client], NULL_VECTOR, angle, NULL_VECTOR);
+			TeleportEntity(cameraAnchor, NULL_VECTOR, angle, NULL_VECTOR);
 		}
 		if (IsValidDrone(hDroneEntity[client]))
 		{
@@ -1548,6 +1567,7 @@ stock void ClampVector(float vec[3], float max, float min = 0.0, float vBuffer[3
 
 stock void SpawnDrone(int client, const char[] drone_name)
 {
+	PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
 	char sPath[64];
 	BuildPath(Path_SM, sPath, sizeof sPath, "configs/drones/%s.txt", drone_name);
