@@ -67,7 +67,7 @@ public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] pl
 		char fireSound[64];
 		bool hasSound = CD_GetWeaponAttackSound(Config[drone], weapon, fireSound, sizeof fireSound);
 		if (hasSound)
-			PrecacheSound(fireSound);//
+			PrecacheSound(fireSound);
 		switch (weapon)
 		{
 			case 1: //chaingun
@@ -167,7 +167,7 @@ public void CD_OnDroneCreated(int drone, int owner, const char[] plugin, const c
 	}
 }
 
-public void OnDroneDestroyed(int drone, int owner, const char[] plugin)
+public void OnDroneRemoved(int drone, int owner, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
