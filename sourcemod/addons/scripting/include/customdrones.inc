@@ -180,6 +180,15 @@ native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float dam
 native int CD_GetDroneActiveWeapon(int drone);
 
 /**
+ * Set a drone's active weapon
+ *
+ * @param1 drone - Drone ent index
+ * @param2 weapon - weapon index to swap to
+ */
+
+native void CD_SetDroneActiveWeapon(int drone, int weapon);
+
+/**
  * Get Current Health of drone
  *
  * @param1 drone - Drone ent index
