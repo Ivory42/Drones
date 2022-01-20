@@ -21,8 +21,10 @@
 			"attack_time"	"0.08"
 			"inaccuracy"	"1.5"
 			
-			"attack_acceleration"	"0.2" //rate at which attack speed increases while attacking
-			"attack_start_rate"	"0.5"  //beginning attack speed
+			"attack_acceleration"	"0.2" 	//rate at which attack speed increases while attacking
+			"attack_start_rate"	"0.5"  	//beginning attack speed
+			"model"			""	//model for weapon to use
+			"health"		"80"	//amount of damage weapon can take directly before being destroyed
 		}
 		"weapon2"
 		{
