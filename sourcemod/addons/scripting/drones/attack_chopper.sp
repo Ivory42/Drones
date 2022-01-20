@@ -24,6 +24,11 @@ float WeaponDamage[2049][MAXWEAPONS+1];
 float Inaccuracy[2049][MAXWEAPONS+1];
 
 //Chaingun variables
+int Chaingun[2049];
+int CGHealth[2049];
+int GunDrone[2049];
+bool CGActive[2049];
+float CGPos[2049][3];
 float CGAttackSpeed[2049];
 float CGAttackDelay[2049];
 float CGMaxAttackSpeed[2049];
@@ -51,6 +56,10 @@ void SetDroneVars(const char[] config, int drone)
 	CGAccel[drone] = CD_GetParamFloat(config, "attack_acceleration", 1);
 	CGStartRate[drone] = CD_GetParamFloat(config, "attack_start_rate", 1);
 	CGMaxAttackSpeed[drone] = CD_GetParamFloat(config, "attack_time", 1);
+	CD_GetParamString(config, "modelname", 1, CGModel, sizeof CGModel);
+	Chaingun[drone] = CreateChaingun(drone, modelname);
+	CGHealth[Chaingun[drone]] = CD_GetParamInteger(drone, "health", 1);
+	GunDrone[Chaingun[drone]] = drone;
 
 	//Missiles
 	MissileSpeed[drone] = CD_GetParamFloat(config, "speed", 2);
@@ -58,6 +67,49 @@ void SetDroneVars(const char[] config, int drone)
 	//Bombs
 	CD_GetParamString(config, "model", 3, BombModel[drone], PLATFORM_MAX_PATH);
 	BombFuseTime[drone] = CD_GetParamFloat(config, "fuse", 3);
+}
+
+int CreateChaingun(int drone, char[] modelname)
+{
+	if (strlen(modelname) > 3)
+		PrecacheModel(modelname);
+		
+	float pos[3], angles[3];
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", angles);
+	GetForwardPos(pos, angles, 30.0, 0.0, -20.0, CGPos[drone]);
+	
+	int gun = CreateEntityByName("prop_physics_override");
+	TeleportEntity(gun, CGPos[drone], angles, NULL_VECTOR);
+	DispatchSpawn(gun);
+	ActivateEntity(gun);
+	SetEntityModel(gun, modelname);
+	CGActive[gun] = true;
+	
+	SetVariantString("!activator");
+	AcceptEntityInput(gun, "SetParent", drone, gun, 0);
+	SDKHook(gun, SDKHook_OnTakeDamage, OnGunDamaged);
+	return gun;
+}
+
+public Action OnGunDamaged(int gun, int &attacker, int &inflictor, float &damage)
+{
+	if (CD_IsValidDrone(GunDrone[gun] && CGActive[gun])
+	{
+		int drone = GunDrone[gun];
+		int damageamount = RoundFloat(damage);
+		CGHealth[gun] -= damageamount;
+		if (CGHealth[gun] <= 0)
+		{
+			damage *= 1.25;
+			CGActive[gun] = false;
+			CD_DestroyComponent(drone, gun, attacker, inflictor, damage, CGPos[drone]);
+		}
+		else
+		{
+			CD_DroneTakeDamage(drone, attacker, inflictor, damage);
+		}
+	}
 }
 
 public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
