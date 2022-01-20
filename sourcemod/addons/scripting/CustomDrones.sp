@@ -81,7 +81,7 @@ public Plugin MyInfo = {
 	name 			= 	"Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for players",
-	version 		= 	"1.2.7"
+	version 		= 	"1.3.0"
 };
 
 public void OnPluginStart()
@@ -98,7 +98,7 @@ public void OnPluginStart()
 	//Forwards
 	g_DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Cell, Param_Cell, Param_String, Param_String); //drone, owner, plugin, config
 	g_DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, plugin
-	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
+	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 	g_DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
 	g_DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_String); //drone, owner, weapon, plugin
 }
@@ -132,6 +132,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_GetDroneMaxHealth", Native_GetDroneMaxHealth);
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneWeapon);
+	CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon);
 	CreateNative("CD_SetWeaponReloading", Native_SetWeaponReload);
 	CreateNative("CD_GetParamFloat", Native_GetFloatParam);
 	CreateNative("CD_GetParamInteger", Native_GetIntParam);
@@ -227,6 +228,13 @@ public int Native_GetDroneWeapon(Handle plugin, int args)
 {
 	int drone = GetNativeCell(1);
 	return dActiveWeapon[drone];
+}
+
+public int Native_SetDroneWeapon(Handle plugin, int args)
+{
+	int drone = GetNativeCell(1);
+	int weapon = GetNativeCell(2);
+	dActiveWeapon[drone] = weapon;
 }
 
 public int Native_SpawnDroneName(Handle plugin, int args)
@@ -1233,6 +1241,26 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				GetEntPropVector(hDrone, Prop_Send, "m_angRotation", droneAngles);
 				vAngles = droneAngles;
 				DroneYaw[hDrone][0] = droneAngles[1];
+				float hpRatio = float(iDroneHP) / flDroneMaxHealth[hDrone];
+				
+				if (hpRatio <= 0.3) //30% or less hp
+				{
+					static float sparkDelay[MAXPLAYERS+1];
+					if (sparkDelay[client] <= GetGameTime())
+					{
+						float sparkPos[3], direction[3], sparkAngle[3];
+						for (int i = 0; i < 3; i++)
+						{
+							sparkPos[i] = vPos[i] + GetRandomFloat(-20.0, 20.0);
+							sparkAngle[i] = GetRandomFloat(-89.0, 89.0);
+							
+						}
+						GetAngleVectors(sparkAngle, direction, NULL_VECTOR, NULL_VECTOR);
+						TE_SetupMetalSparks(sparkPos, direction);
+						TE_SendToAll();
+						sparkDelay[client] = GetGameTime() + ClampFloat(hpRatio, 1.0, 0.3);
+					}
+				}
 
 				switch (dMoveType[hDrone])
 				{
@@ -1342,7 +1370,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						}
 						vAngles[2] = flRoll[client];
 					}
-					case DroneMove_Ground: //TODO - add support to rotate wheel models
+					case DroneMove_Ground: //Not functioning
 					{
 						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
 						if (buttons & IN_FORWARD)
@@ -1372,13 +1400,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				//Swap weapons on alt-fire
 				if (buttons & IN_ATTACK2 && flAmmoChange[hDrone] <= GetEngineTime())
 				{
+					int oldweapon = iWeaponNumber[hDrone];
 					if (iWeaponNumber[hDrone] >= iDroneWeapons[hDrone])
 						iWeaponNumber[hDrone] = 1;
 					else
 						iWeaponNumber[hDrone]++;
-
-					dActiveWeapon[hDrone] = iWeaponNumber[hDrone];
-					flAmmoChange[hDrone] = GetEngineTime() + 0.5;
+					
+					Action result;
 					Call_StartForward(g_DroneChangeWeapon);
 
 					Call_PushCell(hDrone);
@@ -1386,7 +1414,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					Call_PushCell(iWeaponNumber[hDrone]);
 					Call_PushString(sPluginName[hDrone]);
 
-					Call_Finish();
+					Call_Finish(result);
+					
+					dActiveWeapon[hDrone] = iWeaponNumber[hDrone];
+					flAmmoChange[hDrone] = GetEngineTime() + 0.5;
 				}
 
 				//Use active weapon on drone
