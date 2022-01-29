@@ -37,6 +37,7 @@ This plugin comes with several forwards and natives to use with other plugins. R
 ### Natives
   - `CD_GetDroneHealth` - Returns the current health of the given drone
   - `CD_GetDroneMaxHealth` - Returns the maximum health of the given drone
+  - `CD_ToggleViewLocked` - Unlock/Lock a drone to the player's view angles
   - `CD_SpawnDroneByName` - Spawns a drone for a client from the given config name
   - `CD_GetDroneActiveWeapon` - Returns the index of the current weapon for a given drone
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
@@ -46,9 +47,11 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_FireBullet` - Fires a hitscan attack from the drone
   - `CD_GetParamFloat` - Retrieves a float parameter from a drone's config file
   - `CD_GetParamInteger` - Retrieves an integer parameter from a drone's config file
+  - `CD_GetParamString` - Retrieves a string parameter from a drone's config file
   - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
   - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
   - `CD_OverrideMaxSpeed` - Overrides the max speed for the given drone
+  - `CD_GetWeaponAttackSound` - Retrieves a weapon's attack sound from the drone's config
 
 ### Forwards
   - `CD_OnDroneCreated` - Called when a drone initially spawns
