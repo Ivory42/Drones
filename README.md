@@ -42,6 +42,8 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
   - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
   - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile
+  - `CD_SpawnDroneBomb` - Spawns a custom bomb entity to be dropped from drones
+  - `CD_FireBullet` - Fires a hitscan attack from the drone
   - `CD_GetParamFloat` - Retrieves a float parameter from a drone's config file
   - `CD_GetParamInteger` - Retrieves an integer parameter from a drone's config file
   - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
@@ -53,7 +55,7 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_OnDroneDestroyed` - Called when a drone is destroyed
   - `CD_OnDroneRemoved` - Called when a drone is removed from the world after being destroyed
   - `CD_OnWeaponChanged` - Called when a player cycles weapons on a drone
-  - `CD_OnDroneAttack` - Called when a player presses their attack key while piloting a drone
+  - `CD_OnDroneAttack` - Called when a drone fires its active weapon
 
 
 ## Known Issues
@@ -62,6 +64,5 @@ This plugin comes with several forwards and natives to use with other plugins. R
 
 
 ## Planned Featurs
-  - Native hitscan attack
   - Native support abilities (healing, ammo regeneration, etc)
   - Multiple move type modes for ground based drones
