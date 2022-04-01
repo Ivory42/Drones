@@ -51,14 +51,28 @@ enum CDWeaponType
 	CDWeapon_Laser		//laser weapons
 };
 
+enum CDWeaponState
+{
+	WeaponState_Active,
+	WeaponState_Reloading,
+	WeaponState_Destroyed,
+	WeaponState_Custom
+}
+
 ///
 /// Struct to store all weapon info for specific drone weapons.
 /// These can be accessed in a drone's plugin on specific forwards.
+/// Do NOT directly access the properties 'weapon' or 'drone'.
+///	- Use the methods GetWeapon() and GetDrone() instead.
 ///
 
 enum struct DroneWeapon
 {
+	//entity references - DO NOT ACCESS DIRECTLY WITHOUT CONVERTING
 	int weapon;
+	int drone;
+	
+	//weapon stats
 	int ammo;
 	int maxammo;
 	float firerate;
@@ -66,6 +80,9 @@ enum struct DroneWeapon
 	float damage;
 	float reloadtime;
 	float reloaddelay;
+	
+	//weapon state
+	CDWeaponState state;
 	
 	//max pitch and yaw
 	float pitch;
@@ -102,13 +119,28 @@ enum struct DroneWeapon
 	void Spawn() //spawns the weapon and saves its reference
 	{
 		int wep = CreateEntityByName("prop_dynamic_override");
+		float pos[3], rot[3];
+		int drone = EntRefToEntIndex(this.drone);
+		if (!IsValidEntity(drone)) LogError("Could not spawn drone weapon: Drone entity invalid!");
+		
+		DispatchKeyValue(wep, "model", this.model);
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
+		GetOffsetPos(pos, rot, this.offset, pos);
+		TeleportEntity(wep, pos, rot, NULL_VECTOR);
 		DispatchSpawn(wep);
+		SetVariantString("!activator");
+		AcceptEntityInput(wep, "SetParent", drone, wep, 0);
 		
 		this.weapon = EntIndexToEntRef(wep);
 	}
 	int GetWeapon() //returns entity being used as this weapon
 	{
 		return EntRefToEntIndex(this.weapon);
+	}
+	int GetDrone()
+	{
+		return EntRefToEntIndex(this.drone);
 	}
 	void SimulateFire(Action action)
 	{
@@ -118,22 +150,27 @@ enum struct DroneWeapon
 			
 		switch (action)
 		{
-			case Plugin_Handled:
+			case Plugin_Continue:
 			{
 				this.ammo--;
 				if (this.ammo == 0)
 					this.SimulateReload();
 			}
-			case Plugin_Continue:
-			{
-				//TODO - default firing params
-			}
+		}
+	}
+	void Simulate() //weapon tick event
+	{
+		if (this.reloaddelay <= GetGameTime() && this.ammo == 0 && this.state == WeaponState_Reloading)
+		{
+			this.ammo = this.maxammo;
+			this.state = WeaponState_Active;
 		}
 	}
 	void SimulateReload()
 	{
 		this.ammo = 0;
-		this.reloadtime = GetGameTime() + this.reloaddelay;
+		this.reloaddelay = GetGameTime() + this.reloadtime;
+		this.reloading = true;
 	}
 	bool CanFire(bool force)
 	{
@@ -145,6 +182,10 @@ enum struct DroneWeapon
 				return true;
 		}
 		return false;
+	}
+	void GetName(char[] buffer, int size)
+	{
+		FormatEx(buffer, size, this.name);
 	}
 }
 
@@ -519,6 +560,24 @@ stock void GetForwardPos(float origin[3], const float angles[3], float distance,
 	
 	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
 	ScaleVector(dir, upDistance);
+	AddVectors(buffer, dir, buffer);
+}
+
+void GetOffsetPos(float origin[3], float angles[3], float offset[3], float buffer[3])
+{
+	float dir[3];
+
+	GetAngleVectors(angles, dir, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(dir, offset[0]);
+	AddVectors(origin, dir, buffer);
+
+	GetAngleVectors(angles, NULL_VECTOR, dir, NULL_VECTOR);
+	NegateVector(dir);
+	ScaleVector(dir, offset[1]);
+	AddVectors(buffer, dir, buffer);
+
+	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
+	ScaleVector(dir, offset[2]);
 	AddVectors(buffer, dir, buffer);
 }
 
