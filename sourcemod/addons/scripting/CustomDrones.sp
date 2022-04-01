@@ -1064,6 +1064,7 @@ stock void GetWeaponName(int drone, int type, char[] buffer, int size)
 }
 */
 
+/*
 void GetAmmoCount(int drone, int weapon, char[] buffer, int size)
 {
 	switch (AmmoLoaded[drone][weapon])
@@ -1073,6 +1074,7 @@ void GetAmmoCount(int drone, int weapon, char[] buffer, int size)
 		default: Format(buffer, size, "Ammo: %i", AmmoLoaded[drone][weapon]);
 	}
 }
+*/
 
 public Action OnDroneDamaged(int drone, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
@@ -1198,10 +1200,15 @@ void RemoveSpecCamera(client)
 	SpecDrone[client] = false;
 }
 
+///
+/// Drone tick functions
+///
+
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
 	if (IsValidClient(client))
 	{
+		//Check if we are spectating a player with an active drone
 		if (!IsPlayerAlive(client) || GetClientTeam(client) == 1 || GetClientTeam(client) == 0) //player is dead or in spectate
 		{
 			int observerTarget = GetEntPropEnt(client, Prop_Send, "m_hObserverTarget");
@@ -1228,14 +1235,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			int activeWeapon = WeaponNumber[hDrone];
 			iDroneHP = RoundFloat(DroneHealth[hDrone]);
 			float vPos[3], vAngles[3], cAngles[3], vVel[7][3], vAbsVel[3];
-			char sAmmoType[64], ammo[64];
+			char weaponname[MAX_WEAPON_LENGHT], ammo[32];
 			float flMaxSpeed = SpeedOverride[hDrone] > 0.0 ? SpeedOverride[hDrone] : DroneMaxSpeed[hDrone];
 			if (!DroneIsDead[hDrone])
 			{
 				float droneAngles[3];
 				GetClientEyeAngles(client, cAngles);
-				//GetWeaponName(hDrone, activeWeapon, sAmmoType, sizeof sAmmoType);
-				GetAmmoCount(hDrone, activeWeapon, ammo, sizeof ammo);
+				WeaponProps[hDrone][activeWeapon].GetName(weaponname, sizeof weaponname);
+				//GetWeaponName(hDrone, activeWeapon, weaponname, sizeof weaponname);
+				FormatAmmoString(WeaponProps[hDrone][activeWeapon], ammo, sizeof ammo); //should probably only update on attack and reload
+				//GetAmmoCount(hDrone, activeWeapon, ammo, sizeof ammo);
 
 				SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
 				char sDroneHp[64];
@@ -1248,6 +1257,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				vAngles = droneAngles;
 				DroneYaw[hDrone][0] = droneAngles[1];
 				float hpRatio = float(iDroneHP) / DroneMaxHealth[hDrone];
+				
+				UpdateWeaponAngles(WeaponProps[hDrone][activeWeapon], cAngles, drone);
 
 				if (hpRatio <= 0.3) //30% or less hp
 				{
@@ -1398,9 +1409,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				}
 
 				//manual reload
-				if (buttons & IN_RELOAD && AmmoLoaded[hDrone][activeWeapon] > 0)
+				if (buttons & IN_RELOAD && WeaponProps[hDrone][activeWeapon] > 0)
 				{
-					StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
+					WeaponProps[hDrone][activeWeapon].SimulateReload();
+					//StartWeaponReload(hDrone, activeWeapon, ReloadTime[hDrone][activeWeapon]);
 				}
 
 				//Swap weapons on alt-fire
@@ -1417,11 +1429,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 					Call_PushCell(hDrone);
 					Call_PushCell(client);
-					Call_PushArray(WeaponProps[hDrone][WeaponNumber[hDrone]], 600);
+					Call_PushArray(WeaponProps[hDrone][WeaponNumber[hDrone]], sizeof DroneWeapon);
 					Call_PushCell(WeaponNumber[hDrone]);
 					Call_PushString(sPluginName[hDrone]);
 
 					Call_Finish(result);
+					
+					ResetWeaponRotation(WeaponProps[hDrone][oldweapon], droneAngles[1]);
 
 					DroneActiveWeapon[hDrone] = WeaponNumber[hDrone];
 					AmmoChangeCooldown[hDrone] = GetEngineTime() + 0.5;
@@ -1434,12 +1448,14 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				}
 
 				buttons &= ~IN_ATTACK;
-
-				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime() && AmmoLoaded[hDrone][activeWeapon] == 0)
+				WeaponProps[hDrone][activeWeapon].Simulate();
+				/*
+				if (ReloadDelay[hDrone][activeWeapon] <= GetEngineTime())
 				{
 					AmmoLoaded[hDrone][activeWeapon] = MaxAmmo[hDrone][activeWeapon];
 					ReloadDelay[hDrone][activeWeapon] = FAR_FUTURE;
 				}
+				*/
 
 				//update drone speed and angles
 				TeleportEntity(hDrone, NULL_VECTOR, vAngles, vAbsVel);
@@ -1451,6 +1467,54 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				ExplodeDrone(hDrone);
 				TryRemoveDrone(DroneOwner[hDrone]);
 			}
+		}
+	}
+}
+
+void FormatAmmoString(DroneWeapon weapon, char[] buffer, int size)
+{
+	switch (weapon.ammo)
+	{
+		case 0: FormatEx(buffer, size, "Reloading...");
+		case -1: FormatEx(buffer, size, "");
+		default: FormatEx(buffer, size, "Ammo: %i", weapon.ammo);
+	}
+}
+
+void UpdateWeaponAngles(DroneWeapon weapon, float angles[3], int drone)
+{
+	if (!weapon.fixed) //only bother with this if the weapon is not fixed
+	{
+		int model = weapon.GetWeapon();
+		if (!IsValidEntity(model)) return;
+		
+		float pos[3], rot[3], aimangle[3], aimpos[3], cameraPos[3], aimvec[3];
+		
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
+		GetForwardPos(pos, rot, 0.0, 0.0, CameraHeight[drone], cameraPos); //Get our camera height relative to our drone's forward vector
+		
+		CD_GetDroneAimPosition(drone, cameraPos, angles, aimpos);	//find where the client is aiming at in relation to the drone
+
+		MakeVectorFromPoints(pos, aimpos, aimvec); //draw vector from offset position to our aim position
+		GetVectorAngles(aimvec, aimangle);
+		//Need to clamp this angle based on weapon's max rotation parameters
+		//Ignoring for now
+		
+		TeleportEntity(model, NULL_VECTOR, aimangle, NULL_VECTOR);
+	}
+}
+
+void ResetWeaponRotation(DroneWeapon weapon, int drone, float yaw)
+{
+	if (!weapon.fixed)
+	{
+		int model = weapon.GetWeapon();
+		if (IsValidEntity(weapon))
+		{
+			float angle[3] = {0.0, 0.0, 0.0};
+			angle[1] = yaw;
+			SetEntProp(model, NULL_VECTOR, angle, NULL_VECTOR);
 		}
 	}
 }
@@ -1480,7 +1544,7 @@ void FireWeapon(int owner, int drone, int slot, DroneWeapon weapon)
 
 	Call_PushCell(drone);
 	Call_PushCell(owner);
-	Call_PushArray(WeaponProps[drone][slot], 600);
+	Call_PushArray(WeaponProps[drone][slot], sizeof DroneWeapon);
 	Call_PushCell(slot);
 	Call_PushString(sPluginName[drone]);
 
@@ -1655,7 +1719,7 @@ stock void SpawnDrone(int client, const char[] drone_name)
 			FormatEx(sNumber, sizeof sNumber, "weapon%i", i);
 			if (kv.JumpToKey(sNumber))
 			{
-				SetupWeapon(kv, WeaponProps[hDrone][i]);
+				SetupWeapon(kv, WeaponProps[hDrone][i], hDrone);
 				/*
 				MaxAmmo[hDrone][i] = kv.GetNum("ammo_loaded", 1);
 				ReloadTime[hDrone][i] = kv.GetFloat("reload_time", 1.0);
@@ -1706,6 +1770,12 @@ stock void SpawnDrone(int client, const char[] drone_name)
 
 	SetVariantInt(1);
 	AcceptEntityInput(client, "SetForcedTauntCam");
+	
+	if(kv.GetNum("vehicle"))
+	{
+		SetPlayerSeatPosition(client, hDrone, kv);
+	}
+	delete kv;
 
 	Call_StartForward(g_DroneCreated);
 
@@ -1717,7 +1787,7 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	Call_Finish();
 }
 
-void SetupWeapon(KeyValues kv, DroneWeapon weapon)
+void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
 {
 	char weaponname[MAX_WEAPON_LENGTH], modelname[PLATFORM_MAX_PATH];
 	float offset[3], projoffset[3];
@@ -1725,6 +1795,8 @@ void SetupWeapon(KeyValues kv, DroneWeapon weapon)
 	kv.GetString("model", modelname, sizeof modelname);
 	if (strlen(modelname) > 3)
 		weapon.SetModel(modelname);
+		
+	weapon.drone = EntIndexToEntRef(drone);
 	kv.GetVector("offset", offset);
 	weapon.SetOffset(offset, false);
 	kv.GetVector("proj_offset", projoffset);
@@ -1767,6 +1839,61 @@ void SetupViewPosition(int client, int drone, const float pos[3], const float an
 
 	SetClientViewEntity(client, camera);
 	DroneCamera[drone] = camera;
+}
+
+void SetPlayerSeatPosition(int client, int drone, KeyValues kv, const char[] seatname)
+{
+	float offset[3], seat[3], pos[3], angle[3];
+	if (kv.JumpToKey(seatname))
+	{
+		kv.GetVector("offset", offset);
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
+		GetOffsetPosition(pos, angle, offset, seat);
+
+		TeleportEntity(client, seat, NULL_VECTOR, NULL_VECTOR);
+		if (!kv.GetNum("visible"))
+		{
+			SetEntityRenderFX(client, RENDERFX_FADE_FAST);
+			RemoveWearables(client);
+		}
+		SetVariantString("!activator");
+		AcceptEntityInput(client, "SetParent", drone, client, 0);
+		//TODO - Set player animation to kart animation
+	}
+}
+
+void RemoveWearables(int client)
+{
+	int entity = MaxClients + 1;
+	while((entity = FindEntityByClassname(entity, "tf_wearable")) != -1)
+	{
+		if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity"))
+		{
+			switch(GetEntProp(entity, Prop_Send, "m_iItemDefinitionIndex"))
+			{
+				default:
+				{
+					TF2_RemoveWearable(client, entity);
+				}
+			}
+		}
+	}
+	entity = MaxClients + 1;
+	while((entity = FindEntityByClassname(entity, "tf_powerup_bottle")) != -1) //mvm canteens
+	{
+		if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity"))
+		{
+			TF2_RemoveWearable(client, entity);
+		}
+	}
+}
+
+void PlayerExitVehicle(int client)
+{
+	AcceptEntityInput(client, "ClearParent");
+	SetEntityRenderFX(client, RENDERFX_NONE);
+	TF2_RegeneratePlayer(client);
 }
 
 stock CDMoveType GetMoveType(const char[] movetype)
