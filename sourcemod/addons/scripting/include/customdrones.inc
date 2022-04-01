@@ -78,6 +78,7 @@ enum struct DroneWeapon
 	float firerate;
 	float attackdelay;
 	float damage;
+	float inaccuracy;
 	float reloadtime;
 	float reloaddelay;
 	
@@ -172,13 +173,33 @@ enum struct DroneWeapon
 		this.reloaddelay = GetGameTime() + this.reloadtime;
 		this.reloading = true;
 	}
-	bool CanFire(bool force)
+	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
+	{
+		int drone = this.GetDrone();
+		if (IsValidEntity(drone))
+		{
+			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
+			GetOffsetPosition(pos, rot, this.offset, pos);
+			int weapon = this.GetWeapon();
+			if (IsValidEntity(weapon))
+			{
+				GetEntPropVector(weapon, Prop_Send, "m_angRotation", rot);
+			}
+		}
+	}
+	void GetMuzzleTransform(float pos[3], float rot[3])	//retrieve's this weapon's muzzle location in the world.
+	{
+		this.GetWeaponTransform(pos, rot);
+		GetOffsetPosition(pos, rot, this.projoffset, pos);
+	}
+	bool CanFire(bool force)	//Can this weapon fire
 	{
 		if (force) //ignore attack delay
-			return (this.ammo != 0);
+			return (this.ammo != 0 && this.state == WeaponState_Active);
 		else
 		{
-			if (this.ammo != 0 && this.attackdelay <= GetGameTime())
+			if (this.ammo != 0 && this.attackdelay <= GetGameTime() && this.state == WeaponState_Active)
 				return true;
 		}
 		return false;
@@ -263,22 +284,15 @@ native bool CD_ToggleViewLocked(int drone);
  *
  * @param1 owner - Client index who owns the drone
  * @param2 drone - Drone firing the attack
- * @param3 damage - Damage to deal on successful hit
- * @param4 origin - Position to fire trace from
- * @param5 forwardAngle - Forward direction of attack to check angle from
- * @param6 overrideX - Forward position to offset trace origin from
- * @param7 overrideY - Side position to offset trace origin from
- * @param8 overrideZ - Vertical position to offset trace origin from
- * @param9 inaccuracy - Variation to add onto trace angle
- * @param10 maxAngle - Maximum angle from forward angle that the attack can angle towards
- * @param11 dmgType - Drone damage type to use for attack | CDDmgType
- * @param12 type - Drone weapon type this bullet is fire from | CDWeaponType
+ * @param3 weapon - Weapon object firing this attack
+ * @param4 dmgType - Drone damage type to use for attack | CDDmgType
+ * @param5 type - Drone weapon type this bullet is fire from | CDWeaponType
  */
 
-native void CD_FireBullet(int owner, int drone, float damage, const float[] origin, const float[] forwardAngle, float overrideX, float overrideY, float overrideZ, float inaccuracy, const float[] maxAngle, CDDmgType dmgType, CDWeaponType type);
+native void CD_FireBullet(int owner, int drone, DroneWeapon weapon, CDDmgType dmgType, CDWeaponType type);
 
 /**
- * Fire the current drone's active weapon
+ * Override max speed of the given drone
  *
  * @param1 drone - Drone to override speed of
  * @param2 speed - Speed override
@@ -312,11 +326,23 @@ native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float dam
  * Get Drone Active Weapon
  *
  * @param1 drone - Drone ent index
+ * @param2 weapon - Struct to store the weapon info in
  * 
- * @return Active weapon index from 1 - 6
+ * @return active slot index
  */
 
-native int CD_GetDroneActiveWeapon(int drone);
+native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof DroneWeapon]);
+
+/**
+ * Get Drone Weapon from Slot
+ *
+ * @param1 drone - Drone ent index
+ * @param2 slot - Which slot to get weapon info from
+ * @param3 weapon - Struct to store the weapon info in
+ * 
+ */
+
+native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof DroneWeapon]);
 
 /**
  * Set a drone's active weapon
@@ -362,7 +388,7 @@ native void CD_SpawnDroneByName(int client, const char[] drone_name);
  * Sets a weapon's reload state based on a fire delay
  *
  * @param1 drone - Ent index of drone firing
- * @param2 weapon - Weapon # that is firing
+ * @param2 weapon - Slot of weapon being fired
  * @param3 override - Override reload time if non-zero
  *
  */
@@ -423,40 +449,32 @@ native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] 
  *
  * @param1 owner - Player owning the drone
  * @param2 drone - Drone entity index
- * @param3 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
- * @param4 angle - Angle to use for offsetting positions
- * @param5 projectile - Type of rocket to spawn
- * @param6 damage - Damage of the rocket
- * @param7 speed - Speed of the rocket
- * @param8 overrideX - Forward position to offset rocket by (increase this value if the rocket is colliding with the drone model)
- * @param9 overrideY - Right position to offset rocket by
- * @param10 overrideZ - Up position to offset rocket by
- * @param11 inaccuracy - random variance added to projectile angles
+ * @param3 weapon - Weapon object firing the attack
+ * @param4 projectile - Type of rocket to spawn
+ * @param5 speed - Speed of the rocket
  *
  * @return entity index of spawned rocket
  *
  */
 
-native int CD_SpawnRocket(int owner, int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, float speed = 1100.0, float overrideX = 60.0, float overrideY = 0.0, float overrideZ = 0.0, float inaccuracy = 0.0);
+native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile, float speed = 1100.0);
 
 /**
  * Spawns a physics prop to use as a bomb projectile
  *
- * @param1 drone - Drone firing the projectile
- * @param2 pos - Position of entity firing rocket (i.e cannon on a tank) | can be the drone itself if no weapon model exists
- * @param3 angle - Angle to use for offsetting positions
+ * @param1 owner - Client damage should credited to
+ * @param2 drone - Drone firing the projectile
+ * @param3 weapon - Weapon object firing the attack
  * @param4 projectile - Projectile type to use for this bomb
- * @param5 damage - Damage of the bomb
- * @param6 modelname - Model for bomb to use
- * @param7 fuse - Fuse time on bomb
- * @param8 offset - Position to offset spawn by
- * @param9 bomb - buffer to store bomb struct
+ * @param5 modelname - Model for bomb to use
+ * @param6 fuse - Fuse time on bomb
+ * @param7 bomb - buffer to store bomb struct
  *
  * @return true on success
  *
  */
 
-native bool CD_SpawnDroneBomb(int drone, const float[] pos, const float[] angle, ProjType projectile, float damage, const char[] modelname, float fuse = 6.0, const float[] offset, any bomb[sizeof DroneBomb]);
+native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile, const char[] modelname, float fuse = 6.0, any bomb[sizeof DroneBomb]);
 
 
 /**
