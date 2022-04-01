@@ -1785,9 +1785,9 @@ stock void SpawnDrone(int client, const char[] drone_name)
 	SetVariantInt(1);
 	AcceptEntityInput(client, "SetForcedTauntCam");
 	
-	if(kv.GetNum("vehicle"))
+	if(kv.GetNum("vehicle")) //set player into pilot seat
 	{
-		SetPlayerSeatPosition(client, hDrone, kv);
+		SetPlayerSeatPosition(client, hDrone, kv, "pilot_seat");
 	}
 	delete kv;
 
@@ -1815,6 +1815,7 @@ void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
 	weapon.SetOffset(projoffset, true);
 	weapon.SetName(weaponname);
 	weapon.maxammo = kv.GetNum("ammo_loaded", 1);
+	weapon.inaccuracy = kv.GetFloat("inaccuracy", 0.0);
 	weapon.reloadtime = kv.GetFloat("reload_time", 1.0);
 	weapon.firerate = kv.GetFloat("attack_time", 0.5);
 	weapon.fixed = view_as<bool>(kv.GetNum("fixed", 1));
@@ -1860,22 +1861,25 @@ void SetupViewPosition(int client, int drone, const float pos[3], const float an
 void SetPlayerSeatPosition(int client, int drone, KeyValues kv, const char[] seatname)
 {
 	float offset[3], seat[3], pos[3], angle[3];
-	if (kv.JumpToKey(seatname))
+	if (kv.JumpToKey("seats"))
 	{
-		kv.GetVector("offset", offset);
-		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-		GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-		GetOffsetPosition(pos, angle, offset, seat);
-
-		TeleportEntity(client, seat, NULL_VECTOR, NULL_VECTOR);
-		if (!kv.GetNum("visible"))
+		if (kv.JumpToKey(seatname))
 		{
-			SetEntityRenderFX(client, RENDERFX_FADE_FAST);
-			RemoveWearables(client);
+			kv.GetVector("offset", offset);
+			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+			GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
+			GetOffsetPosition(pos, angle, offset, seat);
+
+			TeleportEntity(client, seat, NULL_VECTOR, NULL_VECTOR);
+			if (!kv.GetNum("visible"))
+			{
+				SetEntityRenderFX(client, RENDERFX_FADE_FAST);
+				RemoveWearables(client);
+			}
+			SetVariantString("!activator");
+			AcceptEntityInput(client, "SetParent", drone, client, 0);
+			//TODO - Set player animation to kart animation
 		}
-		SetVariantString("!activator");
-		AcceptEntityInput(client, "SetParent", drone, client, 0);
-		//TODO - Set player animation to kart animation
 	}
 }
 
