@@ -3,6 +3,7 @@
 #endif
 #define _customdrones_included
 #define MAXWEAPONS 6
+#define MAX_WEAPON_LENGTH 64
 
 #include <sdktools>
 #include <entity>
@@ -49,6 +50,103 @@ enum CDWeaponType
 	CDWeapon_SlowFire,	//slow fire weapons
 	CDWeapon_Laser		//laser weapons
 };
+
+///
+/// Struct to store all weapon info for specific drone weapons.
+/// These can be accessed in a drone's plugin on specific forwards.
+///
+
+enum struct DroneWeapon
+{
+	int weapon;
+	int ammo;
+	int maxammo;
+	float firerate;
+	float attackdelay;
+	float damage;
+	float reloadtime;
+	float reloaddelay;
+	
+	//max pitch and yaw
+	float pitch;
+	float yaw;
+	bool fixed;
+	
+	//appearance
+	char model[PLATFORM_MAX_PATH];
+	char name[MAX_WEAPON_LENGTH];
+	float offset[3];
+	float projoffset[3]; //offset based on weapon offset - this does NOT offset from the drone's world position
+	
+	//weapon parameters
+	void SetName(char[] name)
+	{
+		FormatEx(this.name, MAX_WEAPON_LENGTH, name);
+	}
+	void SetModel(char[] model)
+	{
+		FormatEx(this.model, PLATFORM_MAX_PATH, model);
+	}
+	void SetOffset(float offset[3], bool proj)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			if (proj)
+				this.projoffset[i] = offset[i];
+			else
+				this.offset[i] = offset[i];
+		}
+	}
+	
+	//Weapon functions
+	void Spawn() //spawns the weapon and saves its reference
+	{
+		int wep = CreateEntityByName("prop_dynamic_override");
+		DispatchSpawn(wep);
+		
+		this.weapon = EntIndexToEntRef(wep);
+	}
+	int GetWeapon() //returns entity being used as this weapon
+	{
+		return EntRefToEntIndex(this.weapon);
+	}
+	void SimulateFire(Action action)
+	{
+		this.attackdelay = GetGameTime() + this.firerate;
+		if (this.ammo == -1)
+			return;
+			
+		switch (action)
+		{
+			case Plugin_Handled:
+			{
+				this.ammo--;
+				if (this.ammo == 0)
+					this.SimulateReload();
+			}
+			case Plugin_Continue:
+			{
+				//TODO - default firing params
+			}
+		}
+	}
+	void SimulateReload()
+	{
+		this.ammo = 0;
+		this.reloadtime = GetGameTime() + this.reloaddelay;
+	}
+	bool CanFire(bool force)
+	{
+		if (force) //ignore attack delay
+			return (this.ammo != 0);
+		else
+		{
+			if (this.ammo != 0 && this.attackdelay <= GetGameTime())
+				return true;
+		}
+		return false;
+	}
+}
 
 //should probably be a methodmap
 enum struct DroneBomb
@@ -369,7 +467,7 @@ forward void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name);
  *
  * @param1 drone - Ent index of drone
  * @param2 owner - Client index of owner
- * @param3 newWeapon - Weapon # that is being switched to
+ * @param3 newWeapon - Weapon object that is being switched to
  * @param4 plugin_name - Name of plugin defined in config
  */
 
@@ -393,11 +491,12 @@ forward void CD_OnDroneDestroyed(int drone, int owner, int attacker, float damag
  *
  * @param1 drone - Ent index of drone
  * @param2 owner - Client index of owner
- * @param3 weapon - Weapon # that is being fired
+ * @param3 weapon - Weapon object that is being fired
+ * @param4 slot - Weapon slot being used
  * @param4 plugin_name - Name of plugin defined in config
  */
 
-forward Action CD_OnDroneAttack(int drone, int owner, int Weapon, const char[] plugin_name);
+forward Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slot, const char[] plugin_name);
 
 /*************
 
