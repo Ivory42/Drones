@@ -127,7 +127,9 @@ enum struct DroneWeapon
 		DispatchKeyValue(wep, "model", this.model);
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 		GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-		GetOffsetPos(pos, rot, this.offset, pos);
+		float offset[3];
+		FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
+		GetOffsetPos(pos, rot, offset, pos);
 		TeleportEntity(wep, pos, rot, NULL_VECTOR);
 		DispatchSpawn(wep);
 		SetVariantString("!activator");
@@ -169,9 +171,12 @@ enum struct DroneWeapon
 	}
 	void SimulateReload()
 	{
-		this.ammo = 0;
-		this.reloaddelay = GetGameTime() + this.reloadtime;
-		this.reloading = true;
+		if (this.ammo < this.maxammo)
+		{
+			this.ammo = 0;
+			this.reloaddelay = GetGameTime() + this.reloadtime;
+			this.state = WeaponState_Reloading;
+		}
 	}
 	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
 	{
@@ -180,7 +185,9 @@ enum struct DroneWeapon
 		{
 			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-			GetOffsetPosition(pos, rot, this.offset, pos);
+			float offset[3];
+			FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
+			GetOffsetPos(pos, rot, offset, pos);
 			int weapon = this.GetWeapon();
 			if (IsValidEntity(weapon))
 			{
@@ -191,7 +198,9 @@ enum struct DroneWeapon
 	void GetMuzzleTransform(float pos[3], float rot[3])	//retrieve's this weapon's muzzle location in the world.
 	{
 		this.GetWeaponTransform(pos, rot);
-		GetOffsetPosition(pos, rot, this.projoffset, pos);
+		float offset[3];
+		FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
+		GetOffsetPos(pos, rot, offset, pos);
 	}
 	bool CanFire(bool force)	//Can this weapon fire
 	{
@@ -289,7 +298,7 @@ native bool CD_ToggleViewLocked(int drone);
  * @param5 type - Drone weapon type this bullet is fire from | CDWeaponType
  */
 
-native void CD_FireBullet(int owner, int drone, DroneWeapon weapon, CDDmgType dmgType, CDWeaponType type);
+native void CD_FireBullet(int owner, int drone, any weapon[sizeof DroneWeapon], CDDmgType dmgType, CDWeaponType type);
 
 /**
  * Override max speed of the given drone
@@ -563,6 +572,14 @@ STOCKS
 
 *************/
 
+//vectors in structs are annoying, so using this to "format" a vector as needed
+stock void FormatVector(float vec[3], float x, float y, float z)
+{
+	vec[0] = x;
+	vec[1] = y;
+	vec[2] = z;
+}
+
 stock void GetForwardPos(float origin[3], const float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
 {
 	float dir[3];
@@ -581,7 +598,7 @@ stock void GetForwardPos(float origin[3], const float angles[3], float distance,
 	AddVectors(buffer, dir, buffer);
 }
 
-void GetOffsetPos(float origin[3], float angles[3], float offset[3], float buffer[3])
+void GetOffsetPos(float origin[3], float angles[3], any offset[3], float buffer[3])
 {
 	float dir[3];
 
