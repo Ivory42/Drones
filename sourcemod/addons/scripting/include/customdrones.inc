@@ -4,6 +4,8 @@
 #define _customdrones_included
 #define MAXWEAPONS 6
 #define MAX_WEAPON_LENGTH 64
+#define MAX_DRONE_LENGTH 32
+#define MAXSEATS 10
 
 #include <sdktools>
 #include <entity>
@@ -15,12 +17,12 @@ enum ProjType
 	DroneProj_Rocket,	//Default rocket
 	DroneProj_Energy,	//Cow mangler rocket
 	DroneProj_Sentry,	//Sentry rocket salvo
-	
+
 	//Bombs
 	DroneProj_Bomb,		//Default bomb, detonates on fuse timer which begins upon spawn
 	DroneProj_BombDelayed,	//Fuse timer starts after touching a surface
 	DroneProj_BombImpact,	//Bomb detonates upon impact rather than a fuse timer
-	
+
 	//misc
 	DroneProj_Custom	//Custom projectile type for defining logic within sub plugins
 };
@@ -38,7 +40,7 @@ enum CDDmgType
 	DmgType_Missile,
 	DmgType_Energy,
 	DmgType_Plasma,
-	
+
 	//default damage types used by main plugin
 	DmgType_Rangeless, 	//hitscan damage with no falloff
 	DmgType_Generic		//hitscan generic damage
@@ -71,7 +73,7 @@ enum struct DroneWeapon
 	//entity references - DO NOT ACCESS DIRECTLY WITHOUT CONVERTING
 	int weapon;
 	int drone;
-	
+
 	//weapon stats
 	int ammo;
 	int maxammo;
@@ -81,21 +83,22 @@ enum struct DroneWeapon
 	float inaccuracy;
 	float reloadtime;
 	float reloaddelay;
-	
+	char firesound[PLATFORM_MAX_PATH];
+
 	//weapon state
 	CDWeaponState state;
-	
+
 	//max pitch and yaw
 	float pitch;
 	float yaw;
 	bool fixed;
-	
+
 	//appearance
 	char model[PLATFORM_MAX_PATH];
 	char name[MAX_WEAPON_LENGTH];
 	float offset[3];
 	float projoffset[3]; //offset based on weapon offset - this does NOT offset from the drone's world position
-	
+
 	//weapon parameters
 	void SetName(char[] name)
 	{
@@ -104,6 +107,10 @@ enum struct DroneWeapon
 	void SetModel(char[] model)
 	{
 		FormatEx(this.model, PLATFORM_MAX_PATH, model);
+	}
+	void SetFire(char[] firesound)
+	{
+		FormatEx(this.firesound, PLATFORM_MAX_PATH, firesound);
 	}
 	void SetOffset(float offset[3], bool proj)
 	{
@@ -115,7 +122,7 @@ enum struct DroneWeapon
 				this.offset[i] = offset[i];
 		}
 	}
-	
+
 	//Weapon functions
 	void Spawn() //spawns the weapon and saves its reference
 	{
@@ -123,7 +130,7 @@ enum struct DroneWeapon
 		float pos[3], rot[3];
 		int drone = EntRefToEntIndex(this.drone);
 		if (!IsValidEntity(drone)) LogError("Could not spawn drone weapon: Drone entity invalid!");
-		
+
 		DispatchKeyValue(wep, "model", this.model);
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 		GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
@@ -134,7 +141,7 @@ enum struct DroneWeapon
 		DispatchSpawn(wep);
 		SetVariantString("!activator");
 		AcceptEntityInput(wep, "SetParent", drone, wep, 0);
-		
+
 		this.weapon = EntIndexToEntRef(wep);
 	}
 	int GetWeapon() //returns entity being used as this weapon
@@ -150,7 +157,7 @@ enum struct DroneWeapon
 		this.attackdelay = GetGameTime() + this.firerate;
 		if (this.ammo == -1)
 			return;
-			
+
 		switch (action)
 		{
 			case Plugin_Continue:
@@ -219,6 +226,116 @@ enum struct DroneWeapon
 	}
 }
 
+enum struct DroneProp
+{
+	//entity references - do not access without converting to indexes
+	int drone;
+	int owner;
+	int camera;
+
+	//appearance
+	char model[PLATFORM_MAX_PATH];
+	char destroyedmodel[PLATFORM_MAX_PATH];
+	char name[MAX_DRONE_LENGTH];
+	float cameraheight;
+
+	//stats
+	float health;
+	float maxhealth;
+	float speedoverride;
+	float maxspeed;
+	float acceleration;
+	float turnrate;
+
+	//logic
+	CDMoveType movetype;
+	char plugin[32];
+	bool dead;
+	bool viewlocked;
+	bool occupied;
+
+	//weapons
+	int weapons;
+	int activeweapon;
+	int oldweapon;
+	float changecooldown;
+
+	void Clear()
+	{
+		this.drone = INVALID_ENT_REFERENCE;
+		this.owner = INVALID_ENT_REFERENCE;
+		this.camera = INVALID_ENT_REFERENCE;
+		this.occupied = false;
+	}
+	int GetDrone()
+	{
+		return EntRefToEntIndex(this.drone);
+	}
+	int GetOwner()
+	{
+		return EntRefToEntIndex(this.owner);
+	}
+	int GetCamera()
+	{
+		return EntRefToEntIndex(this.camera);
+	}
+	int Spawn(KeyValues config, int drone, float pos[3], float angles[3], float vel[3])
+	{
+		//Spawn drone and get its index
+		//int drone = CreateEntityByName("prop_physics_override");
+
+		//Establish drone attributes
+		config.GetString("name", this.name, MAX_DRONE_LENGTH);
+		config.GetString("model", this.model, PLATFORM_MAX_PATH);
+		config.GetString("destroyed_model", this.destroyedmodel, PLATFORM_MAX_PATH, this.name);
+		this.maxhealth = config.GetFloat("health", 100.0);
+		this.maxspeed = config.GetFloat("speed", 300.0);
+		this.acceleration = config.GetFloat("acceleration", 5.0);
+		this.speedoverride = 0.0;
+		this.turnrate = config.GetFloat("turn_rate", 80.0);
+
+		char movetype[64];
+		config.GetString("movetype", movetype, sizeof movetype, "drone_hover");
+		this.movetype = GetMoveType(movetype);
+
+		config.GetString("plugin", this.plugin, 32, "INVALID_PLUGIN");
+		this.cameraheight = config.GetFloat("camera_height", 30.0);
+
+		//drone appearance
+		DispatchKeyValue(drone, "model", this.model);
+		DispatchKeyValue(drone, "health", "900");
+
+		if(HasEntProp(drone, Prop_Data, "m_takedamage"))
+			SetEntProp(drone, Prop_Data, "m_takedamage", 1);
+		else
+			LogMessage("Tried to spawn a drone with no m_takedamage netprop!");
+		this.health = this.maxhealth;
+		this.dead = false;
+
+		DispatchSpawn(drone);
+		ActivateEntity(drone);
+		TeleportEntity(drone, pos, angles, vel);
+
+		this.oldweapon = 1;
+		this.activeweapon = this.oldweapon;
+		//PrintToChat(client, "Successfully created drone (%s) with owner: %i", drone_name, DroneOwner[hDrone]);
+
+		this.drone = EntIndexToEntRef(drone);
+		PrintToChatAll("Drone reference set to entity: %i", drone);
+		return drone;
+	}
+	void PlayerPilot(int client)
+	{
+		this.owner = EntIndexToEntRef(client);
+		SetEntityMoveType(client, MOVETYPE_NONE);
+		this.occupied = true;
+	}
+	void PlayerEnterSeat(int client, const char[] seatname)
+	{
+		//
+	}
+}
+
 //should probably be a methodmap
 enum struct DroneBomb
 {
@@ -233,7 +350,7 @@ enum struct DroneBomb
 	char damage[8];
 	char radius[8];
 	ProjType type;
-	
+
 	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
 	{
 		this.bomb = CreateEntityByName("prop_physics_override");
@@ -254,12 +371,12 @@ enum struct DroneBomb
 		GetEntPropVector(this.bomb, Prop_Data, "m_vecOrigin", detPos);
 		int ownerPlayer = GetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity");
 		AcceptEntityInput(this.bomb, "Kill");
-		
+
 		//clear variables
 		this.isBomb = false;
 		this.touched = false;
 		this.primed = false;
-		
+
 		//setup explosion
 		this.explosion = CreateEntityByName("env_explosion");
 		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", ownerPlayer);
@@ -276,7 +393,7 @@ enum struct DroneBomb
 /****************************************************************
 
 	NATIVES
-	
+
 ****************************************************************/
 
 /**
@@ -313,7 +430,7 @@ native void CD_OverrideMaxSpeed(int drone, float speed);
  * Fire the current drone's active weapon
  *
  * @param1 owner - client owning the drone
- * @param2 drone - Drone to damage
+ * @param2 drone - Drone firing the weapon
  */
 
 native void CD_FireActiveWeapon(int owner, int drone);
@@ -336,7 +453,7 @@ native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float dam
  *
  * @param1 drone - Drone ent index
  * @param2 weapon - Struct to store the weapon info in
- * 
+ *
  * @return active slot index
  */
 
@@ -348,7 +465,7 @@ native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof DroneWeapon]);
  * @param1 drone - Drone ent index
  * @param2 slot - Which slot to get weapon info from
  * @param3 weapon - Struct to store the weapon info in
- * 
+ *
  */
 
 native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof DroneWeapon]);
@@ -366,7 +483,7 @@ native void CD_SetDroneActiveWeapon(int drone, int weapon);
  * Get Current Health of drone
  *
  * @param1 drone - Drone ent index
- * 
+ *
  * @return current health of drone
  */
 
@@ -376,7 +493,7 @@ native int CD_GetDroneHealth(int drone);
  * Get Max Health of drone
  *
  * @param1 drone - Drone ent index
- * 
+ *
  * @return max health of drone
  */
 
@@ -387,7 +504,7 @@ native int CD_GetDroneMaxHealth(int drone);
  *
  * @param1 client - Client index to spawn drone for
  * @param2 drone_name - Name of drone to spawn
- * 
+ *
  * @return max health of drone
  */
 
@@ -487,13 +604,14 @@ native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof DroneWeapo
 
 
 /**
- * Retrieves the camera height for the given drone
+ * Retrieves the client's drone struct
  *
- * @param1 drone - drone entity index
+ * @param1 client - Client index owning the drone
+ * @param2 drone - Buffer struct to store the drone into
  *
  */
 
-native float CD_GetCameraHeight(int drone);
+native float CD_GetClientDrone(int client, any drone[sizeof DroneProp]);
 
 /**
  * Determines whether an entity is a drone
@@ -501,24 +619,24 @@ native float CD_GetCameraHeight(int drone);
  * @param1 entity - entity to check
  *
  */
- 
+
 native bool CD_IsValidDrone(int entity);
 
 /****************************************************************
 
 	FORWARDS
-	
+
 ****************************************************************/
 
 /**
  * Forward called after a drone spawns
  *
- * @param1 drone - Ent index of drone
+ * @param1 drone - Drone object being spawned
  * @param2 owner - Client index of owner
  * @param3 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnDroneCreated(int drone, int owner, const char[] plugin_name, const char[] config);
+forward void CD_OnDroneCreated(DroneProp drone, int owner, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a drone is removed
@@ -580,6 +698,19 @@ stock void FormatVector(float vec[3], float x, float y, float z)
 	vec[2] = z;
 }
 
+//converts a string into a CDMoveType
+stock CDMoveType GetMoveType(const char[] movetype)
+{
+	if (StrEqual(movetype, "drone_hover"))
+		return DroneMove_Hover;
+	else if (StrEqual(movetype, "drone_fly"))
+		return DroneMove_Fly;
+	else if (StrEqual(movetype, "drone_ground"))
+		return DroneMove_Ground;
+
+	return DroneMove_Hover;
+}
+
 stock void GetForwardPos(float origin[3], const float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
 {
 	float dir[3];
@@ -592,7 +723,7 @@ stock void GetForwardPos(float origin[3], const float angles[3], float distance,
 	NegateVector(dir);
 	ScaleVector(dir, sideDistance);
 	AddVectors(buffer, dir, buffer);
-	
+
 	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
 	ScaleVector(dir, upDistance);
 	AddVectors(buffer, dir, buffer);
