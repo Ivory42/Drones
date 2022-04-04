@@ -39,12 +39,6 @@ bool BombProj[2049];
 
 void SetDroneVars(const char[] config, int drone)
 {
-	for (int i = 0; i <= MAXWEAPONS; i++)
-	{
-		WeaponDamage[drone][i] = CD_GetParamFloat(config, "damage", i);
-		Inaccuracy[drone][i] = CD_GetParamFloat(config, "inaccuracy", i);
-	}
-
 	//chaingun
 	CGAccel[drone] = CD_GetParamFloat(config, "attack_acceleration", 1);
 	CGStartRate[drone] = CD_GetParamFloat(config, "attack_start_rate", 1);
@@ -58,15 +52,11 @@ void SetDroneVars(const char[] config, int drone)
 	BombFuseTime[drone] = CD_GetParamFloat(config, "fuse", 3);
 }
 
-public Action CD_OnDroneAttack(int drone, int owner, int slot, DroneWeapon weapon, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slot, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
-		char fireSound[64];
-		bool hasSound = CD_GetWeaponAttackSound(Config[drone], weapon, fireSound, sizeof fireSound);
-		if (hasSound)
-			PrecacheSound(fireSound);
-		switch (weapon)
+		switch (slot)
 		{
 			case 1: //chaingun
 			{
@@ -93,8 +83,6 @@ public Action CD_OnDroneAttack(int drone, int owner, int slot, DroneWeapon weapo
 				SpawnBomb(owner, drone, weapon);
 			}
 		}
-		if (hasSound)
-			EmitSoundToAll(fireSound, drone);
 	}
 	return Plugin_Continue;
 }
@@ -138,10 +126,11 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 	}
 }
 
-public void CD_OnDroneCreated(int drone, int owner, const char[] plugin, const char[] config)
+public void CD_OnDroneCreated(DroneProp Drone, int owner, const char[] plugin, const char[] config)
 {
 	if (StrEqual(plugin, "attack_chopper"))
 	{
+		int drone = Drone.GetDrone();
 		SetEntPropFloat(drone, Prop_Send, "m_flModelScale", 0.35);
 		Format(Config[drone], PLATFORM_MAX_PATH, config);
 		SetDroneVars(config, drone);
