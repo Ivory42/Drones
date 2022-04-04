@@ -21,15 +21,6 @@
 			}
 		}
 	}
-	"vehicle"	"0"
-	"seats"
-	{
-		"pilot_seat"
-		{
-			"visible"	"1"
-			"offset"	"50 0 0"
-		}
-	}
 	"weapons"
 	{
 		"weapon1"
@@ -37,14 +28,14 @@
 			"name"		"Chaingun"
 			
 			//default properties
-			//"model"		""					//optional model for weapon to use
-			"offset"		"120 0 -30"				//Vector to offset this weapon's position by
-			"proj_offset"	"50 0 0"						//Offset from weapon offset to fire projectiles from
-			//"health"		"300"					//if using a model, optional health value to make this weapon destructible
-			"max_angle_y"	"40.0"						//Max angle on the vertical axis that this weapon can aim at, 0 for unlimited
-			"max_angle_x"	"0.0"						//Max angle on the horizontal axis that this weapon can aim at, 0 for unlimited
-			"fixed"			"0"					//If true, this model will be in a fixed position and cannot rotate
-			"sound"		"weapons/ar2/npc_ar2_altfire.wav"		//optional sound for firing
+			//"model"		""								//optional model for weapon to use
+			//"offset"		"40 0 -30"						//Vector to offset this weapon's position by
+			"proj_offset"	""								//Offset from weapon offset to fire projectiles from
+			//"health"		"300"							//if using a model, optional health value to make this weapon destructible
+			"max_angle_y"	"40.0"							//Max angle on the vertical axis that this weapon can aim at, 0 for unlimited
+			"max_angle_x"	"0.0"							//Max angle on the horizontal axis that this weapon can aim at, 0 for unlimited
+			"fixed"			"0"								//If true, this model will be in a fixed position and cannot rotate
+			"sound"		"weapons/ar2/npc_ar2_altfire.wav"	//optional sound for firing
 			"ammo_loaded"	"-1"
 			"damage"	"15.0"
 			"attack_time"	"0.08"
@@ -58,8 +49,6 @@
 		{
 			"name"		"Missiles"
 			
-			"offset"	"125 45 -80"
-			"proj_offset"	"0 0 0"
 			"max_angle_y"	"40.0"
 			"max_angle_x"	"35.0"
 			"fixed"			"1"
@@ -75,8 +64,6 @@
 		{
 			"name"		"Bombs"
 			
-			"offset"	"-60 0 -50"
-			"fixed"	"1"
 			"ammo_loaded"	"6"
 			"attack_time"	"0.8"
 			"damage"	"120.0"
