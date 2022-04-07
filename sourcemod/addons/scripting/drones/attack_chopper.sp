@@ -126,7 +126,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 	}
 }
 
-public void CD_OnDroneCreated(DroneProp Drone, int owner, const char[] plugin, const char[] config)
+public void CD_OnDroneCreated(DroneProp Drone, const char[] plugin, const char[] config)
 {
 	if (StrEqual(plugin, "attack_chopper"))
 	{
@@ -135,8 +135,24 @@ public void CD_OnDroneCreated(DroneProp Drone, int owner, const char[] plugin, c
 		Format(Config[drone], PLATFORM_MAX_PATH, config);
 		SetDroneVars(config, drone);
 		Attributed[drone] = true;
-		ClientDrone[owner] = drone;
 	}
+}
+
+public void CD_OnPlayerEnterDrone(DroneProp Drone, int client, int seat, const char[] plugin, const char[] config)
+{
+	int drone = Drone.GetDrone();
+	switch (seat)
+	{
+		case 0: //pilot seat
+		{
+			ClientDrone[owner] = drone;
+		}
+	}
+}
+
+public void CD_OnPlayerExitDrone(DroneProp Drone, int client, int seat)
+{
+	ClientDrone[owner] = INVALID_ENT_REFERENCE;
 }
 
 public void OnDroneRemoved(int drone, int owner, const char[] plugin)
@@ -144,6 +160,5 @@ public void OnDroneRemoved(int drone, int owner, const char[] plugin)
 	if (Attributed[drone])
 	{
 		Attributed[drone] = false;
-		ClientDrone[owner] = INVALID_ENT_REFERENCE;
 	}
 }
