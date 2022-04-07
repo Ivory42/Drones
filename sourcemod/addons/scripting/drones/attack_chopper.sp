@@ -52,7 +52,7 @@ void SetDroneVars(const char[] config, int drone)
 	BombFuseTime[drone] = CD_GetParamFloat(config, "fuse", 3);
 }
 
-public Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slot, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
@@ -62,11 +62,11 @@ public Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slo
 			{
 				if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone])
 				{
-					CD_FireBullet(owner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
+					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
 				}
 				else if (CGAttackDelay[drone] <= GetEngineTime())
 				{
-					CD_FireBullet(owner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
+					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
 					CGAttackSpeed[drone] -= CGAccel[drone];
 					if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone]) CGAttackSpeed[drone] = CGMaxAttackSpeed[drone];
 					CGAttackDelay[drone] = GetEngineTime() + CGAttackSpeed[drone];
@@ -75,12 +75,12 @@ public Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slo
 			}
 			case 2: //missiles
 			{
-				FireRocket(owner, drone, weapon, false);
-				FireRocket(owner, drone, weapon, true);
+				FireRocket(gunner, drone, weapon, false);
+				FireRocket(gunner, drone, weapon, true);
 			}
 			case 3:
 			{
-				SpawnBomb(owner, drone, weapon);
+				SpawnBomb(gunner, drone, weapon);
 			}
 		}
 	}
