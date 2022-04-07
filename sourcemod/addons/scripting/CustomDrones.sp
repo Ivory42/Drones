@@ -19,11 +19,13 @@
 
 //Forwards
 
-GlobalForward g_DroneCreated;
-GlobalForward g_DroneExplode;
-GlobalForward g_DroneDestroy;
-GlobalForward g_DroneChangeWeapon;
-GlobalForward g_DroneAttack;
+GlobalForward DroneCreated;
+GlobalForward DroneEntered;
+GlobalForward DroneExited;
+GlobalForward DroneExplode;
+GlobalForward DroneDestroy;
+GlobalForward DroneChangeWeapon;
+GlobalForward DroneAttack;
 
 float FlyMinSpeed = 200.0;
 DroneProp DroneInfo[2049];
@@ -54,7 +56,7 @@ public Plugin MyInfo = {
 	name 			= 	"Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for players",
-	version 		= 	"1.3.0"
+	version 		= 	"1.3.3"
 };
 
 public void OnPluginStart()
@@ -71,11 +73,13 @@ public void OnPluginStart()
 	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
 
 	//Forwards
-	g_DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Any, Param_Cell, Param_String, Param_String); //drone struct, owner, plugin, config
-	g_DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_Cell, Param_String); //drone, owner, plugin
-	g_DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
-	g_DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
-	g_DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
+	DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_String); //drone struct, plugin, config
+	DroneEntered = CreateGlobalForward("CD_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell Param_String, Param_String); //drone struct, client, seat, plugin, config
+	DroneExited = CreateGlobalForward("CD_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
+	DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
+	DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
+	DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
+	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, gunner, weapon, slot, plugin
 }
 
 Action OnPlayerResupply(Event event, const char[] name, bool dBroad)
@@ -123,7 +127,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneWeapon", Native_GetDroneWeapon);
 	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneActiveWeapon); //deprecated
-	CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon); //deprecated
+	CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon);
 	CreateNative("CD_SetWeaponReloading", Native_SetWeaponReload);
 	CreateNative("CD_GetParamFloat", Native_GetFloatParam);
 	CreateNative("CD_GetParamInteger", Native_GetIntParam);
@@ -133,8 +137,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_DroneTakeDamage", Native_DroneTakeDamage);
 	CreateNative("CD_FireActiveWeapon", Native_FireWeapon);
 	CreateNative("CD_FireBullet", Native_HitscanAttack);
-	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed); //deprecated
-	CreateNative("CD_ToggleViewLocked", Native_ViewLock); //deprecated
+	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed);
+	CreateNative("CD_ToggleViewLocked", Native_ViewLock);
 	CreateNative("CD_GetWeaponAttackSound", Native_AttackSound); //deprecated
 	CreateNative("CD_GetParamString", Native_GetString);
 	CreateNative("CD_SpawnDroneBomb", Native_SpawnBomb);
@@ -149,25 +153,24 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public any Native_ViewLock(Handle plugin, int args)
 {
-	/*
 	int drone = GetNativeCell(1);
 	if (IsValidDrone(drone))
-		ViewLocked[drone] = !ViewLocked[drone];
+		DroneInfo[drone].viewlocked = !DroneInfo[drone].viewlocked;
 	else
 		ThrowNativeError(017, "Entity index %i is not a valid drone", drone);
 
-	return ViewLocked[drone];
-	*/
+	return DroneInfo[drone].viewlocked;
 }
 
 public int Native_OverrideMaxSpeed(Handle plugin, int args)
 {
-	/*
 	int drone = GetNativeCell(1);
 	float speed = GetNativeCell(2);
-
-	SpeedOverride[drone] = speed;
-	*/
+	
+	if (IsValidDrone(drone))
+		DroneInfo[drone].speedoverride = speed;
+	else
+		ThrowNativeError(017, "Entity index %i is not a valid drone", drone);
 }
 
 public int Native_FireWeapon(Handle plugin, int args)
@@ -238,13 +241,10 @@ public any Native_GetDroneActiveWeapon(Handle plugin, int args)
 
 public int Native_SetDroneWeapon(Handle plugin, int args)
 {
-	/*
 	int drone = GetNativeCell(1);
 	int slot = GetNativeCell(2);
-	int owner = GetEntPropEnt(drone, Prop_Data, "m_hOwnerEntity");
-	if (IsValidClient(owner))
-		DroneInfo[owner].activeweapon = slot;
-		*/
+	if (IsValidDrone(drone))
+		DroneInfo[drone].activeweapon = slot;
 }
 
 public int Native_SpawnDroneName(Handle plugin, int args)
@@ -837,7 +837,7 @@ public void TryCreateDrone(int client, const char[] drone_name)
 	char Directory[PLATFORM_MAX_PATH];
 	char FileName[PLATFORM_MAX_PATH];
 	FileType type;
-	BuildPath(Path_SM, Directory, sizeof(Directory), "configs/drones");
+	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
 	Handle hDir = OpenDirectory(Directory);
 
 	while (ReadDirEntry(hDir, FileName, sizeof(FileName), type))
@@ -1212,7 +1212,6 @@ void DroneTick(DroneProp Drone)
 	if (Drone.dead && DroneExplodeDelay[drone] <= GetGameTime())
 	{
 		DroneExplodeDelay[drone] = FAR_FUTURE;
-		//ExplodeDrone(drone);
 		TryRemoveDrone(DroneInfo[drone]);
 	}
 }
@@ -1417,7 +1416,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						weaponId++;
 
 					Action result;
-					Call_StartForward(g_DroneChangeWeapon);
+					Call_StartForward(DroneChangeWeapon);
 
 					Call_PushCell(drone);
 					Call_PushCell(client);
@@ -1516,7 +1515,7 @@ void GetAngleFromTurnRate(const float angles[3], float pos[3], float droneAngles
 	bufferAngles = bufferAngle;
 }
 
-void FireWeapon(int owner, int drone, int slot, DroneWeapon weapon)
+void FireWeapon(int gunner, int drone, int slot, DroneWeapon weapon)
 {
 	Action result = Plugin_Continue;
 
@@ -1530,17 +1529,15 @@ void FireWeapon(int owner, int drone, int slot, DroneWeapon weapon)
 		else
 			EmitSoundToAll(weapon.firesound, drone); //otherwise just emit from the drone
 	}
-
-	Call_StartForward(g_DroneAttack);
+	Call_StartForward(DroneAttack);
 
 	Call_PushCell(drone);
-	Call_PushCell(owner);
+	Call_PushCell(gunner);
 	Call_PushArray(WeaponProps[drone][slot], sizeof DroneWeapon);
 	Call_PushCell(slot);
 	Call_PushString(DroneInfo[drone].plugin);
 
 	Call_Finish(result);
-
 	weapon.SimulateFire(result);
 }
 
@@ -1611,10 +1608,9 @@ public void ExplodeDrone(int drone)
 	TE_SendToAll();
 
 	int owner = DroneInfo[drone].GetOwner();
-	Call_StartForward(g_DroneExplode);
+	Call_StartForward(DroneExplode);
 
 	Call_PushCell(drone);
-	Call_PushCell(owner);
 	Call_PushString(DroneInfo[drone].plugin);
 
 	Call_Finish();
@@ -1661,6 +1657,7 @@ stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int 
 	GetClientEyeAngles(client, angles);
 	GetClientEyePosition(client, pos);
 	GetEntPropVector(client, Prop_Data, "m_vecVelocity", vel); //reset velocity
+	Drone.SetConfig(done_name);
 	SetupDrone(Drone, kv, drone, pos, angles, vel);
 	switch (Drone.movetype)
 	{
@@ -1699,18 +1696,17 @@ stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int 
 		}
 		kv.Rewind();
 	}
-	PlayerEnterDrone(client, Drone);
-
 	delete kv;
 
-	Call_StartForward(g_DroneCreated);
+	Call_StartForward(DroneCreated);
 
 	Call_PushArray(Drone, sizeof DroneProp);
-	Call_PushCell(client);
 	Call_PushString(Drone.plugin);
 	Call_PushString(drone_name);
 
 	Call_Finish();
+	
+	PlayerEnterDrone(client, Drone);
 }
 
 void SetupDrone(DroneProp Drone, KeyValues kv, int drone, float pos[3], float angles[3], float vel[3])
@@ -1734,6 +1730,15 @@ void PlayerEnterDrone(int client, DroneProp Drone)
 	SetVariantInt(1);
 	AcceptEntityInput(client, "SetForcedTauntCam");
 	SetPlayerOnDrone(client);
+	
+	Call_StartForward(DroneEntered);
+
+	Call_PushArray(Drone, sizeof DroneProp);
+	Call_PushCell(client);
+	Call_PushString(Drone.plugin);
+	Call_PushString(Drone.config);
+
+	Call_Finish();
 }
 
 void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
@@ -1815,13 +1820,10 @@ stock void SetPlayerSeatPosition(int client, int drone, KeyValues kv, const char
 	{
 		if (kv.JumpToKey(seatname))
 		{
-			//If this seat uses an attachment on the model, lets parent the player to that attachment
+			//If this seat uses an attachment on the model, lets set the player to its position
 			if (kv.GetString("attachment", attach, sizeof attach))
 			{
-				SetVariantString("!activator");
-				AcceptEntityInput(client, "SetParent", drone, client, 0);
-				SetVariantString(attach);
-				AcceptEntityInput(client, "SetParentAttachment");
+				//preserved
 			}
 			else //...otherwise use the offset position
 			{
@@ -1886,14 +1888,23 @@ Action ExitVehicle(int client, int args)
 {
 	PlayerExitVehicle(client);
 	int drone = GetClientDrone(client);
-	SetVehicleUnoccupied(DroneInfo[drone]);
+	SetVehicleUnoccupied(DroneInfo[drone], client);
 	DroneRef[client] = INVALID_ENT_REFERENCE;
 }
 
-void SetVehicleUnoccupied(DroneProp drone)
+void SetVehicleUnoccupied(DroneProp drone, int pilot)
 {
 	drone.owner = INVALID_ENT_REFERENCE;
 	drone.occupied = false;
+	
+	Call_StartForward(DroneExited);
+
+	Call_PushArray(drone, sizeof DroneProp);
+	Call_PushCell(pilot);
+	Call_PushString(drone.plugin);
+	Call_PushString(drone.config);
+
+	Call_Finish();
 }
 
 void PlayerExitVehicle(int client)
