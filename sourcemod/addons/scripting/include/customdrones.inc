@@ -250,6 +250,7 @@ enum struct DroneProp
 	//logic
 	CDMoveType movetype;
 	char plugin[32];
+	char config[32];
 	bool dead;
 	bool viewlocked;
 	bool occupied;
@@ -266,6 +267,10 @@ enum struct DroneProp
 		this.owner = INVALID_ENT_REFERENCE;
 		this.camera = INVALID_ENT_REFERENCE;
 		this.occupied = false;
+	}
+	void SetConfig(char[] config)
+	{
+		FormatEx(this.config, 32, config);
 	}
 	int GetDrone()
 	{
@@ -632,57 +637,79 @@ native bool CD_IsValidDrone(int entity);
  * Forward called after a drone spawns
  *
  * @param1 drone - Drone object being spawned
- * @param2 owner - Client index of owner
- * @param3 plugin_name - Name of plugin defined in config
+ * @param2 plugin_name - Name of plugin defined in config
+ * @param3 config - Config for this drone
  */
 
-forward void CD_OnDroneCreated(DroneProp drone, int owner, const char[] plugin_name, const char[] config);
+forward void CD_OnDroneCreated(DroneProp drone, const char[] plugin_name, const char[] config);
+
+/**
+ * Forward called after a player enters a drone
+ *
+ * @param1 drone - Drone object being spawned
+ * @param2 client - Client index of player
+ * @param3 seat - Seat player is entering
+ * @param4 plugin_name - Name of plugin defined in config
+ * @param5 config - Config for this drone
+ */
+
+forward void CD_OnPlayerEnterDrone(DroneProp drone, int client, int seat, const char[] plugin_name, const char[] config);
+
+/**
+ * Forward called after a player exits a drone
+ *
+ * @param1 drone - Drone object being spawned
+ * @param2 client - Client index of player
+ * @param3 seat - Seat player was in
+ */
+
+forward void CD_OnPlayerExitDrone(DroneProp drone, int client, int seat);
 
 /**
  * Forward called after a drone is removed
  *
  * @param1 drone - Ent index of drone
- * @param2 owner - Client index of owner
- * @param3 plugin_name - Name of plugin defined in config
+ * @param2 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name);
+forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
 
 /**
  * Forward called after a drone switches weapons
  *
  * @param1 drone - Ent index of drone
- * @param2 owner - Client index of owner
- * @param3 newWeapon - Weapon object that is being switched to
- * @param4 plugin_name - Name of plugin defined in config
+ * @param2 pilot - Client index of pilot
+ * @param3 weapon - Weapon object being switched to
+ * @param4 slot - Weapon slot being switched to
+ * @param5 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnWeaponChanged(int drone, int owner, int newWeapon, const char[] plugin_name);
+forward void CD_OnWeaponChanged(int drone, int pilot, any weapon[sizeof DroneWeapon], int slot, const char[] plugin_name);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
  *
  * @param1 drone - Ent index of drone
- * @param2 owner - Client index of owner
+ * @param2 pilot - Client index of pilot, can be invalid
  * @param3 attacker - Client index of attacker
  * @param4 damage - Damage dealt to drone
  * @param5 plugin_name - Name of plugin defined in config
  *
  */
 
-forward void CD_OnDroneDestroyed(int drone, int owner, int attacker, float damage, const char[] plugin_name);
+forward void CD_OnDroneDestroyed(int drone, int pilot, int attacker, float damage, const char[] plugin_name);
 
 /**
- * Forward called after a drone switches weapons
+ * Forward called after a weapon is fired
  *
  * @param1 drone - Ent index of drone
- * @param2 owner - Client index of owner
+ * @param2 gunner - Client index of player operating the weapon
  * @param3 weapon - Weapon object that is being fired
  * @param4 slot - Weapon slot being used
  * @param4 plugin_name - Name of plugin defined in config
  */
 
-forward Action CD_OnDroneAttack(int drone, int owner, DroneWeapon weapon, int slot, const char[] plugin_name);
+forward Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin_name);
 
 /*************
 
