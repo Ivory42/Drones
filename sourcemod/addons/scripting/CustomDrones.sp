@@ -45,10 +45,10 @@ bool IsInDrone[MAXPLAYERS+1];
 bool IsDrone[2048];
 
 public Plugin MyInfo = {
-	name 			= 	"Custom Drones",
+	name 			= 	"[TF2] Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for players",
-	version 		= 	"1.3.3"
+	version 		= 	"1.3.6"
 };
 
 public void OnPluginStart()
@@ -455,8 +455,6 @@ public any Native_HitscanAttack(Handle plugin, int args)
 void CreateTracer(int owner, float start[3], float end[3])
 {
 	if (!IsDrone[owner]) return;
-
-	PrintToServer("[DRONES] ********** HITSCAN ATTACK ****************");
 	int target = CreateEntityByName("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
 	char targetname[64];
 	Format(targetname, sizeof targetname, "target%i", target);
@@ -543,7 +541,6 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 	float rot[3];
 	weapon.GetMuzzleTransform(pos, rot);
 	ProjType projectile = GetNativeCell(4);
-	float speed = GetNativeCell(5);
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
@@ -586,7 +583,7 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 		}
 	}
 	int rocket = CreateEntityByName(classname);
-	ScaleVector(velocity, speed);
+	ScaleVector(velocity, weapon.projspeed);
 	SetEntPropVector(rocket, Prop_Send, "m_vInitialVelocity", velocity);
 	int team = GetClientTeam(owner);
 
@@ -602,12 +599,72 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	DispatchSpawn(rocket);
 	SetEntDataFloat(rocket, FindSendPropInfo(netname, "m_iDeflected") + 4, weapon.damage); //Set Damage for rocket
+	
+	if (projectile == DroneProj_Impact)
+		SDKHook(rocket, SDKHook_Touch, OnProjHit);
+	
 	return rocket;
 }
 
-/*
-	Drone Bomb Functions
-*/
+Action OnProjHit(int entity, int victim)
+{
+	if (!IsValidClient(victim))
+	{
+		if (IsValidDrone(victim))
+		{
+			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
+			DroneTakeDamage(victim, owner, entity, damage, false);
+			RemoveEntity(entity);
+			return Plugin_Handled;
+		}
+		char classname[64];
+		GetEntityClassname(victim, classname, sizeof(classname));
+		if (victim == 0 || !StrContains(classname, "prop_", false))
+		{
+			RemoveEntity(entity);
+			return Plugin_Handled;
+		}
+		else if (StrContains(classname, "obj_", false)) //engineer buildings
+		{
+			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
+			SDKHooks_TakeDamage(victim, entity, owner, damage, DMG_ENERGYBEAM);
+			RemoveEntity(entity);
+			return Plugin_Handled;
+		}
+		else return Plugin_Continue;
+	}
+	else
+	{
+		int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+		if (IsValidClient(owner) && IsValidClient(victim))
+		{
+			if (GetClientTeam(owner) != GetClientTeam(victim))
+			{
+				int drone = GetClientDrone(owner);
+				float dronePos[3], victimPos[3], distance, damage;
+				damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4);
+
+				//Setup distance between drone and target
+				GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
+				GetClientAbsOrigin(victim, victimPos);
+				distance = GetVectorDistance(dronePos, victimPos);
+
+				//Standard rampup and falloff for rockets
+				float dmgMod = ClampFloat((512.0 / distance), 1.25, 0.528);
+				damage *= dmgMod;
+				SDKHooks_TakeDamage(victim, entity, owner, damage, DMG_ENERGYBEAM);
+			}
+		}
+	}
+	RemoveEntity(entity);
+	return Plugin_Handled;
+}
+
+///
+///	Drone Bomb Functions
+///
 
 public any Native_SpawnBomb(Handle Plugin, int args)
 {
@@ -1764,6 +1821,7 @@ void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
 	weapon.firerate = kv.GetFloat("attack_time", 0.5);
 	weapon.fixed = view_as<bool>(kv.GetNum("fixed", 1));
 	weapon.damage = kv.GetFloat("damage", 1.0);
+	weapon.projspeed = kv.GetFloat("speed", 1100.0);
 	if (!weapon.fixed)
 	{
 		weapon.pitch = kv.GetFloat("max_angle_y", 0.0);
