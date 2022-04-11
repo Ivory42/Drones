@@ -17,6 +17,7 @@ enum ProjType
 	DroneProj_Rocket,	//Default rocket
 	DroneProj_Energy,	//Cow mangler rocket
 	DroneProj_Sentry,	//Sentry rocket salvo
+	DroneProj_Impact, 	//Rocket which deals impact damage with no explosion
 
 	//Bombs
 	DroneProj_Bomb,		//Default bomb, detonates on fuse timer which begins upon spawn
@@ -29,21 +30,19 @@ enum ProjType
 
 enum CDMoveType
 {
-	DroneMove_Hover,
-	DroneMove_Fly,
-	DroneMove_Ground
+	DroneMove_Hover,	//hovering, moves in all directions
+	DroneMove_Fly,		//flying, can only move forward
+	DroneMove_Ground,	//ground wheeled vehicles, can only steer while moving
+	DroneMove_Tracked	//ground tracked vehicles, such as tanks, can steer without moving
 };
 
 enum CDDmgType
 {
-	//damagetypes for custom plugins
-	DmgType_Missile,
-	DmgType_Energy,
-	DmgType_Plasma,
-
-	//default damage types used by main plugin
+	DmgType_Hitscan,	//hitscan generic damage
 	DmgType_Rangeless, 	//hitscan damage with no falloff
-	DmgType_Generic		//hitscan generic damage
+	
+	//Custom damage type for plugins
+	DmgType_Custom
 };
 
 enum CDWeaponType
@@ -70,7 +69,7 @@ enum CDWeaponState
 
 enum struct DroneWeapon
 {
-	//entity references - DO NOT ACCESS DIRECTLY WITHOUT CONVERTING
+	//entity references - DO NOT ACCESS DIRECTLY
 	int weapon;
 	int drone;
 
@@ -80,6 +79,7 @@ enum struct DroneWeapon
 	float firerate;
 	float attackdelay;
 	float damage;
+	float projspeed;
 	float inaccuracy;
 	float reloadtime;
 	float reloaddelay;
@@ -341,7 +341,7 @@ enum struct DroneProp
 	}
 }
 
-//should probably be a methodmap
+//To be reworked, does not work for now
 enum struct DroneBomb
 {
 	int bomb;
@@ -588,7 +588,7 @@ native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] 
  *
  */
 
-native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile, float speed = 1100.0);
+native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile);
 
 /**
  * Spawns a physics prop to use as a bomb projectile
