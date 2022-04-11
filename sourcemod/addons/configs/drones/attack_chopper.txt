@@ -9,16 +9,25 @@
 	"acceleration"	"5"
 	"movetype"	"drone_hover"
 	"plugin"	"attack_chopper"
+	
+	//optional attachments to use for custom plugins
 	"attachments"
 	{
-		"rotor1"
+		"rotor_base"
 		{
 			"proptype"	"func_rotator"
-			"model"		"models/empty.mdl"
 			"custom_props"
 			{
 				"rotation_speed"	"80.0"
 			}
+			"attachment_point"	"rotor_placement" //attachment on model to use
+		}
+		"rotor_blades"
+		{
+			"proptype"	"prop_physics_override"
+			"model"		"models/empty.mdl"
+			"parent"	"rotor_base"	//parent attachment to use, leave as null to use the drone itself
+			"attachment_point"	"null"	//this will attach to the origin on the parent
 		}
 	}
 	"weapons"
