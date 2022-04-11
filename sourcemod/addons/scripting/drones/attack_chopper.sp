@@ -16,6 +16,7 @@ public Plugin MyInfo = {
 
 int LastWeaponFired[2049];
 int ClientDrone[MAXPLAYERS+1];
+bool IsInChopper[MAXPLAYERS+1];
 bool Attributed[2049];
 char Config[2049][PLATFORM_MAX_PATH];
 
@@ -54,7 +55,7 @@ void SetDroneVars(const char[] config, int drone)
 
 public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin)
 {
-	if (Attributed[drone])
+	if (Attributed[drone] && IsInChopper[gunner])
 	{
 		switch (slot)
 		{
@@ -114,7 +115,7 @@ public void OnEntityDestroyed(int entity)
 public Action OnPlayerRunCmd(int client, int &buttons)
 {
 	int drone = ClientDrone[client];
-	if (CD_IsValidDrone(drone) && Attributed[drone])
+	if (CD_IsValidDrone(drone) && Attributed[drone] && IsInChopper[client])
 	{
 		bool attacking = (buttons & IN_ATTACK) != 0;
 		if (!attacking && CGAttackSpeed[drone] < CGStartRate[drone])
@@ -145,17 +146,19 @@ public void CD_OnPlayerEnterDrone(DroneProp Drone, int client, int seat, const c
 	{
 		case 0: //pilot seat
 		{
-			ClientDrone[owner] = drone;
+			ClientDrone[client] = drone;
+			IsInChopper[client] = true;
 		}
 	}
 }
 
 public void CD_OnPlayerExitDrone(DroneProp Drone, int client, int seat)
 {
-	ClientDrone[owner] = INVALID_ENT_REFERENCE;
+	ClientDrone[client] = INVALID_ENT_REFERENCE;
+	IsInChopper[client] = false;
 }
 
-public void OnDroneRemoved(int drone, int owner, const char[] plugin)
+public void OnDroneRemoved(int drone, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
