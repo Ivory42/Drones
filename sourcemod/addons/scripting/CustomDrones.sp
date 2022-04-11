@@ -1,11 +1,3 @@
-
-///
-/// Custom Drones Staging
-/// Experimental branch for new features - not recommended for actual use.
-/// Most features in this will not be working properly and are in development.
-/// If you would like to use the plugin, check out the main branch instead.
-///
-
 #pragma semicolon 1
 #include <tf2>
 #include <tf2_stocks>
@@ -74,7 +66,7 @@ public void OnPluginStart()
 
 	//Forwards
 	DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_String); //drone struct, plugin, config
-	DroneEntered = CreateGlobalForward("CD_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell Param_String, Param_String); //drone struct, client, seat, plugin, config
+	DroneEntered = CreateGlobalForward("CD_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
 	DroneExited = CreateGlobalForward("CD_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
 	DroneExplode = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
@@ -166,7 +158,7 @@ public int Native_OverrideMaxSpeed(Handle plugin, int args)
 {
 	int drone = GetNativeCell(1);
 	float speed = GetNativeCell(2);
-	
+
 	if (IsValidDrone(drone))
 		DroneInfo[drone].speedoverride = speed;
 	else
@@ -1077,7 +1069,6 @@ stock void DroneTakeDamage(DroneProp Drone, int drone, int &attacker, int &infli
 	{
 		damage *= 0.25; //Should probably be a convar
 		sendEvent = false;
-		PrintToChat(attacker, "Owner");
 	}
 
 	if (sendEvent)
@@ -1100,7 +1091,7 @@ stock void KillDrone(DroneProp Drone, int drone, int attacker, float damage, int
 	DroneExplodeDelay[drone] = GetGameTime() + 3.0;
 	//SendKillEvent(drone, attacker, weapon);
 	CreateParticle(drone, "burningplayer_flyingbits", true);
-	Call_StartForward(g_DroneDestroy);
+	Call_StartForward(DroneDestroy);
 
 	Call_PushCell(drone);
 	Call_PushCell(client);
@@ -1445,6 +1436,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				TeleportEntity(drone, NULL_VECTOR, vAngles, vAbsVel);
 			}
 		}
+		else if (buttons & IN_RELOAD) //Player is not in a drone
+		{
+			int entity = GetClientAimTarget(client, false);
+			if (IsValidDrone(entity) && !DroneInfo[entity].occupied && InRange(client, entity))
+				PlayerEnterDrone(client, DroneInfo[entity]);
+		}
 	}
 }
 
@@ -1607,7 +1604,6 @@ public void ExplodeDrone(int drone)
 	TE_SetupExplosion(dronePos, ExplosionSprite, 4.0, 1, 0, 450, 400);
 	TE_SendToAll();
 
-	int owner = DroneInfo[drone].GetOwner();
 	Call_StartForward(DroneExplode);
 
 	Call_PushCell(drone);
@@ -1641,7 +1637,7 @@ stock void ClampVector(float vec[3], float max, float min = 0.0, float vBuffer[3
 
 stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int drone)
 {
-	PrintToChatAll("Drone spawned");
+	//PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
 	char sPath[64];
 	BuildPath(Path_SM, sPath, sizeof sPath, "configs/drones/%s.txt", drone_name);
@@ -1657,7 +1653,7 @@ stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int 
 	GetClientEyeAngles(client, angles);
 	GetClientEyePosition(client, pos);
 	GetEntPropVector(client, Prop_Data, "m_vecVelocity", vel); //reset velocity
-	Drone.SetConfig(done_name);
+	Drone.SetConfig(drone_name);
 	SetupDrone(Drone, kv, drone, pos, angles, vel);
 	switch (Drone.movetype)
 	{
@@ -1705,7 +1701,7 @@ stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int 
 	Call_PushString(drone_name);
 
 	Call_Finish();
-	
+
 	PlayerEnterDrone(client, Drone);
 }
 
@@ -1723,18 +1719,23 @@ void PlayerEnterDrone(int client, DroneProp Drone)
 	Drone.PlayerPilot(client);
 
 	float angles[3], pos[3];
-	GetClientEyeAngles(client, angles);
-	GetClientEyePosition(client, pos);
-	SetupViewPosition(client, Drone.GetDrone(), Drone, pos, angles, Drone.cameraheight);
+	int drone = Drone.GetDrone();
+	if (IsValidDrone(drone))
+	{
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", angles);
+	}
+	SetupViewPosition(client, drone, Drone, pos, angles, Drone.cameraheight);
 
 	SetVariantInt(1);
 	AcceptEntityInput(client, "SetForcedTauntCam");
 	SetPlayerOnDrone(client);
-	
+
 	Call_StartForward(DroneEntered);
 
 	Call_PushArray(Drone, sizeof DroneProp);
 	Call_PushCell(client);
+	Call_PushCell(0);
 	Call_PushString(Drone.plugin);
 	Call_PushString(Drone.config);
 
@@ -1780,14 +1781,13 @@ void SetupViewPosition(int client, int drone, DroneProp Drone, const float pos[3
 	float rPos[3];
 
 	int camera = CreateEntityByName("prop_dynamic_override");
-	DispatchKeyValue(camera, "model", "models/empty.mdl");
+	DispatchKeyValue(camera, "model", "models/empty.mdl"); //models/weapons/w_models/w_baseball.mdl
 
 	DispatchSpawn(camera);
 	ActivateEntity(camera);
 
 	rPos = pos;
-	rPos[2] += height;
-
+	GetForwardPos(rPos, angle, 0.0, _, height, rPos);
 	Drone.cameraheight = height;
 
 	TeleportEntity(camera, rPos, angle, NULL_VECTOR);
@@ -1887,28 +1887,32 @@ void RemoveWearables(int client)
 Action ExitVehicle(int client, int args)
 {
 	PlayerExitVehicle(client);
-	int drone = GetClientDrone(client);
-	SetVehicleUnoccupied(DroneInfo[drone], client);
-	DroneRef[client] = INVALID_ENT_REFERENCE;
 }
 
 void SetVehicleUnoccupied(DroneProp drone, int pilot)
 {
 	drone.owner = INVALID_ENT_REFERENCE;
 	drone.occupied = false;
-	
+
+	int camera = drone.GetCamera();
+	if (IsValidEntity(camera) && camera > MaxClients)
+		RemoveEntity(camera);
+
 	Call_StartForward(DroneExited);
 
 	Call_PushArray(drone, sizeof DroneProp);
 	Call_PushCell(pilot);
-	Call_PushString(drone.plugin);
-	Call_PushString(drone.config);
+	Call_PushCell(0);
 
 	Call_Finish();
 }
 
 void PlayerExitVehicle(int client)
 {
+	int drone = GetClientDrone(client);
+	SetVehicleUnoccupied(DroneInfo[drone], client);
+	DroneRef[client] = INVALID_ENT_REFERENCE;
+
 	SetVariantString("");
 	AcceptEntityInput(client, "SetCustomModel");
 	ResetClientView(client);
@@ -1966,6 +1970,15 @@ stock int CreateParticle(int iEntity = 0, char[] sParticle, bool bAttach = false
 		AcceptEntityInput(iParticle, "Start");
 	}
 	return iParticle;
+}
+
+bool InRange(int client, int drone)
+{
+	float cPos[3], dPos[3];
+	GetClientEyePosition(client, cPos);
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dPos);
+
+	return (GetVectorDistance(cPos, dPos) <= 300.0);
 }
 
 stock bool IsValidDrone(int drone)
