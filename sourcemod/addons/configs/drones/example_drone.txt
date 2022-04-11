@@ -15,16 +15,17 @@
 		//Weapon setup:
 		// 	- These define the weapon the drone can use
 		// 	- +attack2 cycles between the weapons in chronological order
-		//	- Use CD_GetActiveWeapon() native to check the current active weapon index in your plugin
+		//	- Check this weapons active weapon with `DroneWeapon.activeweapon` after retrieving its struct properties
 		//		- Check scripting/drones/example_drone.sp for proper usage
 		//	- Each weapon can have as many parameters as you want
-		//		- Every weapon must at least have a "name" parameter
+		//		- Every weapon must at least have a "name" and "damage" parameter
 		//		- Parameters can be retrieved with the appropriate native functions
-		// 	- Max of 4 weapons (1 through 4)
+		// 	- Max of 6 weapons (1 through 6)
 		"weapon1"
 		{
 			"name"	"Missile Launcher"
 			
+			"offset"	"30.0 15.0 0.0" //Offset for this weapon to use for projectiles
 			"ammo_loaded"	"4"		//ammo for this weapon
 			"attack_time"	"0.8"	//weapon attack delay
 			"damage"	"75"	//damage of each rocket
@@ -35,6 +36,7 @@
 		{
 			"name"	"Plasma Launcher"
 			
+			"offset"	"30.0 15.0 0.0"
 			"damage"	"100"
 			"speed"		"1700"
 			"reload_time"	"1.4"
@@ -43,6 +45,7 @@
 		{
 			"name"	"Plasma Rifle"
 			
+			"offset"	"30.0 15.0 0.0"
 			"ammo_loaded"	"24"
 			"attack_time"	"0.15"
 			"damage"	"10"
@@ -54,6 +57,7 @@
 		{
 			"name"	"Rocket Pods"
 			
+			"offset"	"30.0 15.0 0.0"
 			"ammo_loaded"		"12"
 			"attack_time"	"0.15"
 			"damage"	"65"
