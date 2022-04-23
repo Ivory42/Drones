@@ -47,14 +47,13 @@ bool IsDrone[2048];
 public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones",
 	author 			=	"Ivory",
-	description		= 	"Customizable drones for players",
+	description		= 	"Customizable drones for Team Fortress 2",
 	version 		= 	"1.3.6"
 };
 
 public void OnPluginStart()
 {
 	RegAdminCmd("sm_drone", CmdDrone, ADMFLAG_ROOT);
-	RegAdminCmd("sm_exit", ExitVehicle, ADMFLAG_ROOT);
 	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
 	HookEvent("player_spawn", OnPlayerSpawn);
 	HookEvent("teamplay_round_start", OnRoundStart);
@@ -599,10 +598,10 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	DispatchSpawn(rocket);
 	SetEntDataFloat(rocket, FindSendPropInfo(netname, "m_iDeflected") + 4, weapon.damage); //Set Damage for rocket
-	
+
 	if (projectile == DroneProj_Impact)
 		SDKHook(rocket, SDKHook_Touch, OnProjHit);
-	
+
 	return rocket;
 }
 
@@ -614,7 +613,7 @@ Action OnProjHit(int entity, int victim)
 		{
 			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
-			DroneTakeDamage(victim, owner, entity, damage, false);
+			DroneTakeDamage(DroneInfo[victim], victim, owner, entity, damage, false);
 			RemoveEntity(entity);
 			return Plugin_Handled;
 		}
@@ -1493,13 +1492,29 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				TeleportEntity(drone, NULL_VECTOR, vAngles, vAbsVel);
 			}
 		}
-		else if (buttons & IN_RELOAD) //Player is not in a drone
+	}
+}
+
+//Entering and exiting drones
+public Action OnClientCommandKeyValues(int client, KeyValues kv)
+{
+	char szBuffer[64];
+	kv.GetSectionName(szBuffer, sizeof szBuffer);
+	if (StrEqual(szBuffer, "+inspect_server", false))
+	{
+		int drone = GetClientDrone(client);
+		if (IsValidDrone(drone))
+		{
+			PlayerExitVehicle(client);
+		}
+		else
 		{
 			int entity = GetClientAimTarget(client, false);
 			if (IsValidDrone(entity) && !DroneInfo[entity].occupied && InRange(client, entity))
 				PlayerEnterDrone(client, DroneInfo[entity]);
 		}
 	}
+	return Plugin_Continue;
 }
 
 void FormatAmmoString(DroneWeapon weapon, char[] buffer, int size)
@@ -1940,11 +1955,6 @@ void RemoveWearables(int client)
 			TF2_RemoveWearable(client, entity);
 		}
 	}
-}
-
-Action ExitVehicle(int client, int args)
-{
-	PlayerExitVehicle(client);
 }
 
 void SetVehicleUnoccupied(DroneProp drone, int pilot)
