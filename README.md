@@ -35,11 +35,8 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
 This plugin comes with several forwards and natives to use with other plugins. Refer to `scripting/include/customdrones.inc` for more detailed explanations.
 
 ### Natives
-  - `CD_GetDroneHealth` - Returns the current health of the given drone
-  - `CD_GetDroneMaxHealth` - Returns the maximum health of the given drone
   - `CD_ToggleViewLocked` - Unlock/Lock a drone to the player's view angles
   - `CD_SpawnDroneByName` - Spawns a drone for a client from the given config name
-  - `CD_GetDroneActiveWeapon` - Returns the index of the current weapon for a given drone
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
   - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
   - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile
@@ -51,7 +48,6 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
   - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
   - `CD_OverrideMaxSpeed` - Overrides the max speed for the given drone
-  - `CD_GetWeaponAttackSound` - Retrieves a weapon's attack sound from the drone's config
 
 ### Forwards
   - `CD_OnDroneCreated` - Called when a drone initially spawns
@@ -59,11 +55,14 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_OnDroneRemoved` - Called when a drone is removed from the world after being destroyed
   - `CD_OnWeaponChanged` - Called when a player cycles weapons on a drone
   - `CD_OnDroneAttack` - Called when a drone fires its active weapon
+  - `CD_OnPlayerEnterDrone` - Called when a player enters a drone
+  - `CD_OnPlayerExitDrone` - Called when a player exits a drone
 
 
 ## Known Issues
   - Drones can phase through geometry at certain speeds
   - Ground based drones are not properly tested/functioning at this time
+  - Spawning drones seems to create invisible non-networked entities that cause visual bugs with hitscan attacks
 
 
 ## Planned Featurs
