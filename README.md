@@ -38,6 +38,8 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_ToggleViewLocked` - Unlock/Lock a drone to the player's view angles
   - `CD_SpawnDroneByName` - Spawns a drone for a client from the given config name
   - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
+  - `CD_GetDroneWeapon` - Retrieves the weapon object from the given slot
+  - `CD_GetDroneActiveWeapon` - Retrieves the active weapon object and its slot for the given drone
   - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
   - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile
   - `CD_SpawnDroneBomb` - Spawns a custom bomb entity to be dropped from drones
@@ -48,6 +50,7 @@ This plugin comes with several forwards and natives to use with other plugins. R
   - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
   - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
   - `CD_OverrideMaxSpeed` - Overrides the max speed for the given drone
+  - `CD_GetClientDrone` - Retrieves the given client's drone object if currently piloting one
 
 ### Forwards
   - `CD_OnDroneCreated` - Called when a drone initially spawns
