@@ -13,6 +13,7 @@
 //Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
 enum ProjType
 {
+	DroneProj_None,
 	//rockets
 	DroneProj_Rocket,	//Default rocket
 	DroneProj_Energy,	//Cow mangler rocket
@@ -40,7 +41,7 @@ enum CDDmgType
 {
 	DmgType_Hitscan,	//hitscan generic damage
 	DmgType_Rangeless, 	//hitscan damage with no falloff
-	
+
 	//Custom damage type for plugins
 	DmgType_Custom
 };
@@ -268,7 +269,7 @@ enum struct DroneProp
 		this.camera = INVALID_ENT_REFERENCE;
 		this.occupied = false;
 	}
-	void SetConfig(char[] config)
+	void SetConfig(const char[] config)
 	{
 		FormatEx(this.config, 32, config);
 	}
@@ -684,7 +685,7 @@ forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
  * @param5 plugin_name - Name of plugin defined in config
  */
 
-forward void CD_OnWeaponChanged(int drone, int pilot, any weapon[sizeof DroneWeapon], int slot, const char[] plugin_name);
+forward void CD_OnWeaponChanged(int drone, int pilot, DroneWeapon weapon, int slot, const char[] plugin_name);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
