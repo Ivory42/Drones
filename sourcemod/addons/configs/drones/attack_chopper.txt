@@ -4,30 +4,63 @@
 	"model"	"models/combine_helicopter.mdl"
 	"camera_height"	"50"
 	"turn_rate"	"15"
-	"health"	"400"
+	"health"	"1500"
 	"speed"		"350"
 	"acceleration"	"5"
 	"movetype"	"drone_hover"
 	"plugin"	"attack_chopper"
+	
+	//optional attachments to use for custom plugins
+	"attachments"
+	{
+		"rotor_base"
+		{
+			"proptype"	"func_rotator"
+			"custom_props"
+			{
+				"rotation_speed"	"80.0"
+			}
+			"attachment_point"	"rotor_placement" //attachment on model to use
+		}
+		"rotor_blades"
+		{
+			"proptype"	"prop_physics_override"
+			"model"		"models/empty.mdl"
+			"parent"	"rotor_base"	//parent attachment to use, leave as null to use the drone itself
+			"attachment_point"	"null"	//this will attach to the origin on the parent
+		}
+	}
 	"weapons"
 	{
 		"weapon1"
 		{
 			"name"		"Chaingun"
 			
-			"sound"		"weapons/ar2/npc_ar2_altfire.wav"
+			//default properties
+			//"model"		""								//optional model for weapon to use
+			//"offset"		"40 0 -30"						//Vector to offset this weapon's position by
+			"proj_offset"	""								//Offset from weapon offset to fire projectiles from
+			//"health"		"300"							//if using a model, optional health value to make this weapon destructible
+			"max_angle_y"	"40.0"							//Max angle on the vertical axis that this weapon can aim at, 0 for unlimited
+			"max_angle_x"	"0.0"							//Max angle on the horizontal axis that this weapon can aim at, 0 for unlimited
+			"fixed"			"0"								//If true, this model will be in a fixed position and cannot rotate
+			"sound"		"weapons/ar2/npc_ar2_altfire.wav"	//optional sound for firing
 			"ammo_loaded"	"-1"
 			"damage"	"15.0"
 			"attack_time"	"0.08"
 			"inaccuracy"	"1.5"
 			
-			"attack_acceleration"	"0.2" //rate at which attack speed increases while attacking
-			"attack_start_rate"	"0.5"  //beginning attack speed
+			//Custom properties
+			"attack_acceleration"	"0.2" 					//rate at which attack speed increases while attacking
+			"attack_start_rate"	"0.5"  						//beginning attack speed
 		}
 		"weapon2"
 		{
 			"name"		"Missiles"
 			
+			"max_angle_y"	"40.0"
+			"max_angle_x"	"35.0"
+			"fixed"			"1"
 			"sound"		"weapons/stinger_fire1.wav"
 			"damage"	"60.0"
 			"attack_time"	"0.4"
@@ -45,7 +78,7 @@
 			"damage"	"120.0"
 			"reload_time"	"6.0"
 			"fuse"		"1.25"
-			"model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
+			"proj_model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
 		}
 	}
 }

@@ -16,14 +16,13 @@ public Plugin MyInfo = {
 
 int LastWeaponFired[2049];
 int ClientDrone[MAXPLAYERS+1];
+bool IsInChopper[MAXPLAYERS+1];
 bool Attributed[2049];
 char Config[2049][PLATFORM_MAX_PATH];
 
-//weapon variables
-float WeaponDamage[2049][MAXWEAPONS+1];
-float Inaccuracy[2049][MAXWEAPONS+1];
-
 //Chaingun variables
+bool CGActive[2049];
+float CGPos[2049][3];
 float CGAttackSpeed[2049];
 float CGAttackDelay[2049];
 float CGMaxAttackSpeed[2049];
@@ -41,12 +40,6 @@ bool BombProj[2049];
 
 void SetDroneVars(const char[] config, int drone)
 {
-	for (int i = 0; i <= MAXWEAPONS; i++)
-	{
-		WeaponDamage[drone][i] = CD_GetParamFloat(config, "damage", i);
-		Inaccuracy[drone][i] = CD_GetParamFloat(config, "inaccuracy", i);
-	}
-
 	//chaingun
 	CGAccel[drone] = CD_GetParamFloat(config, "attack_acceleration", 1);
 	CGStartRate[drone] = CD_GetParamFloat(config, "attack_start_rate", 1);
@@ -60,30 +53,21 @@ void SetDroneVars(const char[] config, int drone)
 	BombFuseTime[drone] = CD_GetParamFloat(config, "fuse", 3);
 }
 
-public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] plugin)
+public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin)
 {
-	if (Attributed[drone])
+	if (Attributed[drone] && IsInChopper[gunner])
 	{
-		char fireSound[64];
-		bool hasSound = CD_GetWeaponAttackSound(Config[drone], weapon, fireSound, sizeof fireSound);
-		if (hasSound)
-			PrecacheSound(fireSound);
-		switch (weapon)
+		switch (slot)
 		{
 			case 1: //chaingun
 			{
-				float dronePos[3], droneAngle[3], maxAngle[2];
-				GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
-				GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-				maxAngle[0] = 180.0; //pitch
-				maxAngle[1] = 40.0; //yaw
 				if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone])
 				{
-					CD_FireBullet(owner, drone, WeaponDamage[drone][weapon], dronePos, droneAngle, 160.0, 0.0, -60.0, Inaccuracy[drone][weapon], maxAngle, DmgType_Generic, CDWeapon_Auto);
+					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
 				}
 				else if (CGAttackDelay[drone] <= GetEngineTime())
 				{
-					CD_FireBullet(owner, drone, WeaponDamage[drone][weapon], dronePos, droneAngle, 160.0, 0.0, -60.0, Inaccuracy[drone][weapon], maxAngle, DmgType_Generic, CDWeapon_Auto);
+					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
 					CGAttackSpeed[drone] -= CGAccel[drone];
 					if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone]) CGAttackSpeed[drone] = CGMaxAttackSpeed[drone];
 					CGAttackDelay[drone] = GetEngineTime() + CGAttackSpeed[drone];
@@ -92,44 +76,32 @@ public Action CD_OnDroneAttack(int drone, int owner, int weapon, const char[] pl
 			}
 			case 2: //missiles
 			{
-				FireRocket(owner, drone, weapon, LastWeaponFired[drone]);
-				FireRocket(owner, drone, weapon, LastWeaponFired[drone]);
+				FireRocket(gunner, drone, weapon, false);
+				FireRocket(gunner, drone, weapon, true);
 			}
 			case 3:
 			{
-				SpawnBomb(drone, weapon);
+				SpawnBomb(gunner, drone, weapon);
 			}
 		}
-		if (hasSound)
-			EmitSoundToAll(fireSound, drone);
 	}
 	return Plugin_Continue;
 }
 
-void FireRocket(int owner, int drone, int type, int fireLoc)
+void FireRocket(int owner, int drone, DroneWeapon weapon, bool opposite)
 {
 	//Get Spawn Position
-	float sideOffset = (fireLoc == 1) ? 45.0 : -45.0;					//adjust position based on the physical weapon being used on the drone
+	if (opposite)
+		weapon.offset[1] *= -1.0;	//adjust position based on the physical weapon being used on the drone
 
 	float speed = MissileSpeed[drone];
-	float damage = WeaponDamage[drone][type];
-	float pos[3], angle[3];
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-	CD_SpawnRocket(owner, drone, pos, angle, DroneProj_Rocket, damage, speed, 125.0, sideOffset, -80.0, Inaccuracy[drone][type]);
-
-	LastWeaponFired[drone] = (LastWeaponFired[drone] == 1) ? 0 : 1;	//Get next physical weapon to fire from
+	CD_SpawnRocket(owner, drone, weapon, DroneProj_Rocket, speed);
 }
 
-void SpawnBomb(int drone, int weapon)
+void SpawnBomb(int owner, int drone, DroneWeapon weapon)
 {
-	float pos[3], angle[3];
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", angle);
-	float offset[3] = {0.0, 0.0, -60.0};
-
 	DroneBomb bombEnt;
-	CD_SpawnDroneBomb(drone, pos, angle, DroneProj_BombDelayed, WeaponDamage[drone][weapon], BombModel[drone], BombFuseTime[drone], offset, bombEnt);
+	CD_SpawnDroneBomb(owner, drone, weapon, DroneProj_BombDelayed, BombModel[drone], BombFuseTime[drone], bombEnt);
 }
 
 public void OnEntityDestroyed(int entity)
@@ -143,7 +115,7 @@ public void OnEntityDestroyed(int entity)
 public Action OnPlayerRunCmd(int client, int &buttons)
 {
 	int drone = ClientDrone[client];
-	if (CD_IsValidDrone(drone) && Attributed[drone])
+	if (CD_IsValidDrone(drone) && Attributed[drone] && IsInChopper[client])
 	{
 		bool attacking = (buttons & IN_ATTACK) != 0;
 		if (!attacking && CGAttackSpeed[drone] < CGStartRate[drone])
@@ -155,23 +127,41 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 	}
 }
 
-public void CD_OnDroneCreated(int drone, int owner, const char[] plugin, const char[] config)
+public void CD_OnDroneCreated(DroneProp Drone, const char[] plugin, const char[] config)
 {
 	if (StrEqual(plugin, "attack_chopper"))
 	{
+		int drone = Drone.GetDrone();
 		SetEntPropFloat(drone, Prop_Send, "m_flModelScale", 0.35);
 		Format(Config[drone], PLATFORM_MAX_PATH, config);
 		SetDroneVars(config, drone);
 		Attributed[drone] = true;
-		ClientDrone[owner] = drone;
 	}
 }
 
-public void OnDroneRemoved(int drone, int owner, const char[] plugin)
+public void CD_OnPlayerEnterDrone(DroneProp Drone, int client, int seat, const char[] plugin, const char[] config)
+{
+	int drone = Drone.GetDrone();
+	switch (seat)
+	{
+		case 0: //pilot seat
+		{
+			ClientDrone[client] = drone;
+			IsInChopper[client] = true;
+		}
+	}
+}
+
+public void CD_OnPlayerExitDrone(DroneProp Drone, int client, int seat)
+{
+	ClientDrone[client] = INVALID_ENT_REFERENCE;
+	IsInChopper[client] = false;
+}
+
+public void OnDroneRemoved(int drone, const char[] plugin)
 {
 	if (Attributed[drone])
 	{
 		Attributed[drone] = false;
-		ClientDrone[owner] = INVALID_ENT_REFERENCE;
 	}
 }
