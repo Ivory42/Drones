@@ -846,6 +846,8 @@ void CreateSpecCamera(int client, int drone)
 
 	//spawn the camera anchor
 	int cameraAnchor = CreateEntityByName("prop_dynamic_override");
+	if (cameraAnchor < MaxClients) return;
+	
 	DispatchKeyValue(cameraAnchor, "model", "models/empty.mdl");
 
 	DispatchSpawn(cameraAnchor);
@@ -861,6 +863,8 @@ void CreateSpecCamera(int client, int drone)
 
 	//Now setup the actual camera
 	int camera = CreateEntityByName("prop_dynamic_override");
+	if (camera < MaxClients) return;
+	
 	DispatchKeyValue(camera, "model", "models/empty.mdl");
 
 	DispatchSpawn(camera);
@@ -873,6 +877,7 @@ void CreateSpecCamera(int client, int drone)
 	TeleportEntity(camera, pos, angle, NULL_VECTOR);
 	SetVariantString("!activator");
 	AcceptEntityInput(camera, "SetParent", cameraAnchor, camera, 0);
+	
 	SetClientViewEntity(client, camera);
 	PlayerSpecCamera[client] = EntIndexToEntRef(camera);
 	SpecDrone[client] = true;
@@ -1535,7 +1540,7 @@ void UpdateWeaponAngles(DroneWeapon weapon, float angles[3], int drone)
 		if (!IsValidClient(owner)) return;
 
 		int model = weapon.GetWeapon();
-		if (!IsValidEntity(model)) return;
+		if (!IsValidEntity(model) || model <= MaxClients) return;
 
 		float pos[3], rot[3], aimangle[3], aimpos[3], cameraPos[3], aimvec[3];
 
@@ -1559,7 +1564,7 @@ void ResetWeaponRotation(DroneWeapon weapon, float yaw)
 	if (!weapon.fixed)
 	{
 		int model = weapon.GetWeapon();
-		if (IsValidEntity(model))
+		if (IsValidEntity(model) && model > MaxClients)
 		{
 			float angle[3] = {0.0, 0.0, 0.0};
 			angle[1] = yaw;
@@ -1854,6 +1859,8 @@ void SetupViewPosition(int client, int drone, DroneProp Drone, const float pos[3
 	float rPos[3];
 
 	int camera = CreateEntityByName("prop_dynamic_override");
+	if (camera <= MaxClients) return;
+	
 	DispatchKeyValue(camera, "model", "models/empty.mdl"); //models/weapons/w_models/w_baseball.mdl
 
 	DispatchSpawn(camera);
@@ -2016,28 +2023,28 @@ int GetDroneCamera(int drone)
 	return -1;
 }
 
-stock int CreateParticle(int iEntity = 0, char[] sParticle, bool bAttach = false, float pos[3]={0.0, 0.0, 0.0})
+stock int CreateParticle(int entity = 0, char[] name, bool attach = false, float pos[3]={0.0, 0.0, 0.0})
 {
-	int iParticle = CreateEntityByName("info_particle_system");
-	if (IsValidEdict(iParticle))
+	int particle = CreateEntityByName("info_particle_system");
+	if (IsValidEntity(particle) && particle)
 	{
-		if (iEntity > 0)
-			GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", pos);
+		if (entity > 0)
+			GetEntPropVector(entity, Prop_Data, "m_vecOrigin", pos);
 
-		TeleportEntity(iParticle, pos, NULL_VECTOR, NULL_VECTOR);
-		DispatchKeyValue(iParticle, "effect_name", sParticle);
+		TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
+		DispatchKeyValue(particle, "effect_name", name);
 
-		if (bAttach)
+		if (attach && entity)
 		{
 			SetVariantString("!activator");
-			AcceptEntityInput(iParticle, "SetParent", iEntity, iParticle, 0);
+			AcceptEntityInput(particle, "SetParent", entity, particle, 0);
 		}
 
-		DispatchSpawn(iParticle);
-		ActivateEntity(iParticle);
-		AcceptEntityInput(iParticle, "Start");
+		DispatchSpawn(particle);
+		ActivateEntity(particle);
+		AcceptEntityInput(particle, "Start");
 	}
-	return iParticle;
+	return particle;
 }
 
 bool InRange(int client, int drone)
