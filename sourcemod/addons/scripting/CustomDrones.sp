@@ -23,10 +23,10 @@ float FlyMinSpeed = 200.0;
 DroneProp DroneInfo[2049];
 DroneBomb BombInfo[2049];
 
-int DroneRef[MAXPLAYERS+1];
+Component DroneRef[MAXPLAYERS+1];
 
-int PlayerSpecCamera[MAXPLAYERS+1];
-int PlayerSpecCameraAnchor[MAXPLAYERS+1];
+Component PlayerSpecCamera[MAXPLAYERS+1];
+Component PlayerSpecCameraAnchor[MAXPLAYERS+1];
 int PlayerSpecDrone[MAXPLAYERS+1]; //drone being spectated
 bool SpecDrone[MAXPLAYERS+1];
 bool FirstPersonSpec[MAXPLAYERS+1];
@@ -106,7 +106,7 @@ Action ChangeSpecMode(int client, const char[] command, int args)
 	}
 	else if (SpecDrone[client] && FirstPersonSpec[client])
 	{
-		SetClientViewEntity(client, PlayerSpecCamera[client]);
+		SetClientViewEntity(client, PlayerSpecCamera[client].get());
 		FirstPersonSpec[client] = false;
 	}
 }
@@ -201,6 +201,7 @@ public int Native_GetDroneHealth(Handle plugin, int args)
 	int iDroneHP2 = RoundFloat(DroneHealth[drone]);
 	return iDroneHP2;
 	*/
+	LogMessage("Native `CD_GetDroneHealth` is deprecated, please use DroneEntity.health instead");
 }
 
 public int Native_GetDroneMaxHealth(Handle plugin, int args)
@@ -210,6 +211,7 @@ public int Native_GetDroneMaxHealth(Handle plugin, int args)
 	int iDroneMaxHP = RoundFloat(DroneMaxHealth[drone]);
 	return iDroneMaxHP;
 	*/
+	LogMessage("Native `CD_GetDroneMaxHealth` is deprecated, please use DroneEntity.maxhealth instead");
 }
 
 public any Native_GetDroneWeapon(Handle plugin, int args)
@@ -504,7 +506,7 @@ Action RemoveTracer(Handle timer, any ref)
 
 bool FilterDroneShoot(int entity, int mask, int drone)
 {
-	int owner = DroneInfo[drone].GetOwner();
+	int owner = DroneInfo[drone].owner.get();
 	if (IsValidClient(entity)) //ignore teammates
 	{
 		if (IsValidClient(owner) && GetClientTeam(owner) == GetClientTeam(entity))
@@ -804,7 +806,7 @@ void CD_GetDroneAimPosition(int drone, float pos[3], float angle[3], float buffe
 
 bool FilterDrone(int entity, int mask, int exclude)
 {
-	int owner = DroneInfo[exclude].GetOwner();
+	int owner = DroneInfo[exclude].owner.get();
 	if (IsValidClient(owner) && entity == owner)
 		return false;
 	if (entity == exclude)
@@ -859,7 +861,7 @@ void CreateSpecCamera(int client, int drone)
 	TeleportEntity(cameraAnchor, pos, angle, NULL_VECTOR);
 	SetVariantString("!activator");
 	AcceptEntityInput(cameraAnchor, "SetParent", drone, cameraAnchor, 0);
-	PlayerSpecCameraAnchor[client] = EntIndexToEntRef(cameraAnchor);
+	PlayerSpecCameraAnchor[client].set(cameraAnchor);
 
 	//Now setup the actual camera
 	int camera = CreateEntityByName("prop_dynamic_override");
@@ -879,7 +881,7 @@ void CreateSpecCamera(int client, int drone)
 	AcceptEntityInput(camera, "SetParent", cameraAnchor, camera, 0);
 	
 	SetClientViewEntity(client, camera);
-	PlayerSpecCamera[client] = EntIndexToEntRef(camera);
+	PlayerSpecCamera[client].set(camera);
 	SpecDrone[client] = true;
 	PlayerSpecDrone[client] = drone;
 }
@@ -1080,7 +1082,7 @@ public void OnEntityDestroyed(int entity)
 {
 	if (IsValidDrone(entity))
 	{
-		DroneInfo[entity].Clear();
+		DroneInfo[entity].clear();
 	}
 }
 
@@ -1126,7 +1128,7 @@ stock void DroneTakeDamage(DroneProp Drone, int drone, int &attacker, int &infli
 	bool sendEvent = true;
 	if (Drone.dead) return;
 
-	if (attacker == Drone.GetOwner()) //significantly reduce damage if the drone damages itself
+	if (attacker == Drone.owner.get()) //significantly reduce damage if the drone damages itself
 	{
 		damage *= 0.25; //Should probably be a convar
 		sendEvent = false;
@@ -1144,7 +1146,7 @@ stock void DroneTakeDamage(DroneProp Drone, int drone, int &attacker, int &infli
 
 stock void KillDrone(DroneProp Drone, int drone, int attacker, float damage, int weapon)
 {
-	int client = Drone.GetOwner();
+	int client = Drone.owner.get();
 	if (IsValidClient(client))
 		PlayerExitVehicle(client);
 	Drone.health = 0.0;
@@ -1187,16 +1189,16 @@ void SendKillEvent(int drone, int attacker, int weapon)
 }
 */
 
-public void SendDamageEvent(DroneProp Drone, int attacker, float damage, bool crit)
+public void SendDamageEvent(DroneProp drone, int attacker, float damage, bool crit)
 {
-	if (IsValidClient(attacker) && IsValidDrone(Drone.GetDrone()))
+	if (IsValidClient(attacker) && IsValidDrone(drone.drone.get()))
 	{
 		int damageamount = RoundFloat(damage);
-		int health = RoundFloat(Drone.health);
+		int health = RoundFloat(drone.health);
 		Event PropHurt = CreateEvent("npc_hurt", true);
 
 		//setup components for event
-		PropHurt.SetInt("entindex", Drone.GetDrone());
+		PropHurt.SetInt("entindex", drone.drone.get());
 		PropHurt.SetInt("attacker_player", GetClientUserId(attacker));
 		PropHurt.SetInt("damageamount", damageamount);
 		PropHurt.SetInt("health", health - damageamount);
@@ -1208,12 +1210,12 @@ public void SendDamageEvent(DroneProp Drone, int attacker, float damage, bool cr
 
 void RemoveSpecCamera(int client)
 {
-	int camera = EntRefToEntIndex(PlayerSpecCamera[client]);
+	int camera = PlayerSpecCamera[client].get();
 	if (IsValidEntity(camera) && camera > MaxClients)
 	{
 		RemoveEntity(camera);
 	}
-	int anchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+	int anchor = PlayerSpecCameraAnchor[client].get();
 	if (IsValidEntity(anchor) && anchor > MaxClients)
 	{
 		RemoveEntity(anchor);
@@ -1236,16 +1238,16 @@ public void OnGameFrame()
 	}
 }
 
-void DroneTick(DroneProp Drone)
+void DroneTick(DroneProp drone)
 {
-	int drone = Drone.GetDrone();
-	if (!IsValidDrone(drone)) return;
+	int hull = drone.hull.get();
+	if (!IsValidDrone(hull)) return;
 	float pos[3];
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-	float hpRatio = Drone.health / Drone.maxhealth;
+	GetEntPropVector(hull, Prop_Data, "m_vecOrigin", pos);
+	float hpRatio = drone.health / drone.maxhealth;
 	if (hpRatio <= 0.3) //30% or less hp
 	{
-		if (SparkDelay[drone] <= GetGameTime())
+		if (SparkDelay[hull] <= GetGameTime())
 		{
 			float direction[3], sparkAngle[3];
 			for (int i = 0; i < 3; i++)
@@ -1257,14 +1259,14 @@ void DroneTick(DroneProp Drone)
 			GetAngleVectors(sparkAngle, direction, NULL_VECTOR, NULL_VECTOR);
 			TE_SetupMetalSparks(pos, direction);
 			TE_SendToAll();
-			SparkDelay[drone] = GetGameTime() + ClampFloat(hpRatio, 1.0, 0.3);
+			SparkDelay[hull] = GetGameTime() + ClampFloat(hpRatio, 1.0, 0.3);
 		}
 	}
 
-	if (Drone.dead && DroneExplodeDelay[drone] <= GetGameTime())
+	if (drone.dead && DroneExplodeDelay[hull] <= GetGameTime())
 	{
-		DroneExplodeDelay[drone] = FAR_FUTURE;
-		TryRemoveDrone(DroneInfo[drone]);
+		DroneExplodeDelay[hull] = FAR_FUTURE;
+		TryRemoveDrone(drone);
 	}
 }
 
@@ -1285,7 +1287,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				RemoveSpecCamera(client);
 			}
 		}
-		int cameraAnchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+		int cameraAnchor = PlayerSpecCameraAnchor[client].get();
 		if (IsValidEntity(cameraAnchor) && cameraAnchor > MaxClients)
 		{
 			float angle[3];
@@ -1563,7 +1565,7 @@ void ResetWeaponRotation(DroneWeapon weapon, float yaw)
 {
 	if (!weapon.fixed)
 	{
-		int model = weapon.GetWeapon();
+		int model = weapon.receiver.get();
 		if (IsValidEntity(model) && model > MaxClients)
 		{
 			float angle[3] = {0.0, 0.0, 0.0};
@@ -1792,11 +1794,11 @@ void SetupDrone(DroneProp Drone, KeyValues kv, int drone, float pos[3], float an
 void PlayerEnterDrone(int client, DroneProp Drone)
 {
 	IsInDrone[client] = true;
-	DroneRef[client] = Drone.drone; //Reference to a reference, no need to use GetDrone()
+	DroneRef[client] = Drone.hull;
 	Drone.PlayerPilot(client);
 
 	float angles[3], pos[3];
-	int drone = Drone.GetDrone();
+	int drone = Drone.hull.get();
 	if (IsValidDrone(drone))
 	{
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
@@ -1827,7 +1829,7 @@ void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
 	kv.GetString("model", modelname, sizeof modelname);
 	kv.GetString("sound", firesound, sizeof firesound);
 
-	weapon.drone = EntIndexToEntRef(drone);
+	weapon.drone.set(drone);
 	kv.GetVector("offset", offset);
 	weapon.SetOffset(offset, false);
 	kv.GetVector("proj_offset", projoffset);
@@ -1876,7 +1878,7 @@ void SetupViewPosition(int client, int drone, DroneProp Drone, const float pos[3
 	AcceptEntityInput(camera, "SetParent", drone, camera, 0);
 
 	SetClientViewEntity(client, camera);
-	Drone.camera = EntIndexToEntRef(camera);
+	Drone.camera.set(camera);
 }
 
 //Makes the player invisible and sets the model to something without hitboxes
@@ -1931,7 +1933,7 @@ stock void SetPlayerSeatPosition(int client, int drone, KeyValues kv, const char
 
 int GetClientDrone(int client)
 {
-	int drone = EntRefToEntIndex(DroneRef[client]);
+	int drone = DroneRef[client].hull.get();
 	if (IsValidDrone(drone))
 		return drone;
 
@@ -1966,10 +1968,10 @@ void RemoveWearables(int client)
 
 void SetVehicleUnoccupied(DroneProp drone, int pilot)
 {
-	drone.owner = INVALID_ENT_REFERENCE;
+	drone.owner.clear();
 	drone.occupied = false;
 
-	int camera = drone.GetCamera();
+	int camera = drone.camera.get();
 	if (IsValidEntity(camera) && camera > MaxClients)
 		RemoveEntity(camera);
 
@@ -1986,7 +1988,7 @@ void PlayerExitVehicle(int client)
 {
 	int drone = GetClientDrone(client);
 	SetVehicleUnoccupied(DroneInfo[drone], client);
-	DroneRef[client] = INVALID_ENT_REFERENCE;
+	DroneRef[client].clear();
 
 	SetVariantString("");
 	AcceptEntityInput(client, "SetCustomModel");
@@ -2002,7 +2004,7 @@ void PlayerExitVehicle(int client)
 
 stock bool TryRemoveDrone(DroneProp Drone)
 {
-	int drone = Drone.GetDrone();
+	int drone = Drone.hull.get();
 	if (IsValidDrone(drone))
 	{
 		ExplodeDrone(drone);
@@ -2017,7 +2019,7 @@ int GetDroneCamera(int drone)
 {
 	if (IsValidDrone(drone))
 	{
-		int camera = DroneInfo[drone].GetCamera();
+		int camera = DroneInfo[drone].camera.get();
 		return camera;
 	}
 	return -1;
