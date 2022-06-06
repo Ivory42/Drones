@@ -62,17 +62,81 @@ enum CDWeaponState
 }
 
 ///
+/// Structs for components and players related to drones
+/// Each component will act as a pointer to the entity
+/// Use component's getter and setters when accessing
+///
+
+enum struct Component
+{
+	int pointer; //ref
+	char model[256]; //if using a model for this component
+	
+	int maxhealth; //optional health value
+	int health;
+	
+	void set(int entity)
+	{
+		this.pointer = EntIndexToEntRef(entity);
+	}
+	int get()
+	{
+		return EntRefToEntIndex(this.pointer);
+	}
+	bool valid()
+	{
+		int entity = this.get();
+		if (IsValidEntity(entity) && entity > MaxClients)
+			return true;
+			
+		return false;
+	}
+	
+	void clear()
+	{
+		this.pointer = INVALID_ENT_REFERENCE;
+	}
+}
+
+enum struct Player
+{
+	int userid;
+	
+	int seat; //seat currently being occupied
+	
+	int get()
+	{
+		return GetClientOfUserId(this.userid);
+	}
+	void set(int client)
+	{
+		this.userid = GetClientUserId(client);
+	}
+	bool valid()
+	{
+		int client = this.get();
+		if (IsValidClient(client))
+			return true;
+			
+		return false;
+	}
+	
+	void clear()
+	{
+		this.userid = -1;
+	}
+}
+
+///
 /// Struct to store all weapon info for specific drone weapons.
 /// These can be accessed in a drone's plugin on specific forwards.
-/// Do NOT directly access the properties 'weapon' or 'drone'.
-///	- Use the methods GetWeapon() and GetDrone() instead.
 ///
 
 enum struct DroneWeapon
 {
-	//entity references - DO NOT ACCESS DIRECTLY
-	int weapon;
-	int drone;
+	//Components
+	Component receiver;
+	Component drone;
 
 	//weapon stats
 	int ammo;
@@ -100,7 +164,7 @@ enum struct DroneWeapon
 	float offset[3];
 	float projoffset[3]; //offset based on weapon offset - this does NOT offset from the drone's world position
 
-	//weapon parameters
+	//weapon parameters - deprecated
 	void SetName(char[] name)
 	{
 		FormatEx(this.name, MAX_WEAPON_LENGTH, name);
@@ -129,7 +193,7 @@ enum struct DroneWeapon
 	{
 		int wep = CreateEntityByName("prop_dynamic_override");
 		float pos[3], rot[3];
-		int drone = EntRefToEntIndex(this.drone);
+		int drone = this.drone.get();
 		if (!IsValidEntity(drone) || drone <= MaxClients) LogError("Could not spawn drone weapon: Drone entity invalid!");
 
 		DispatchKeyValue(wep, "model", this.model);
@@ -143,15 +207,15 @@ enum struct DroneWeapon
 		SetVariantString("!activator");
 		AcceptEntityInput(wep, "SetParent", drone, wep, 0);
 
-		this.weapon = EntIndexToEntRef(wep);
+		this.receiver.set(wep);
 	}
-	int GetWeapon() //returns entity being used as this weapon
+	int GetWeapon() //returns entity being used as this weapon - deprecated
 	{
-		return EntRefToEntIndex(this.weapon);
+		return EntRefToEntIndex(this.receiver.pointer);
 	}
-	int GetDrone()
+	int GetDrone() //deprecated
 	{
-		return EntRefToEntIndex(this.drone);
+		return EntRefToEntIndex(this.drone.pointer);
 	}
 	void SimulateFire(Action action)
 	{
@@ -188,16 +252,16 @@ enum struct DroneWeapon
 	}
 	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
 	{
-		int drone = this.GetDrone();
-		if (IsValidEntity(drone))
+		int drone = this.drone.get();
+		if (IsValidEntity(drone) && drone > MaxClients)
 		{
 			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
 			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
 			float offset[3];
 			FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
 			GetOffsetPos(pos, rot, offset, pos);
-			int weapon = this.GetWeapon();
-			if (IsValidEntity(weapon))
+			int weapon = this.receiver.get();
+			if (IsValidEntity(weapon) && weapon > MaxClients)
 			{
 				GetEntPropVector(weapon, Prop_Send, "m_angRotation", rot);
 			}
@@ -207,7 +271,8 @@ enum struct DroneWeapon
 	{
 		this.GetWeaponTransform(pos, rot);
 		float offset[3];
-		FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
+		offset = this.projoffset;
+		//FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
 		GetOffsetPos(pos, rot, offset, pos);
 	}
 	bool CanFire(bool force)	//Can this weapon fire
@@ -229,10 +294,10 @@ enum struct DroneWeapon
 
 enum struct DroneProp
 {
-	//entity references - do not access without converting to indexes
-	int drone;
-	int owner;
-	int camera;
+	//Owner and components
+	Component hull;
+	Player owner;
+	Component camera;
 
 	//appearance
 	char model[PLATFORM_MAX_PATH];
@@ -262,28 +327,28 @@ enum struct DroneProp
 	int oldweapon;
 	float changecooldown;
 
-	void Clear()
+	void clear()
 	{
-		this.drone = INVALID_ENT_REFERENCE;
-		this.owner = INVALID_ENT_REFERENCE;
-		this.camera = INVALID_ENT_REFERENCE;
+		this.hull.clear();
+		this.owner.clear();
+		this.camera.clear();
 		this.occupied = false;
 	}
 	void SetConfig(const char[] config)
 	{
 		FormatEx(this.config, 32, config);
 	}
-	int GetDrone()
+	int GetDrone() //deprecated
 	{
-		return EntRefToEntIndex(this.drone);
+		return EntRefToEntIndex(this.hull.pointer);
 	}
-	int GetOwner()
+	int GetOwner() //deprecated
 	{
-		return EntRefToEntIndex(this.owner);
+		return GetClientOfUserId(this.owner.userid);
 	}
-	int GetCamera()
+	int GetCamera() //deprecated
 	{
-		return EntRefToEntIndex(this.camera);
+		return EntRefToEntIndex(this.camera.pointer);
 	}
 	int Spawn(KeyValues config, int drone, float pos[3], float angles[3], float vel[3])
 	{
@@ -323,13 +388,13 @@ enum struct DroneProp
 		this.activeweapon = this.oldweapon;
 		//PrintToChat(client, "Successfully created drone (%s) with owner: %i", drone_name, DroneOwner[hDrone]);
 
-		this.drone = EntIndexToEntRef(drone);
+		this.hull.set(drone);
 		PrintToChatAll("Drone reference set to entity: %i", drone);
 		return drone;
 	}
 	void PlayerPilot(int client)
 	{
-		this.owner = EntIndexToEntRef(client);
+		this.owner.set(client);
 		SetEntityMoveType(client, MOVETYPE_NONE);
 		this.occupied = true;
 	}
