@@ -130,7 +130,7 @@ enum struct DroneWeapon
 		int wep = CreateEntityByName("prop_dynamic_override");
 		float pos[3], rot[3];
 		int drone = EntRefToEntIndex(this.drone);
-		if (!IsValidEntity(drone)) LogError("Could not spawn drone weapon: Drone entity invalid!");
+		if (!IsValidEntity(drone) || drone <= MaxClients) LogError("Could not spawn drone weapon: Drone entity invalid!");
 
 		DispatchKeyValue(wep, "model", this.model);
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
@@ -287,9 +287,6 @@ enum struct DroneProp
 	}
 	int Spawn(KeyValues config, int drone, float pos[3], float angles[3], float vel[3])
 	{
-		//Spawn drone and get its index
-		//int drone = CreateEntityByName("prop_physics_override");
-
 		//Establish drone attributes
 		config.GetString("name", this.name, MAX_DRONE_LENGTH);
 		config.GetString("model", this.model, PLATFORM_MAX_PATH);
