@@ -6,6 +6,7 @@
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 #define MAXSEATS 10
+#define MAXATTACHMENTS 12
 
 #include <sdktools>
 #include <entity>
@@ -62,6 +63,16 @@ enum CDWeaponState
 }
 
 ///
+/// Custom transform used for holding rotation and position information
+///
+
+enum struct DTransform
+{
+	float pos[3];
+	float rot[3];
+}
+
+///
 /// Structs for components and players related to drones
 /// Each component will act as a pointer to the entity
 /// Use component's getter and setters when accessing
@@ -95,6 +106,42 @@ enum struct Component
 	void clear()
 	{
 		this.pointer = INVALID_ENT_REFERENCE;
+	}
+}
+
+//struct for local attachment parameters
+enum struct ComponentAttachment
+{
+	Component attachment;
+	
+	char 
+}
+
+//work-around for storing all attachments in a single array on the drone
+enum struct Attachments
+{
+	int attachment[MAXATTACHMENTS]; //reference to each attachment - 12 max
+	float health[MAXATTACHMENTS];
+	float maxhealth[MAXATTACHMENTS];
+	
+	bool destroyed[MAXATTACHMENTS];
+	bool active[MAXATTACHMENTS];
+	
+	float damage_mod[MAXATTACHMENTS];
+	
+	void set(int entity, int id)
+	{
+		this.attachment[id] = EntIndexToEntRef(entity);
+	}
+	int get(int id)
+	{
+		return EntRefToEntIndex(this.attachment[id]);
+	}
+	
+	void setHealth(int index, float health)
+	{
+		this.maxhealth[index] = health;
+		this.health[index] = this.maxhealth[index];
 	}
 }
 
@@ -298,6 +345,7 @@ enum struct DroneProp
 	Component hull;
 	Player owner;
 	Component camera;
+	Attachments attachments; //arrays of structs would be nice..
 
 	//appearance
 	char model[PLATFORM_MAX_PATH];
@@ -780,7 +828,7 @@ STOCKS
 
 *************/
 
-//vectors in structs are annoying, so using this to "format" a vector as needed
+//deprecated, newer versions of sourcemod allow setting vectors directly in structs
 stock void FormatVector(float vec[3], float x, float y, float z)
 {
 	vec[0] = x;
@@ -819,7 +867,8 @@ stock void GetForwardPos(float origin[3], const float angles[3], float distance,
 	AddVectors(buffer, dir, buffer);
 }
 
-void GetOffsetPos(float origin[3], float angles[3], any offset[3], float buffer[3])
+//Obtains an offset position given an origin and offset vector
+stock void GetOffsetPos(float origin[3], float angles[3], float offset[3], float buffer[3])
 {
 	float dir[3];
 
@@ -843,4 +892,45 @@ stock bool IsValidClient(int client)
         return false;
 
     return true;
+}
+
+///
+/// GetAttachmentTransform
+/// Returns the transform at the given attachment name
+///
+/// entity - Parent entity to attach to
+///
+
+stock void GetAttachmentTransform(int entity, const char[] attachment, DTransform transform)
+{
+	int index = LookupEntityAttachment(entity, attachment);
+	GetEntityAttachment(entity, index, transform.pos, transform.rot);
+}
+
+///
+/// GetAttachmentTransformOffset
+/// Similar to GetAttachmentTransform, but instead of looking up the attachment we will use a given offset vector
+/// This is mostly just a fallback in case the parent model does not have attachment points
+///
+/// entity - Parent entity to attach to
+/// attachment_name - The attachment name in the config file
+/// transform - Buffer to store transform data in
+///
+
+stock void GetAttachmentTransformOffset(int entity, const char[] attachment_name, DTransform transform)
+{
+	
+}
+
+///
+/// Sets a delayed kill command for the given entity
+///
+
+stock void SetEntityKillTimer(int entity, float timer)
+{
+}
+
+
+stock void CreateExplosion() //preserved
+{
 }
