@@ -82,10 +82,10 @@ enum struct Component
 {
 	int pointer; //ref
 	char model[256]; //if using a model for this component
-	
+
 	int maxhealth; //optional health value
 	int health;
-	
+
 	void set(int entity)
 	{
 		this.pointer = EntIndexToEntRef(entity);
@@ -99,22 +99,14 @@ enum struct Component
 		int entity = this.get();
 		if (IsValidEntity(entity) && entity > MaxClients)
 			return true;
-			
+
 		return false;
 	}
-	
+
 	void clear()
 	{
 		this.pointer = INVALID_ENT_REFERENCE;
 	}
-}
-
-//struct for local attachment parameters
-enum struct ComponentAttachment
-{
-	Component attachment;
-	
-	char 
 }
 
 //work-around for storing all attachments in a single array on the drone
@@ -123,12 +115,12 @@ enum struct Attachments
 	int attachment[MAXATTACHMENTS]; //reference to each attachment - 12 max
 	float health[MAXATTACHMENTS];
 	float maxhealth[MAXATTACHMENTS];
-	
+
 	bool destroyed[MAXATTACHMENTS];
 	bool active[MAXATTACHMENTS];
-	
+
 	float damage_mod[MAXATTACHMENTS];
-	
+
 	void set(int entity, int id)
 	{
 		this.attachment[id] = EntIndexToEntRef(entity);
@@ -137,7 +129,7 @@ enum struct Attachments
 	{
 		return EntRefToEntIndex(this.attachment[id]);
 	}
-	
+
 	void setHealth(int index, float health)
 	{
 		this.maxhealth[index] = health;
@@ -148,9 +140,9 @@ enum struct Attachments
 enum struct Player
 {
 	int userid;
-	
+
 	int seat; //seat currently being occupied
-	
+
 	int get()
 	{
 		return GetClientOfUserId(this.userid);
@@ -164,10 +156,10 @@ enum struct Player
 		int client = this.get();
 		if (IsValidClient(client))
 			return true;
-			
+
 		return false;
 	}
-	
+
 	void clear()
 	{
 		this.userid = -1;
@@ -183,7 +175,7 @@ enum struct DroneWeapon
 {
 	//Components
 	Component receiver;
-	Component drone;
+	Component parent;
 
 	//weapon stats
 	int ammo;
@@ -240,7 +232,7 @@ enum struct DroneWeapon
 	{
 		int wep = CreateEntityByName("prop_dynamic_override");
 		float pos[3], rot[3];
-		int drone = this.drone.get();
+		int drone = this.parent.get();
 		if (!IsValidEntity(drone) || drone <= MaxClients) LogError("Could not spawn drone weapon: Drone entity invalid!");
 
 		DispatchKeyValue(wep, "model", this.model);
@@ -262,7 +254,7 @@ enum struct DroneWeapon
 	}
 	int GetDrone() //deprecated
 	{
-		return EntRefToEntIndex(this.drone.pointer);
+		return EntRefToEntIndex(this.parent.pointer);
 	}
 	void SimulateFire(Action action)
 	{
@@ -299,7 +291,7 @@ enum struct DroneWeapon
 	}
 	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
 	{
-		int drone = this.drone.get();
+		int drone = this.parent.get();
 		if (IsValidEntity(drone) && drone > MaxClients)
 		{
 			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
@@ -565,17 +557,6 @@ native void CD_FireActiveWeapon(int owner, int drone);
 native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
- * Get Drone Active Weapon
- *
- * @param1 drone - Drone ent index
- * @param2 weapon - Struct to store the weapon info in
- *
- * @return active slot index
- */
-
-native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof DroneWeapon]);
-
-/**
  * Get Drone Weapon from Slot
  *
  * @param1 drone - Drone ent index
@@ -594,26 +575,6 @@ native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof DroneWeapon
  */
 
 native void CD_SetDroneActiveWeapon(int drone, int weapon);
-
-/**
- * Get Current Health of drone
- *
- * @param1 drone - Drone ent index
- *
- * @return current health of drone
- */
-
-native int CD_GetDroneHealth(int drone);
-
-/**
- * Get Max Health of drone
- *
- * @param1 drone - Drone ent index
- *
- * @return max health of drone
- */
-
-native int CD_GetDroneMaxHealth(int drone);
 
 /**
  * Spawn a drone by name for a specific client
@@ -672,19 +633,6 @@ native int CD_GetParamInteger(const char[] config, const char[] key, int weapon 
  */
 
 native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
-
-/**
- * Retrieves the attack sound for the given weapon
- *
- * @param1 config - config file to check
- * @param2 weapon - if non-zero, pull attribute for this weapon index
- * @param3 buffer - buffer to store string in
- * @param4 size - buffer size
- *
- * @return true on success
- */
-
-native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] buffer, int size);
 
 /**
  * Spawns a rocket based projectile for drones to fire
@@ -919,7 +867,7 @@ stock void GetAttachmentTransform(int entity, const char[] attachment, DTransfor
 
 stock void GetAttachmentTransformOffset(int entity, const char[] attachment_name, DTransform transform)
 {
-	
+
 }
 
 ///
