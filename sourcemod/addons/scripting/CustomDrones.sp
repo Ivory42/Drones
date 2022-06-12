@@ -48,7 +48,7 @@ public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for Team Fortress 2",
-	version 		= 	"1.3.6"
+	version 		= 	"1.3.12"
 };
 
 public void OnPluginStart()
