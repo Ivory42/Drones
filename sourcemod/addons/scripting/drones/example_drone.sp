@@ -8,9 +8,6 @@
 
 #define FAR_FUTURE 9999999999.0
 
-#define ENERGY_SOUND "weapons/cow_mangler_main_shot.wav"
-#define ROCKETSOUND "weapons/sentry_rocket.wav"
-#define PLASMASOUND "weapons/pomson_fire_01.wav"
 #define PODMODEL "models/weapons/c_models/c_blackbox/c_blackbox.mdl"
 #define MISSILEMODEL "models/weapons/c_models/c_rocketlauncher/c_rocketlauncher.mdl"
 #define ENERGYMODEL "models/weapons/c_models/c_drg_cowmangler/c_drg_cowmangler.mdl"
@@ -28,7 +25,7 @@ int DroneRWeapon[2049];
 int DroneLWeapon[2049];
 
 //Weapon variables
-float RocketFireDelay[2049] = FAR_FUTURE;
+float RocketFireDelay[2049];
 float BarrageRate[2049];
 int RocketCount[2049];
 int BarrageMaxCount[2049];
@@ -36,7 +33,7 @@ bool IsDroneRocket[2049];
 bool InBarrage[2049];
 bool WeaponUseOppositeSide[2049][MAXWEAPONS];
 
-CDDmgType ProjDmgType[2049];
+CDDmgType pType[2049];
 
 public Plugin MyInfo = {
 	name 			= 	"[Combat Drones] Example Drone",
@@ -55,7 +52,7 @@ public void OnPluginStart()
 }
 
 void SetupWeaponStats(const char[] config, int drone)
-{		
+{
 	BarrageMaxCount[drone] = CD_GetParamInteger(config, "burst_count", 4);
 	BarrageRate[drone] = CD_GetParamFloat(config, "attack_time", 4);
 }
@@ -66,9 +63,6 @@ public void OnMapStart()
 	PrecacheModel(ENERGYMODEL);
 	PrecacheModel(PODMODEL);
 	PrecacheModel(PLASMAMODEL);
-	PrecacheSound(ROCKETSOUND);
-	PrecacheSound(ENERGY_SOUND);
-	PrecacheSound(PLASMASOUND);
 }
 
 public void OnClientPutInServer(int client)
@@ -89,7 +83,7 @@ stock void DetachDroneWeapons(int drone)
 	int rWeapon = EntRefToEntIndex(DroneRWeapon[drone]);
 	if (IsValidEntity(rWeapon))
 		AcceptEntityInput(rWeapon, "ClearParent");
-		
+
 	int lWeapon = EntRefToEntIndex(DroneLWeapon[drone]);
 	if (IsValidEntity(lWeapon))
 		AcceptEntityInput(lWeapon, "ClearParent");
@@ -106,8 +100,9 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 		int drone = ClientDrone[client];
 		if (Attributed[drone] && ThisDrone[client])
 		{
-			DroneProp Drone = GetClientDrone(client, Drone);
-			int droneHP = Drone.health;
+			DroneProp Drone;
+			CD_GetClientDrone(client, Drone);
+			int droneHP = RoundFloat(Drone.health);
 			if (droneHP > 0)
 			{
 				//Rocket Pods function
@@ -117,6 +112,11 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 				}
 				if (InBarrage[drone] && RocketCount[drone] > 0 && RocketFireDelay[drone] <= GetGameTime())
 				{
+					DroneWeapon weapon;
+					CD_GetDroneWeapon(drone, 4, weapon);
+					if (weapon.state == WeaponState_Reloading)
+						InBarrage[drone] = false;
+
 					CD_FireActiveWeapon(client, drone);
 					RocketFireDelay[drone] = GetGameTime() + BarrageRate[drone];
 				}
@@ -127,6 +127,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 			}
 		}
 	}
+	return Plugin_Continue;
 }
 
 ///
@@ -142,53 +143,57 @@ public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int sl
 			case 3: //plasma rifle
 			{
 				//Fire from both weapons
-				FireRocket(gunner, drone, weapon, slot, false);
-				FireRocket(gunner, drone, weapon, slot, true);
+				FireRocket(gunner, drone, weapon, slot, WeaponUseOppositeSide[drone][slot]);
+				FireRocket(gunner, drone, weapon, slot, WeaponUseOppositeSide[drone][slot]);
 			}
 			case 4: //Rocket pods
 			{
 				if (!InBarrage[drone])
 				{
-					RocketCount[gunner] = BarrageMaxCount[drone];
-					FireRocket(gunner, drone, weapon, 4, &WeaponUseOppositeSide[drone][slot]);
+					RocketCount[drone] = BarrageMaxCount[drone];
+					FireRocket(gunner, drone, weapon, 4, WeaponUseOppositeSide[drone][slot]);
 					RocketCount[drone]--;
 					RocketFireDelay[drone] = GetGameTime() + BarrageRate[drone];
 					InBarrage[drone] = true;
 				}
 				else
 				{
-					FireRocket(gunner, drone, weapon, 4, &WeaponUseOppositeSide[drone][slot]);
+					FireRocket(gunner, drone, weapon, 4, WeaponUseOppositeSide[drone][slot]);
 					RocketCount[drone]--;
 					RocketFireDelay[drone] = GetGameTime() + BarrageRate[drone];
 				}
 
 			}
-			default: FireRocket(gunner, drone, weapon, slot, &WeaponUseOppositeSide[drone][slot]);
+			default: FireRocket(gunner, drone, weapon, slot, WeaponUseOppositeSide[drone][slot]);
 		}
 	}
+	return Plugin_Continue;
 }
 
-public void FireRocket(int owner, int drone, DroneWeapon weapon, bool &opposite)
+public void FireRocket(int owner, int drone, DroneWeapon weapon, int slot, bool &opposite)
 {
 	//Get Spawn Position
 	if (opposite)
 		weapon.offset[1] *= -1.0;	//Adjust position based on the physical weapon being used on the drone
-	
+
 	opposite = !opposite;			//Alternate between firing positions each time we fire.
 	int rocket;
-	
+
 	//Create Rocket
 	switch (slot)
 	{
 		case 1: rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Rocket); //Normal Rockets
-		case 2: rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Energy); //Energy Rockets
+		case 2: //Energy Rockets
+		{
+			rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Energy);
+			pType[rocket] = DmgType_Custom;
+		}
 		case 3: //Energy Orbs
 		{
-			rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Contact);
+			rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Impact);
 			SetEntityModel(rocket, "models/weapons/w_models/w_baseball.mdl");
 			SetEntPropFloat(rocket, Prop_Send, "m_flModelScale", 0.1);
 			CreateParticle(rocket, "drg_cow_rockettrail_fire_blue", true);
-			ProjDmgType[rocket] = DmgType_Custom;
 		}
 		case 4: rocket = CD_SpawnRocket(owner, drone, weapon, DroneProj_Sentry); //Rocekt Pods
 	}
@@ -199,10 +204,11 @@ public Action PlayerTakeDamage(int client, int &attacker, int &inflictor, float 
 {
 	if (IsValidClient(client) && IsDroneRocket[inflictor] && CD_IsValidDrone(ClientDrone[attacker]))
 	{
-		if (Attributed[ClientDrone[attacker]] && ProjDmgType[inflictor] == DmgType_Custom)
+		if (Attributed[ClientDrone[attacker]] && pType[inflictor] == DmgType_Custom)
 		{
 			//remove damage falloff and rampup
 			damagetype = DMG_ENERGYBEAM;
+			pType[inflictor] = DmgType_Default;
 			return Plugin_Changed;
 		}
 	}
@@ -228,13 +234,13 @@ public void CD_OnDroneCreated(DroneProp drone, const char[] plugin_name, const c
 		int droneEnt = drone.GetDrone();
 		if (CD_IsValidDrone(droneEnt))
 		{
-			Format(sPluginName[drone], PLATFORM_MAX_PATH, plugin_name);
-			SetupWeaponStats(config, drone);
+			Format(sPluginName[droneEnt], PLATFORM_MAX_PATH, plugin_name);
+			SetupWeaponStats(config, droneEnt);
 			float angles[3], pos[3];
 			GetEntPropVector(droneEnt, Prop_Data, "m_vecOrigin", pos);
 			GetEntPropVector(droneEnt, Prop_Send, "m_angRotation", angles);
-			Attributed[drone] = true;
-			CreateDroneWeapons(drone, pos, angles);
+			Attributed[droneEnt] = true;
+			CreateDroneWeapons(droneEnt, pos, angles);
 		}
 	}
 }
@@ -258,7 +264,7 @@ public void CD_OnPlayerExitDrone(DroneProp Drone, int client, int seat)
 	ThisDrone[client] = false;
 }
 
-public void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name)
+public void CD_OnDroneRemoved(int drone, const char[] plugin_name)
 {
 	if (Attributed[drone])
 	{
@@ -266,11 +272,11 @@ public void CD_OnDroneRemoved(int drone, int owner, const char[] plugin_name)
 		int weapon = EntRefToEntIndex(DroneRWeapon[drone]);
 		if (IsValidEntity(weapon) && weapon > MaxClients)
 			RemoveEntity(weapon);
-			
+
 		weapon = EntRefToEntIndex(DroneLWeapon[drone]);
 		if (IsValidEntity(weapon) && weapon > MaxClients)
 			RemoveEntity(weapon);
-			
+
 		DroneRWeapon[drone] = INVALID_ENT_REFERENCE;
 		DroneLWeapon[drone] = INVALID_ENT_REFERENCE;
 	}
@@ -284,11 +290,11 @@ stock void SetWeaponModels(int drone, int slot)
 {
 	int lWeapon = EntRefToEntIndex(DroneLWeapon[drone]);
 	int rWeapon = EntRefToEntIndex(DroneRWeapon[drone]);
-	
+
 	//if either of these are not valid, do not proceed
 	if (!IsValidEntity(lWeapon)) return;
 	if (!IsValidEntity(rWeapon)) return;
-	
+
 	switch (slot)
 	{
 		case 1:
@@ -340,7 +346,7 @@ stock void CreateDroneWeapons(int drone, float spawnPos[3], float spawnAngle[3])
 
 	SetVariantString("!activator");
 	AcceptEntityInput(rWeapon, "SetParent", drone, rWeapon, 0);
-	
+
 	DroneRWeapon[drone] = EntIndexToEntRef(rWeapon);
 
 	//Left Weapon
@@ -357,7 +363,7 @@ stock void CreateDroneWeapons(int drone, float spawnPos[3], float spawnAngle[3])
 
 	SetVariantString("!activator");
 	AcceptEntityInput(lWeapon, "SetParent", drone, lWeapon, 0);
-	
+
 	DroneLWeapon[drone] = EntIndexToEntRef(lWeapon);
 }
 
