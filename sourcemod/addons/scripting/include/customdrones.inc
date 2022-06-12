@@ -40,6 +40,7 @@ enum CDMoveType
 
 enum CDDmgType
 {
+	DmgType_Default, 	//Generic damage for all attack types
 	DmgType_Hitscan,	//hitscan generic damage
 	DmgType_Rangeless, 	//hitscan damage with no falloff
 
@@ -269,6 +270,16 @@ enum struct DroneWeapon
 				this.ammo--;
 				if (this.ammo == 0)
 					this.SimulateReload();
+
+				if (strlen(this.firesound) > 3)
+				{
+					PrecacheSound(this.firesound);
+					int wep = this.receiver.get();
+					if (IsValidEntity(wep) && wep > MaxClients)
+						EmitSoundToAll(this.firesound, wep); //emit from weapon if physical entity exists
+					else
+						EmitSoundToAll(this.firesound, this.parent.get()); //otherwise just emit from the drone
+				}
 			}
 		}
 	}
@@ -289,30 +300,26 @@ enum struct DroneWeapon
 			this.state = WeaponState_Reloading;
 		}
 	}
-	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
+	void GetWeaponTransform(DTransform transform)	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
 	{
 		int drone = this.parent.get();
 		if (IsValidEntity(drone) && drone > MaxClients)
 		{
-			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-			float offset[3];
-			FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
-			GetOffsetPos(pos, rot, offset, pos);
+			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", transform.pos);
+			GetEntPropVector(drone, Prop_Send, "m_angRotation", transform.rot);
+			GetOffsetPos(transform.pos, transform.rot, this.offset, transform.pos);
 			int weapon = this.receiver.get();
 			if (IsValidEntity(weapon) && weapon > MaxClients)
 			{
-				GetEntPropVector(weapon, Prop_Send, "m_angRotation", rot);
+				GetEntPropVector(weapon, Prop_Send, "m_angRotation", transform.rot);
 			}
 		}
 	}
-	void GetMuzzleTransform(float pos[3], float rot[3])	//retrieve's this weapon's muzzle location in the world.
+	void GetMuzzleTransform(DTransform transform)	//retrieve's this weapon's muzzle location in the world. TODO - Find attachment if exists and use that transform
 	{
-		this.GetWeaponTransform(pos, rot);
-		float offset[3];
-		offset = this.projoffset;
+		this.GetWeaponTransform(transform);
 		//FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
-		GetOffsetPos(pos, rot, offset, pos);
+		GetOffsetPos(transform.pos, transform.rot, this.projoffset, transform.pos);
 	}
 	bool CanFire(bool force)	//Can this weapon fire
 	{
