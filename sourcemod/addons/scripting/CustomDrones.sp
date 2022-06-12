@@ -329,20 +329,21 @@ public any Native_HitscanAttack(Handle plugin, int args)
 	int drone = GetNativeCell(2);
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3], rot[3];
-	weapon.GetMuzzleTransform(pos, rot); //get our weapon's muzzle position
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform); //get our weapon's muzzle position
 	CDDmgType dmgType = view_as<CDDmgType>(GetNativeCell(4));
 	CDWeaponType type = view_as<CDWeaponType>(GetNativeCell(5));
 	if (IsValidClient(owner) && IsValidDrone(drone))
 	{
-		float angle[3], aimPos[3], aimVec[3], aimAngle[3], cameraPos[3], droneAngle[3], dronePos[3];
-		GetClientEyeAngles(owner, aimAngle);
-		GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
-		GetForwardPos(dronePos, droneAngle, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
-		CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);	//find where the client is aiming at in relation to the drone
+		float angle[3], aimVec[3], cameraPos[3], location[3], aim[3];
+		DTransform dtran;
+		GetClientEyeAngles(owner, aim);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", dtran.rot);
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dtran.pos);
+		GetForwardPos(dtran.pos, dtran.rot, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
+		CD_GetDroneAimPosition(drone, cameraPos, aim, location);	//find where the client is aiming at in relation to the drone
 
-		MakeVectorFromPoints(pos, aimPos, aimVec); //draw vector from offset position to our aim position
+		MakeVectorFromPoints(transform.pos, location, aimVec); //draw vector from offset position to our aim position
 		GetVectorAngles(aimVec, angle);
 
 		//restrict angle at which projectiles can be fired, not yet working
@@ -357,7 +358,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			angle[1] += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
 		}
 
-		Handle bullet = TR_TraceRayFilterEx(pos, angle, MASK_SHOT, RayType_Infinite, FilterDroneShoot, drone);
+		Handle bullet = TR_TraceRayFilterEx(transform.pos, angle, MASK_SHOT, RayType_Infinite, FilterDroneShoot, drone);
 		if (TR_DidHit(bullet))
 		{
 			int victim = TR_GetEntityIndex(bullet);
@@ -369,7 +370,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			{
 				case CDWeapon_Auto:
 				{
-					CreateTracer(drone, pos, endPos);
+					CreateTracer(drone, transform.pos, endPos);
 				}
 				case CDWeapon_Laser:
 				{
@@ -378,7 +379,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 				}
 				case CDWeapon_SlowFire:
 				{
-					CreateTracer(drone, pos, endPos);
+					CreateTracer(drone, transform.pos, endPos);
 				}
 			}
 
@@ -496,27 +497,27 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 {
 	int owner = GetNativeCell(1);
 	int drone = GetNativeCell(2);
-	float pos[3];
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float rot[3];
-	weapon.GetMuzzleTransform(pos, rot);
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform);
 	ProjType projectile = GetNativeCell(4);
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
-	float velocity[3], aimAngle[3], dronePos[3], droneAngle[3], aimPos[3], aimVec[3], cameraPos[3];
+	float velocity[3], aimAngle[3], aimVec[3], cameraPos[3], aim[3], location[3];
+	DTransform dtran;
 	char netname[64], classname[64];
 
 	//Get Spawn Position
-	GetClientEyeAngles(owner, aimAngle);
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
-	cameraPos = dronePos;
-	GetForwardPos(cameraPos, droneAngle, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
-	CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);	//find where the client is aiming at in relation to the drone
+	GetClientEyeAngles(owner, aim);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", dtran.rot);
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dtran.pos);
+	cameraPos = dtran.pos;
+	GetForwardPos(cameraPos, dtran.rot, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
+	CD_GetDroneAimPosition(drone, cameraPos, aim, location);	//find where the client is aiming at in relation to the drone
 
-	MakeVectorFromPoints(pos, aimPos, aimVec); //draw vector from offset position to our aim position
+	MakeVectorFromPoints(transform.pos, location, aimVec); //draw vector from offset position to our aim position
 	GetVectorAngles(aimVec, aimAngle);
 
 	if (weapon.inaccuracy)
@@ -550,7 +551,7 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	//teleport to proper position and then spawn
 	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
-	TeleportEntity(rocket, pos, aimAngle, velocity);
+	TeleportEntity(rocket, transform.pos, aimAngle, velocity);
 
 	SetVariantInt(team);
 	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
@@ -633,15 +634,14 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 	int owner = GetNativeCell(1);
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3];
-	float angle[3];
-	weapon.GetMuzzleTransform(pos, angle);
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform);
 	ProjType projectile = GetNativeCell(4);
 	char modelname[256];
 	GetNativeString(5, modelname, sizeof modelname);
 	float fuse = GetNativeCell(6);
 	DroneBomb bombEnt;
-	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, pos);
+	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, transform.pos);
 	SetEntPropEnt(bombEnt.bomb, Prop_Send, "m_hOwnerEntity", owner);
 	bombEnt.type = projectile;
 	bombEnt.isBomb = true;
@@ -1300,7 +1300,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					case DroneMove_Hover:
 					{
 						if (DroneInfo[drone].viewlocked)
-							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone].turnrate, drone, vAngles);
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone], vAngles);
 
 						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
 						if (buttons & IN_FORWARD)
@@ -1366,7 +1366,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					case DroneMove_Fly: //flying drones can only move forward
 					{
 						if (DroneInfo[drone].viewlocked) //only adjust angles if our view is locked to our client view angles
-							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone].turnrate, drone, vAngles);
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone], vAngles);
 
 						//specific variables for flying drones
 						float forwardVec[3];
@@ -1545,36 +1545,42 @@ void ResetWeaponRotation(DroneWeapon weapon, float yaw)
 	}
 }
 
-void GetAngleFromTurnRate(const float angles[3], float pos[3], float droneAngles[3], float rate, int drone, float bufferAngles[3])
+void GetAngleFromTurnRate(const float angles[3], float pos[3], float droneAngles[3], DroneProp drone, float bufferAngles[3])
 {
-	float forwardPos[3], newDir[3], droneVel[3], bufferAngle[3];
-	GetForwardPos(pos, angles, rate, _, _, forwardPos);
+	//float destination[3]; destination = angles;
+	//LerpAngles(droneAngles, destination, 0.05, bufferAngles);
+	float forwardPos[3], direction[3], forwardvec[3], vel[3];
+	GetForwardPos(pos, angles, drone.turnrate, _, _, forwardPos);
 
-	MakeVectorFromPoints(pos, forwardPos, newDir);
-	GetEntPropVector(drone, Prop_Data, "m_vecAbsVelocity", droneVel);
-	float forwardSpeed = GetVectorLength(droneVel);
-	GetAngleVectors(droneAngles, droneVel, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(droneVel, forwardSpeed);
-	AddVectors(droneVel, newDir, droneVel);
-	NormalizeVector(droneVel, droneVel);
-	GetVectorAngles(droneVel, bufferAngle);
-	bufferAngles = bufferAngle;
+	MakeVectorFromPoints(pos, forwardPos, direction);
+	GetEntPropVector(drone.hull.get(), Prop_Data, "m_vecAbsVelocity", vel);
+	float speed = GetVectorLength(vel);
+
+	GetAngleVectors(droneAngles, forwardvec, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(forwardvec, 3600.0 / drone.turnrate + speed);
+	AddVectors(forwardvec, direction, forwardvec);
+	NormalizeVector(forwardvec, forwardvec);
+	GetVectorAngles(forwardvec, bufferAngles);
+}
+/*
+void LerpAngles(float start[3], float end[3], float time, float buffer[3])
+{
+	for (int i = 0; i != 2; i++)
+	{
+		buffer[i] = start[i] + (end[i] - start[i]) * time;
+		AngleNormalize(buffer[i]);
+	}
 }
 
+stock void AngleNormalize(float &ang)
+{
+	if(ang > 180.0) ang -= 360.0;
+	if(ang <-180.0) ang += 360.0;
+}
+*/
 void FireWeapon(int gunner, int drone, int slot, DroneWeapon weapon)
 {
 	Action result = Plugin_Continue;
-
-	//Play fire sound if one exists
-	if (strlen(weapon.firesound) > 3)
-	{
-		PrecacheSound(weapon.firesound);
-		int wep = weapon.GetWeapon();
-		if (IsValidEntity(wep) && wep > MaxClients)
-			EmitSoundToAll(weapon.firesound, wep); //emit from weapon if physical entity exists
-		else
-			EmitSoundToAll(weapon.firesound, drone); //otherwise just emit from the drone
-	}
 	Call_StartForward(DroneAttack);
 
 	Call_PushCell(drone);
@@ -1585,6 +1591,7 @@ void FireWeapon(int gunner, int drone, int slot, DroneWeapon weapon)
 
 	Call_Finish(result);
 	weapon.SimulateFire(result);
+	//Play fire sound if one exists
 }
 
 float AngleDifference(float droneAngle[3], float aimAngle[3])
