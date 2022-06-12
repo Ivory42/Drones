@@ -6,6 +6,7 @@
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 #define MAXSEATS 10
+#define MAXATTACHMENTS 12
 
 #include <sdktools>
 #include <entity>
@@ -39,6 +40,7 @@ enum CDMoveType
 
 enum CDDmgType
 {
+	DmgType_Default, 	//Generic damage for all attack types
 	DmgType_Hitscan,	//hitscan generic damage
 	DmgType_Rangeless, 	//hitscan damage with no falloff
 
@@ -62,17 +64,119 @@ enum CDWeaponState
 }
 
 ///
+/// Custom transform used for holding rotation and position information
+///
+
+enum struct DTransform
+{
+	float pos[3];
+	float rot[3];
+}
+
+///
+/// Structs for components and players related to drones
+/// Each component will act as a pointer to the entity
+/// Use component's getter and setters when accessing
+///
+
+enum struct Component
+{
+	int pointer; //ref
+	char model[256]; //if using a model for this component
+
+	int maxhealth; //optional health value
+	int health;
+
+	void set(int entity)
+	{
+		this.pointer = EntIndexToEntRef(entity);
+	}
+	int get()
+	{
+		return EntRefToEntIndex(this.pointer);
+	}
+	bool valid()
+	{
+		int entity = this.get();
+		if (IsValidEntity(entity) && entity > MaxClients)
+			return true;
+
+		return false;
+	}
+
+	void clear()
+	{
+		this.pointer = INVALID_ENT_REFERENCE;
+	}
+}
+
+//work-around for storing all attachments in a single array on the drone
+enum struct Attachments
+{
+	int attachment[MAXATTACHMENTS]; //reference to each attachment - 12 max
+	float health[MAXATTACHMENTS];
+	float maxhealth[MAXATTACHMENTS];
+
+	bool destroyed[MAXATTACHMENTS];
+	bool active[MAXATTACHMENTS];
+
+	float damage_mod[MAXATTACHMENTS];
+
+	void set(int entity, int id)
+	{
+		this.attachment[id] = EntIndexToEntRef(entity);
+	}
+	int get(int id)
+	{
+		return EntRefToEntIndex(this.attachment[id]);
+	}
+
+	void setHealth(int index, float health)
+	{
+		this.maxhealth[index] = health;
+		this.health[index] = this.maxhealth[index];
+	}
+}
+
+enum struct Player
+{
+	int userid;
+
+	int seat; //seat currently being occupied
+
+	int get()
+	{
+		return GetClientOfUserId(this.userid);
+	}
+	void set(int client)
+	{
+		this.userid = GetClientUserId(client);
+	}
+	bool valid()
+	{
+		int client = this.get();
+		if (IsValidClient(client))
+			return true;
+
+		return false;
+	}
+
+	void clear()
+	{
+		this.userid = -1;
+	}
+}
+
+///
 /// Struct to store all weapon info for specific drone weapons.
 /// These can be accessed in a drone's plugin on specific forwards.
-/// Do NOT directly access the properties 'weapon' or 'drone'.
-///	- Use the methods GetWeapon() and GetDrone() instead.
 ///
 
 enum struct DroneWeapon
 {
-	//entity references - DO NOT ACCESS DIRECTLY
-	int weapon;
-	int drone;
+	//Components
+	Component receiver;
+	Component parent;
 
 	//weapon stats
 	int ammo;
@@ -100,7 +204,7 @@ enum struct DroneWeapon
 	float offset[3];
 	float projoffset[3]; //offset based on weapon offset - this does NOT offset from the drone's world position
 
-	//weapon parameters
+	//weapon parameters - deprecated
 	void SetName(char[] name)
 	{
 		FormatEx(this.name, MAX_WEAPON_LENGTH, name);
@@ -129,8 +233,8 @@ enum struct DroneWeapon
 	{
 		int wep = CreateEntityByName("prop_dynamic_override");
 		float pos[3], rot[3];
-		int drone = EntRefToEntIndex(this.drone);
-		if (!IsValidEntity(drone)) LogError("Could not spawn drone weapon: Drone entity invalid!");
+		int drone = this.parent.get();
+		if (!IsValidEntity(drone) || drone <= MaxClients) LogError("Could not spawn drone weapon: Drone entity invalid!");
 
 		DispatchKeyValue(wep, "model", this.model);
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
@@ -143,15 +247,15 @@ enum struct DroneWeapon
 		SetVariantString("!activator");
 		AcceptEntityInput(wep, "SetParent", drone, wep, 0);
 
-		this.weapon = EntIndexToEntRef(wep);
+		this.receiver.set(wep);
 	}
-	int GetWeapon() //returns entity being used as this weapon
+	int GetWeapon() //returns entity being used as this weapon - deprecated
 	{
-		return EntRefToEntIndex(this.weapon);
+		return EntRefToEntIndex(this.receiver.pointer);
 	}
-	int GetDrone()
+	int GetDrone() //deprecated
 	{
-		return EntRefToEntIndex(this.drone);
+		return EntRefToEntIndex(this.parent.pointer);
 	}
 	void SimulateFire(Action action)
 	{
@@ -166,6 +270,16 @@ enum struct DroneWeapon
 				this.ammo--;
 				if (this.ammo == 0)
 					this.SimulateReload();
+
+				if (strlen(this.firesound) > 3)
+				{
+					PrecacheSound(this.firesound);
+					int wep = this.receiver.get();
+					if (IsValidEntity(wep) && wep > MaxClients)
+						EmitSoundToAll(this.firesound, wep); //emit from weapon if physical entity exists
+					else
+						EmitSoundToAll(this.firesound, this.parent.get()); //otherwise just emit from the drone
+				}
 			}
 		}
 	}
@@ -186,29 +300,26 @@ enum struct DroneWeapon
 			this.state = WeaponState_Reloading;
 		}
 	}
-	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
+	void GetWeaponTransform(DTransform transform)	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
 	{
-		int drone = this.GetDrone();
-		if (IsValidEntity(drone))
+		int drone = this.parent.get();
+		if (IsValidEntity(drone) && drone > MaxClients)
 		{
-			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-			float offset[3];
-			FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
-			GetOffsetPos(pos, rot, offset, pos);
-			int weapon = this.GetWeapon();
-			if (IsValidEntity(weapon))
+			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", transform.pos);
+			GetEntPropVector(drone, Prop_Send, "m_angRotation", transform.rot);
+			GetOffsetPos(transform.pos, transform.rot, this.offset, transform.pos);
+			int weapon = this.receiver.get();
+			if (IsValidEntity(weapon) && weapon > MaxClients)
 			{
-				GetEntPropVector(weapon, Prop_Send, "m_angRotation", rot);
+				GetEntPropVector(weapon, Prop_Send, "m_angRotation", transform.rot);
 			}
 		}
 	}
-	void GetMuzzleTransform(float pos[3], float rot[3])	//retrieve's this weapon's muzzle location in the world.
+	void GetMuzzleTransform(DTransform transform)	//retrieve's this weapon's muzzle location in the world. TODO - Find attachment if exists and use that transform
 	{
-		this.GetWeaponTransform(pos, rot);
-		float offset[3];
-		FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
-		GetOffsetPos(pos, rot, offset, pos);
+		this.GetWeaponTransform(transform);
+		//FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
+		GetOffsetPos(transform.pos, transform.rot, this.projoffset, transform.pos);
 	}
 	bool CanFire(bool force)	//Can this weapon fire
 	{
@@ -229,10 +340,11 @@ enum struct DroneWeapon
 
 enum struct DroneProp
 {
-	//entity references - do not access without converting to indexes
-	int drone;
-	int owner;
-	int camera;
+	//Owner and components
+	Component hull;
+	Player owner;
+	Component camera;
+	Attachments attachments; //arrays of structs would be nice..
 
 	//appearance
 	char model[PLATFORM_MAX_PATH];
@@ -262,34 +374,31 @@ enum struct DroneProp
 	int oldweapon;
 	float changecooldown;
 
-	void Clear()
+	void clear()
 	{
-		this.drone = INVALID_ENT_REFERENCE;
-		this.owner = INVALID_ENT_REFERENCE;
-		this.camera = INVALID_ENT_REFERENCE;
+		this.hull.clear();
+		this.owner.clear();
+		this.camera.clear();
 		this.occupied = false;
 	}
 	void SetConfig(const char[] config)
 	{
 		FormatEx(this.config, 32, config);
 	}
-	int GetDrone()
+	int GetDrone() //deprecated
 	{
-		return EntRefToEntIndex(this.drone);
+		return EntRefToEntIndex(this.hull.pointer);
 	}
-	int GetOwner()
+	int GetOwner() //deprecated
 	{
-		return EntRefToEntIndex(this.owner);
+		return GetClientOfUserId(this.owner.userid);
 	}
-	int GetCamera()
+	int GetCamera() //deprecated
 	{
-		return EntRefToEntIndex(this.camera);
+		return EntRefToEntIndex(this.camera.pointer);
 	}
 	int Spawn(KeyValues config, int drone, float pos[3], float angles[3], float vel[3])
 	{
-		//Spawn drone and get its index
-		//int drone = CreateEntityByName("prop_physics_override");
-
 		//Establish drone attributes
 		config.GetString("name", this.name, MAX_DRONE_LENGTH);
 		config.GetString("model", this.model, PLATFORM_MAX_PATH);
@@ -326,13 +435,13 @@ enum struct DroneProp
 		this.activeweapon = this.oldweapon;
 		//PrintToChat(client, "Successfully created drone (%s) with owner: %i", drone_name, DroneOwner[hDrone]);
 
-		this.drone = EntIndexToEntRef(drone);
+		this.hull.set(drone);
 		PrintToChatAll("Drone reference set to entity: %i", drone);
 		return drone;
 	}
 	void PlayerPilot(int client)
 	{
-		this.owner = EntIndexToEntRef(client);
+		this.owner.set(client);
 		SetEntityMoveType(client, MOVETYPE_NONE);
 		this.occupied = true;
 	}
@@ -455,17 +564,6 @@ native void CD_FireActiveWeapon(int owner, int drone);
 native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
- * Get Drone Active Weapon
- *
- * @param1 drone - Drone ent index
- * @param2 weapon - Struct to store the weapon info in
- *
- * @return active slot index
- */
-
-native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof DroneWeapon]);
-
-/**
  * Get Drone Weapon from Slot
  *
  * @param1 drone - Drone ent index
@@ -484,26 +582,6 @@ native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof DroneWeapon
  */
 
 native void CD_SetDroneActiveWeapon(int drone, int weapon);
-
-/**
- * Get Current Health of drone
- *
- * @param1 drone - Drone ent index
- *
- * @return current health of drone
- */
-
-native int CD_GetDroneHealth(int drone);
-
-/**
- * Get Max Health of drone
- *
- * @param1 drone - Drone ent index
- *
- * @return max health of drone
- */
-
-native int CD_GetDroneMaxHealth(int drone);
 
 /**
  * Spawn a drone by name for a specific client
@@ -562,19 +640,6 @@ native int CD_GetParamInteger(const char[] config, const char[] key, int weapon 
  */
 
 native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
-
-/**
- * Retrieves the attack sound for the given weapon
- *
- * @param1 config - config file to check
- * @param2 weapon - if non-zero, pull attribute for this weapon index
- * @param3 buffer - buffer to store string in
- * @param4 size - buffer size
- *
- * @return true on success
- */
-
-native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] buffer, int size);
 
 /**
  * Spawns a rocket based projectile for drones to fire
@@ -718,7 +783,7 @@ STOCKS
 
 *************/
 
-//vectors in structs are annoying, so using this to "format" a vector as needed
+//deprecated, newer versions of sourcemod allow setting vectors directly in structs
 stock void FormatVector(float vec[3], float x, float y, float z)
 {
 	vec[0] = x;
@@ -757,7 +822,8 @@ stock void GetForwardPos(float origin[3], const float angles[3], float distance,
 	AddVectors(buffer, dir, buffer);
 }
 
-void GetOffsetPos(float origin[3], float angles[3], any offset[3], float buffer[3])
+//Obtains an offset position given an origin and offset vector
+stock void GetOffsetPos(float origin[3], float angles[3], float offset[3], float buffer[3])
 {
 	float dir[3];
 
@@ -781,4 +847,45 @@ stock bool IsValidClient(int client)
         return false;
 
     return true;
+}
+
+///
+/// GetAttachmentTransform
+/// Returns the transform at the given attachment name
+///
+/// entity - Parent entity to attach to
+///
+
+stock void GetAttachmentTransform(int entity, const char[] attachment, DTransform transform)
+{
+	int index = LookupEntityAttachment(entity, attachment);
+	GetEntityAttachment(entity, index, transform.pos, transform.rot);
+}
+
+///
+/// GetAttachmentTransformOffset
+/// Similar to GetAttachmentTransform, but instead of looking up the attachment we will use a given offset vector
+/// This is mostly just a fallback in case the parent model does not have attachment points
+///
+/// entity - Parent entity to attach to
+/// attachment_name - The attachment name in the config file
+/// transform - Buffer to store transform data in
+///
+
+stock void GetAttachmentTransformOffset(int entity, const char[] attachment_name, DTransform transform)
+{
+
+}
+
+///
+/// Sets a delayed kill command for the given entity
+///
+
+stock void SetEntityKillTimer(int entity, float timer)
+{
+}
+
+
+stock void CreateExplosion() //preserved
+{
 }

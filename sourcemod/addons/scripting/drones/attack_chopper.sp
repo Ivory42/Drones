@@ -14,15 +14,12 @@ public Plugin MyInfo = {
 	version 		= 	"1.0"
 };
 
-int LastWeaponFired[2049];
 int ClientDrone[MAXPLAYERS+1];
 bool IsInChopper[MAXPLAYERS+1];
 bool Attributed[2049];
 char Config[2049][PLATFORM_MAX_PATH];
 
 //Chaingun variables
-bool CGActive[2049];
-float CGPos[2049][3];
 float CGAttackSpeed[2049];
 float CGAttackDelay[2049];
 float CGMaxAttackSpeed[2049];
@@ -45,6 +42,8 @@ void SetDroneVars(const char[] config, int drone)
 	CGStartRate[drone] = CD_GetParamFloat(config, "attack_start_rate", 1);
 	CGMaxAttackSpeed[drone] = CD_GetParamFloat(config, "attack_time", 1);
 
+	CGAttackSpeed[drone] = CGStartRate[drone];
+
 	//Missiles
 	MissileSpeed[drone] = CD_GetParamFloat(config, "speed", 2);
 
@@ -63,13 +62,18 @@ public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int sl
 			{
 				if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone])
 				{
-					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
+					for (int bullet = 1; bullet != 7; bullet++) //fire seven bullets per ammo
+						CD_FireBullet(gunner, drone, weapon, DmgType_Hitscan, CDWeapon_Auto);
 				}
 				else if (CGAttackDelay[drone] <= GetEngineTime())
 				{
-					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
+					for (int bullet = 1; bullet != 7; bullet++) //fire seven bullets per ammo
+						CD_FireBullet(gunner, drone, weapon, DmgType_Hitscan, CDWeapon_Auto);
 					CGAttackSpeed[drone] -= CGAccel[drone];
-					if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone]) CGAttackSpeed[drone] = CGMaxAttackSpeed[drone];
+
+					if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone])
+						CGAttackSpeed[drone] = CGMaxAttackSpeed[drone];
+
 					CGAttackDelay[drone] = GetEngineTime() + CGAttackSpeed[drone];
 				}
 				else return Plugin_Stop;
@@ -94,8 +98,7 @@ void FireRocket(int owner, int drone, DroneWeapon weapon, bool opposite)
 	if (opposite)
 		weapon.offset[1] *= -1.0;	//adjust position based on the physical weapon being used on the drone
 
-	float speed = MissileSpeed[drone];
-	CD_SpawnRocket(owner, drone, weapon, DroneProj_Rocket, speed);
+	CD_SpawnRocket(owner, drone, weapon, DroneProj_Rocket);
 }
 
 void SpawnBomb(int owner, int drone, DroneWeapon weapon)
@@ -125,6 +128,7 @@ public Action OnPlayerRunCmd(int client, int &buttons)
 				CGAttackSpeed[drone] = CGStartRate[drone];
 		}
 	}
+	return Plugin_Continue;
 }
 
 public void CD_OnDroneCreated(DroneProp Drone, const char[] plugin, const char[] config)

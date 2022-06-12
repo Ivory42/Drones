@@ -23,10 +23,10 @@ float FlyMinSpeed = 200.0;
 DroneProp DroneInfo[2049];
 DroneBomb BombInfo[2049];
 
-int DroneRef[MAXPLAYERS+1];
+Component DroneRef[MAXPLAYERS+1];
 
-int PlayerSpecCamera[MAXPLAYERS+1];
-int PlayerSpecCameraAnchor[MAXPLAYERS+1];
+Component PlayerSpecCamera[MAXPLAYERS+1];
+Component PlayerSpecCameraAnchor[MAXPLAYERS+1];
 int PlayerSpecDrone[MAXPLAYERS+1]; //drone being spectated
 bool SpecDrone[MAXPLAYERS+1];
 bool FirstPersonSpec[MAXPLAYERS+1];
@@ -80,17 +80,22 @@ Action OnPlayerResupply(Event event, const char[] name, bool dBroad)
 	{
 		CreateTimer(0.5, DroneResupplied, client, TIMER_FLAG_NO_MAPCHANGE);
 	}
+
+	return Plugin_Continue;
 }
 
 Action DroneResupplied(Handle timer, int client)
 {
 	RemoveWearables(client);
 	//TF2_RemoveAllWeapons(client);
+
+	return Plugin_Stop;
 }
 
 Action ChangeSpec(int client, const char[] command, int args)
 {
 	RemoveSpecCamera(client);
+	return Plugin_Continue;
 }
 
 Action ChangeSpecMode(int client, const char[] command, int args)
@@ -106,18 +111,17 @@ Action ChangeSpecMode(int client, const char[] command, int args)
 	}
 	else if (SpecDrone[client] && FirstPersonSpec[client])
 	{
-		SetClientViewEntity(client, PlayerSpecCamera[client]);
+		SetClientViewEntity(client, PlayerSpecCamera[client].get());
 		FirstPersonSpec[client] = false;
 	}
+
+	return Plugin_Continue;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	CreateNative("CD_GetDroneHealth", Native_GetDroneHealth); //deprecated
-	CreateNative("CD_GetDroneMaxHealth", Native_GetDroneMaxHealth); //deprecated
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneWeapon", Native_GetDroneWeapon);
-	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneActiveWeapon); //deprecated
 	CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon);
 	CreateNative("CD_SetWeaponReloading", Native_SetWeaponReload);
 	CreateNative("CD_GetParamFloat", Native_GetFloatParam);
@@ -130,7 +134,6 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_FireBullet", Native_HitscanAttack);
 	CreateNative("CD_OverrideMaxSpeed", Native_OverrideMaxSpeed);
 	CreateNative("CD_ToggleViewLocked", Native_ViewLock);
-	CreateNative("CD_GetWeaponAttackSound", Native_AttackSound); //deprecated
 	CreateNative("CD_GetParamString", Native_GetString);
 	CreateNative("CD_SpawnDroneBomb", Native_SpawnBomb);
 	return APLRes_Success;
@@ -162,6 +165,8 @@ public int Native_OverrideMaxSpeed(Handle plugin, int args)
 		DroneInfo[drone].speedoverride = speed;
 	else
 		ThrowNativeError(017, "Entity index %i is not a valid drone", drone);
+
+	return 0;
 }
 
 public int Native_FireWeapon(Handle plugin, int args)
@@ -172,6 +177,8 @@ public int Native_FireWeapon(Handle plugin, int args)
 
 	if (WeaponProps[drone][slot].CanFire(true))
 		FireWeapon(owner, drone, slot, WeaponProps[drone][slot]);
+
+	return 0;
 }
 
 public int Native_DroneTakeDamage(Handle plugin, int args)
@@ -183,6 +190,8 @@ public int Native_DroneTakeDamage(Handle plugin, int args)
 	bool crit = view_as<bool>(GetNativeCell(5));
 
 	DroneTakeDamage(DroneInfo[drone], drone, attacker, inflictor, damage, crit);
+
+	return 0;
 }
 
 public int Native_ValidDrone(Handle plugin, int args)
@@ -194,40 +203,13 @@ public int Native_ValidDrone(Handle plugin, int args)
 	return false;
 }
 
-public int Native_GetDroneHealth(Handle plugin, int args)
-{
-	/*
-	int drone = GetNativeCell(1);
-	int iDroneHP2 = RoundFloat(DroneHealth[drone]);
-	return iDroneHP2;
-	*/
-}
-
-public int Native_GetDroneMaxHealth(Handle plugin, int args)
-{
-	/*
-	int drone = GetNativeCell(1);
-	int iDroneMaxHP = RoundFloat(DroneMaxHealth[drone]);
-	return iDroneMaxHP;
-	*/
-}
-
 public any Native_GetDroneWeapon(Handle plugin, int args)
 {
 	int drone = GetNativeCell(1);
 	int slot = GetNativeCell(2);
 	SetNativeArray(3, WeaponProps[drone][slot], sizeof DroneWeapon);
-}
 
-
-public any Native_GetDroneActiveWeapon(Handle plugin, int args)
-{
-	/*
-	int drone = GetNativeCell(1);
-	int owner = GetEntPropEnt(drone, Prop_Data, "m_hOwnerEntity");
-	if (IsValidClient(owner))
-		SetNativeArray(2, WeaponProps[drone][DroneInfo[owner].activeweapon], sizeof DroneWeapon);
-		*/
+	return 0;
 }
 
 public int Native_SetDroneWeapon(Handle plugin, int args)
@@ -236,6 +218,8 @@ public int Native_SetDroneWeapon(Handle plugin, int args)
 	int slot = GetNativeCell(2);
 	if (IsValidDrone(drone))
 		DroneInfo[drone].activeweapon = slot;
+
+	return 0;
 }
 
 public int Native_SpawnDroneName(Handle plugin, int args)
@@ -245,6 +229,8 @@ public int Native_SpawnDroneName(Handle plugin, int args)
 	GetNativeString(2, name, sizeof(name));
 
 	TryCreateDrone(client, name);
+
+	return 0;
 }
 
 public int Native_SetWeaponReload(Handle plugin, int args)
@@ -258,6 +244,8 @@ public int Native_SetWeaponReload(Handle plugin, int args)
 		delay = weapon.reloadtime;
 
 	weapon.SimulateReload();
+
+	return 0;
 }
 
 public any Native_GetFloatParam(Handle plugin, int args)
@@ -331,39 +319,8 @@ public any Native_GetString(Handle plugin, int args)
 	drone.GetString(key, result, size);
 	delete drone;
 	SetNativeString(4, result, size);
-}
 
-public any Native_AttackSound(Handle plugin, int args)
-{
-	/*
-	char config[64], weapon[64];
-	int weaponId = GetNativeCell(2);
-	GetNativeString(1, config, sizeof config);
-	int size = GetNativeCell(4);
-	char[] result = new char[size];
-
-	KeyValues drone = new KeyValues("Drone");
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
-	drone.ImportFromFile(path);
-	drone.JumpToKey("weapons");
-	Format(weapon, sizeof weapon, "weapon%i", weaponId);
-	if (drone.JumpToKey(weapon))
-	{
-		drone.GetString("sound", result, size);
-		delete drone;
-		if (strlen(result) <= 0) return false;
-		SetNativeString(3, result, size);
-		return true;
-	}
-	else
-	{
-		delete drone;
-		ThrowNativeError(017, "Drone %s does not have weapon with ID %i", config, weaponId);
-	}
-	delete drone;
-	return false;
-	*/
+	return 0;
 }
 
 public any Native_HitscanAttack(Handle plugin, int args)
@@ -372,20 +329,21 @@ public any Native_HitscanAttack(Handle plugin, int args)
 	int drone = GetNativeCell(2);
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3], rot[3];
-	weapon.GetMuzzleTransform(pos, rot); //get our weapon's muzzle position
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform); //get our weapon's muzzle position
 	CDDmgType dmgType = view_as<CDDmgType>(GetNativeCell(4));
 	CDWeaponType type = view_as<CDWeaponType>(GetNativeCell(5));
 	if (IsValidClient(owner) && IsValidDrone(drone))
 	{
-		float angle[3], aimPos[3], aimVec[3], aimAngle[3], cameraPos[3], droneAngle[3], dronePos[3];
-		GetClientEyeAngles(owner, aimAngle);
-		GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
-		GetForwardPos(dronePos, droneAngle, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
-		CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);	//find where the client is aiming at in relation to the drone
+		float angle[3], aimVec[3], cameraPos[3], location[3], aim[3];
+		DTransform dtran;
+		GetClientEyeAngles(owner, aim);
+		GetEntPropVector(drone, Prop_Send, "m_angRotation", dtran.rot);
+		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dtran.pos);
+		GetForwardPos(dtran.pos, dtran.rot, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
+		CD_GetDroneAimPosition(drone, cameraPos, aim, location);	//find where the client is aiming at in relation to the drone
 
-		MakeVectorFromPoints(pos, aimPos, aimVec); //draw vector from offset position to our aim position
+		MakeVectorFromPoints(transform.pos, location, aimVec); //draw vector from offset position to our aim position
 		GetVectorAngles(aimVec, angle);
 
 		//restrict angle at which projectiles can be fired, not yet working
@@ -400,7 +358,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			angle[1] += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
 		}
 
-		Handle bullet = TR_TraceRayFilterEx(pos, angle, MASK_SHOT, RayType_Infinite, FilterDroneShoot, drone);
+		Handle bullet = TR_TraceRayFilterEx(transform.pos, angle, MASK_SHOT, RayType_Infinite, FilterDroneShoot, drone);
 		if (TR_DidHit(bullet))
 		{
 			int victim = TR_GetEntityIndex(bullet);
@@ -412,7 +370,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			{
 				case CDWeapon_Auto:
 				{
-					CreateTracer(drone, pos, endPos);
+					CreateTracer(drone, transform.pos, endPos);
 				}
 				case CDWeapon_Laser:
 				{
@@ -421,7 +379,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 				}
 				case CDWeapon_SlowFire:
 				{
-					CreateTracer(drone, pos, endPos);
+					CreateTracer(drone, transform.pos, endPos);
 				}
 			}
 
@@ -448,6 +406,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			}
 		}
 	}
+	return 0;
 }
 
 //create a visual bullet tracer
@@ -491,6 +450,8 @@ Action RemoveTarget(Handle timer, any ref)
 	{
 		RemoveEntity(target);
 	}
+
+	return Plugin_Stop;
 }
 
 Action RemoveTracer(Handle timer, any ref)
@@ -500,11 +461,13 @@ Action RemoveTracer(Handle timer, any ref)
 	{
 		RemoveEntity(tracer);
 	}
+
+	return Plugin_Stop;
 }
 
 bool FilterDroneShoot(int entity, int mask, int drone)
 {
-	int owner = DroneInfo[drone].GetOwner();
+	int owner = DroneInfo[drone].owner.get();
 	if (IsValidClient(entity)) //ignore teammates
 	{
 		if (IsValidClient(owner) && GetClientTeam(owner) == GetClientTeam(entity))
@@ -534,27 +497,27 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 {
 	int owner = GetNativeCell(1);
 	int drone = GetNativeCell(2);
-	float pos[3];
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float rot[3];
-	weapon.GetMuzzleTransform(pos, rot);
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform);
 	ProjType projectile = GetNativeCell(4);
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
-	float velocity[3], aimAngle[3], dronePos[3], droneAngle[3], aimPos[3], aimVec[3], cameraPos[3];
+	float velocity[3], aimAngle[3], aimVec[3], cameraPos[3], aim[3], location[3];
+	DTransform dtran;
 	char netname[64], classname[64];
 
 	//Get Spawn Position
-	GetClientEyeAngles(owner, aimAngle);
-	GetEntPropVector(drone, Prop_Send, "m_angRotation", droneAngle);
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dronePos);
-	cameraPos = dronePos;
-	GetForwardPos(cameraPos, droneAngle, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
-	CD_GetDroneAimPosition(drone, cameraPos, aimAngle, aimPos);	//find where the client is aiming at in relation to the drone
+	GetClientEyeAngles(owner, aim);
+	GetEntPropVector(drone, Prop_Send, "m_angRotation", dtran.rot);
+	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", dtran.pos);
+	cameraPos = dtran.pos;
+	GetForwardPos(cameraPos, dtran.rot, 0.0, 0.0, DroneInfo[drone].cameraheight, cameraPos); //Get our camera height relative to our drone's forward vector
+	CD_GetDroneAimPosition(drone, cameraPos, aim, location);	//find where the client is aiming at in relation to the drone
 
-	MakeVectorFromPoints(pos, aimPos, aimVec); //draw vector from offset position to our aim position
+	MakeVectorFromPoints(transform.pos, location, aimVec); //draw vector from offset position to our aim position
 	GetVectorAngles(aimVec, aimAngle);
 
 	if (weapon.inaccuracy)
@@ -588,7 +551,7 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	//teleport to proper position and then spawn
 	SetEntPropEnt(rocket, Prop_Send, "m_hOwnerEntity", owner);
-	TeleportEntity(rocket, pos, aimAngle, velocity);
+	TeleportEntity(rocket, transform.pos, aimAngle, velocity);
 
 	SetVariantInt(team);
 	AcceptEntityInput(rocket, "TeamNum", -1, -1, 0);
@@ -671,15 +634,14 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 	int owner = GetNativeCell(1);
 	DroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3];
-	float angle[3];
-	weapon.GetMuzzleTransform(pos, angle);
+	DTransform transform;
+	weapon.GetMuzzleTransform(transform);
 	ProjType projectile = GetNativeCell(4);
 	char modelname[256];
 	GetNativeString(5, modelname, sizeof modelname);
 	float fuse = GetNativeCell(6);
 	DroneBomb bombEnt;
-	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, pos);
+	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, transform.pos);
 	SetEntPropEnt(bombEnt.bomb, Prop_Send, "m_hOwnerEntity", owner);
 	bombEnt.type = projectile;
 	bombEnt.isBomb = true;
@@ -717,6 +679,8 @@ Action DetonateBombTimer(Handle timer, int bomb)//
 	{
 		BombInfo[bomb].detonate();
 	}
+
+	return Plugin_Stop;
 }
 
 Action BombDelayUpdate(int bomb)
@@ -733,6 +697,8 @@ Action BombDelayUpdate(int bomb)
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 Action BombImpactUpdate(int bomb)
@@ -748,6 +714,8 @@ Action BombImpactUpdate(int bomb)
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 //SDKHook_Touch does not reliably detect when physics props collide with the world.. so we have to check manually
@@ -788,6 +756,8 @@ public any Native_GetDrone(Handle plugin, int args)
 	int client = GetNativeCell(1);
 	int drone = GetClientDrone(client);
 	SetNativeArray(2, DroneInfo[drone], sizeof DroneProp);
+
+	return 0;
 }
 
 void CD_GetDroneAimPosition(int drone, float pos[3], float angle[3], float buffer[3])
@@ -804,7 +774,7 @@ void CD_GetDroneAimPosition(int drone, float pos[3], float angle[3], float buffe
 
 bool FilterDrone(int entity, int mask, int exclude)
 {
-	int owner = DroneInfo[exclude].GetOwner();
+	int owner = DroneInfo[exclude].owner.get();
 	if (IsValidClient(owner) && entity == owner)
 		return false;
 	if (entity == exclude)
@@ -818,6 +788,8 @@ public Action OnPlayerSpawn(Event event, const char[] name, bool dBroad)
 	int client = GetClientOfUserId(event.GetInt("userid"));
 
 	RemoveSpecCamera(client);
+
+	return Plugin_Continue;
 }
 
 public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
@@ -833,10 +805,7 @@ public Action OnPlayerDeath(Event hEvent, const char[] name, bool dBroad)
 			ResetClientView(client);
 		}
 	}
-	//if (IsInDrone[attacker] && IsValidDrone(DroneEnt[attacker] && attacker != client))
-	//{
-	//	CreateSpecCamera(client, DroneEnt[attacker]);
-	//}
+	return Plugin_Continue;
 }
 
 
@@ -846,6 +815,8 @@ void CreateSpecCamera(int client, int drone)
 
 	//spawn the camera anchor
 	int cameraAnchor = CreateEntityByName("prop_dynamic_override");
+	if (cameraAnchor < MaxClients) return;
+
 	DispatchKeyValue(cameraAnchor, "model", "models/empty.mdl");
 
 	DispatchSpawn(cameraAnchor);
@@ -857,10 +828,12 @@ void CreateSpecCamera(int client, int drone)
 	TeleportEntity(cameraAnchor, pos, angle, NULL_VECTOR);
 	SetVariantString("!activator");
 	AcceptEntityInput(cameraAnchor, "SetParent", drone, cameraAnchor, 0);
-	PlayerSpecCameraAnchor[client] = EntIndexToEntRef(cameraAnchor);
+	PlayerSpecCameraAnchor[client].set(cameraAnchor);
 
 	//Now setup the actual camera
 	int camera = CreateEntityByName("prop_dynamic_override");
+	if (camera < MaxClients) return;
+
 	DispatchKeyValue(camera, "model", "models/empty.mdl");
 
 	DispatchSpawn(camera);
@@ -873,8 +846,9 @@ void CreateSpecCamera(int client, int drone)
 	TeleportEntity(camera, pos, angle, NULL_VECTOR);
 	SetVariantString("!activator");
 	AcceptEntityInput(camera, "SetParent", cameraAnchor, camera, 0);
+
 	SetClientViewEntity(client, camera);
-	PlayerSpecCamera[client] = EntIndexToEntRef(camera);
+	PlayerSpecCamera[client].set(camera);
 	SpecDrone[client] = true;
 	PlayerSpecDrone[client] = drone;
 }
@@ -974,6 +948,8 @@ public Action OnRoundStart(Event event, const char[] name, bool dBroad)
 		if (IsValidClient(i) && IsInDrone[i])
 			ResetClientView(i);
 	}
+
+	return Plugin_Continue;
 }
 
 public Action CmdDrone(int client, int args)
@@ -1075,7 +1051,7 @@ public void OnEntityDestroyed(int entity)
 {
 	if (IsValidDrone(entity))
 	{
-		DroneInfo[entity].Clear();
+		DroneInfo[entity].clear();
 	}
 }
 
@@ -1121,7 +1097,7 @@ stock void DroneTakeDamage(DroneProp Drone, int drone, int &attacker, int &infli
 	bool sendEvent = true;
 	if (Drone.dead) return;
 
-	if (attacker == Drone.GetOwner()) //significantly reduce damage if the drone damages itself
+	if (attacker == Drone.owner.get()) //significantly reduce damage if the drone damages itself
 	{
 		damage *= 0.25; //Should probably be a convar
 		sendEvent = false;
@@ -1139,7 +1115,7 @@ stock void DroneTakeDamage(DroneProp Drone, int drone, int &attacker, int &infli
 
 stock void KillDrone(DroneProp Drone, int drone, int attacker, float damage, int weapon)
 {
-	int client = Drone.GetOwner();
+	int client = Drone.owner.get();
 	if (IsValidClient(client))
 		PlayerExitVehicle(client);
 	Drone.health = 0.0;
@@ -1182,16 +1158,16 @@ void SendKillEvent(int drone, int attacker, int weapon)
 }
 */
 
-public void SendDamageEvent(DroneProp Drone, int attacker, float damage, bool crit)
+public void SendDamageEvent(DroneProp drone, int attacker, float damage, bool crit)
 {
-	if (IsValidClient(attacker) && IsValidDrone(Drone.GetDrone()))
+	if (IsValidClient(attacker) && IsValidDrone(drone.hull.get()))
 	{
 		int damageamount = RoundFloat(damage);
-		int health = RoundFloat(Drone.health);
+		int health = RoundFloat(drone.health);
 		Event PropHurt = CreateEvent("npc_hurt", true);
 
 		//setup components for event
-		PropHurt.SetInt("entindex", Drone.GetDrone());
+		PropHurt.SetInt("entindex", drone.hull.get());
 		PropHurt.SetInt("attacker_player", GetClientUserId(attacker));
 		PropHurt.SetInt("damageamount", damageamount);
 		PropHurt.SetInt("health", health - damageamount);
@@ -1203,12 +1179,12 @@ public void SendDamageEvent(DroneProp Drone, int attacker, float damage, bool cr
 
 void RemoveSpecCamera(int client)
 {
-	int camera = EntRefToEntIndex(PlayerSpecCamera[client]);
+	int camera = PlayerSpecCamera[client].get();
 	if (IsValidEntity(camera) && camera > MaxClients)
 	{
 		RemoveEntity(camera);
 	}
-	int anchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+	int anchor = PlayerSpecCameraAnchor[client].get();
 	if (IsValidEntity(anchor) && anchor > MaxClients)
 	{
 		RemoveEntity(anchor);
@@ -1231,16 +1207,16 @@ public void OnGameFrame()
 	}
 }
 
-void DroneTick(DroneProp Drone)
+void DroneTick(DroneProp drone)
 {
-	int drone = Drone.GetDrone();
-	if (!IsValidDrone(drone)) return;
+	int hull = drone.hull.get();
+	if (!IsValidDrone(hull)) return;
 	float pos[3];
-	GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-	float hpRatio = Drone.health / Drone.maxhealth;
+	GetEntPropVector(hull, Prop_Data, "m_vecOrigin", pos);
+	float hpRatio = drone.health / drone.maxhealth;
 	if (hpRatio <= 0.3) //30% or less hp
 	{
-		if (SparkDelay[drone] <= GetGameTime())
+		if (SparkDelay[hull] <= GetGameTime())
 		{
 			float direction[3], sparkAngle[3];
 			for (int i = 0; i < 3; i++)
@@ -1252,14 +1228,14 @@ void DroneTick(DroneProp Drone)
 			GetAngleVectors(sparkAngle, direction, NULL_VECTOR, NULL_VECTOR);
 			TE_SetupMetalSparks(pos, direction);
 			TE_SendToAll();
-			SparkDelay[drone] = GetGameTime() + ClampFloat(hpRatio, 1.0, 0.3);
+			SparkDelay[hull] = GetGameTime() + ClampFloat(hpRatio, 1.0, 0.3);
 		}
 	}
 
-	if (Drone.dead && DroneExplodeDelay[drone] <= GetGameTime())
+	if (drone.dead && DroneExplodeDelay[hull] <= GetGameTime())
 	{
-		DroneExplodeDelay[drone] = FAR_FUTURE;
-		TryRemoveDrone(DroneInfo[drone]);
+		DroneExplodeDelay[hull] = FAR_FUTURE;
+		TryRemoveDrone(drone);
 	}
 }
 
@@ -1280,7 +1256,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				RemoveSpecCamera(client);
 			}
 		}
-		int cameraAnchor = EntRefToEntIndex(PlayerSpecCameraAnchor[client]);
+		int cameraAnchor = PlayerSpecCameraAnchor[client].get();
 		if (IsValidEntity(cameraAnchor) && cameraAnchor > MaxClients)
 		{
 			float angle[3];
@@ -1324,7 +1300,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					case DroneMove_Hover:
 					{
 						if (DroneInfo[drone].viewlocked)
-							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone].turnrate, drone, vAngles);
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone], vAngles);
 
 						GetAngleVectors(vAngles, vVel[1], NULL_VECTOR, NULL_VECTOR); //forward movement
 						if (buttons & IN_FORWARD)
@@ -1381,7 +1357,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 							DroneSpeed[client][v] = ClampFloat(DroneSpeed[client][v], flMaxSpeed);
 						}
 
-						if (!ClientSideMovement(client, buttons) && (flRoll[client] > 0.6 || flRoll[client] < 0.6))
+						if (!ClientSideMovement(buttons) && (flRoll[client] > 0.6 || flRoll[client] < 0.6))
 							flRoll[client] = SetRollTowardsZero(flRoll[client]);
 
 						flRoll[client] = ClampFloat(flRoll[client], 30.0, -30.0);
@@ -1390,7 +1366,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					case DroneMove_Fly: //flying drones can only move forward
 					{
 						if (DroneInfo[drone].viewlocked) //only adjust angles if our view is locked to our client view angles
-							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone].turnrate, drone, vAngles);
+							GetAngleFromTurnRate(cAngles, vPos, droneAngles, DroneInfo[drone], vAngles);
 
 						//specific variables for flying drones
 						float forwardVec[3];
@@ -1493,6 +1469,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			}
 		}
 	}
+	return Plugin_Continue;
 }
 
 //Entering and exiting drones
@@ -1535,7 +1512,7 @@ void UpdateWeaponAngles(DroneWeapon weapon, float angles[3], int drone)
 		if (!IsValidClient(owner)) return;
 
 		int model = weapon.GetWeapon();
-		if (!IsValidEntity(model)) return;
+		if (!IsValidEntity(model) || model <= MaxClients) return;
 
 		float pos[3], rot[3], aimangle[3], aimpos[3], cameraPos[3], aimvec[3];
 
@@ -1558,8 +1535,8 @@ void ResetWeaponRotation(DroneWeapon weapon, float yaw)
 {
 	if (!weapon.fixed)
 	{
-		int model = weapon.GetWeapon();
-		if (IsValidEntity(model))
+		int model = weapon.receiver.get();
+		if (IsValidEntity(model) && model > MaxClients)
 		{
 			float angle[3] = {0.0, 0.0, 0.0};
 			angle[1] = yaw;
@@ -1568,36 +1545,42 @@ void ResetWeaponRotation(DroneWeapon weapon, float yaw)
 	}
 }
 
-void GetAngleFromTurnRate(const float angles[3], float pos[3], float droneAngles[3], float rate, int drone, float bufferAngles[3])
+void GetAngleFromTurnRate(const float angles[3], float pos[3], float droneAngles[3], DroneProp drone, float bufferAngles[3])
 {
-	float forwardPos[3], newDir[3], droneVel[3], bufferAngle[3];
-	GetForwardPos(pos, angles, rate, _, _, forwardPos);
+	//float destination[3]; destination = angles;
+	//LerpAngles(droneAngles, destination, 0.05, bufferAngles);
+	float forwardPos[3], direction[3], forwardvec[3], vel[3];
+	GetForwardPos(pos, angles, drone.turnrate, _, _, forwardPos);
 
-	MakeVectorFromPoints(pos, forwardPos, newDir);
-	GetEntPropVector(drone, Prop_Data, "m_vecAbsVelocity", droneVel);
-	float forwardSpeed = GetVectorLength(droneVel);
-	GetAngleVectors(droneAngles, droneVel, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(droneVel, forwardSpeed);
-	AddVectors(droneVel, newDir, droneVel);
-	NormalizeVector(droneVel, droneVel);
-	GetVectorAngles(droneVel, bufferAngle);
-	bufferAngles = bufferAngle;
+	MakeVectorFromPoints(pos, forwardPos, direction);
+	GetEntPropVector(drone.hull.get(), Prop_Data, "m_vecAbsVelocity", vel);
+	float speed = GetVectorLength(vel);
+
+	GetAngleVectors(droneAngles, forwardvec, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(forwardvec, 3600.0 / drone.turnrate + speed);
+	AddVectors(forwardvec, direction, forwardvec);
+	NormalizeVector(forwardvec, forwardvec);
+	GetVectorAngles(forwardvec, bufferAngles);
+}
+/*
+void LerpAngles(float start[3], float end[3], float time, float buffer[3])
+{
+	for (int i = 0; i != 2; i++)
+	{
+		buffer[i] = start[i] + (end[i] - start[i]) * time;
+		AngleNormalize(buffer[i]);
+	}
 }
 
+stock void AngleNormalize(float &ang)
+{
+	if(ang > 180.0) ang -= 360.0;
+	if(ang <-180.0) ang += 360.0;
+}
+*/
 void FireWeapon(int gunner, int drone, int slot, DroneWeapon weapon)
 {
 	Action result = Plugin_Continue;
-
-	//Play fire sound if one exists
-	if (strlen(weapon.firesound) > 3)
-	{
-		PrecacheSound(weapon.firesound);
-		int wep = weapon.GetWeapon();
-		if (IsValidEntity(wep) && wep > MaxClients)
-			EmitSoundToAll(weapon.firesound, wep); //emit from weapon if physical entity exists
-		else
-			EmitSoundToAll(weapon.firesound, drone); //otherwise just emit from the drone
-	}
 	Call_StartForward(DroneAttack);
 
 	Call_PushCell(drone);
@@ -1608,6 +1591,7 @@ void FireWeapon(int gunner, int drone, int slot, DroneWeapon weapon)
 
 	Call_Finish(result);
 	weapon.SimulateFire(result);
+	//Play fire sound if one exists
 }
 
 float AngleDifference(float droneAngle[3], float aimAngle[3])
@@ -1642,15 +1626,17 @@ stock void AddMultipleVectors(float vec1[3], float vec2[3], float vec3[3] = {0.0
 	newVec = curVec;
 }
 
-stock bool ClientMovementInput(int client, int &buttons)
+/*
+bool ClientMovementInput(int client, int &buttons)
 {
 	if (buttons & IN_FORWARD || buttons & IN_BACK || buttons & IN_MOVELEFT || buttons & IN_MOVERIGHT || buttons & IN_JUMP || buttons & IN_DUCK)
 		return true;
 
 	return false;
 }
+*/
 
-stock bool ClientSideMovement(int client, int &buttons)
+bool ClientSideMovement(int &buttons)
 {
 	if (buttons & IN_MOVELEFT || buttons & IN_MOVERIGHT)
 		return true;
@@ -1658,7 +1644,7 @@ stock bool ClientSideMovement(int client, int &buttons)
 	return false;
 }
 
-stock float SetRollTowardsZero(float roll)
+float SetRollTowardsZero(float roll)
 {
 	if (roll > 0.0)
 		roll -= RollRate;
@@ -1669,7 +1655,7 @@ stock float SetRollTowardsZero(float roll)
 	return roll;
 }
 
-public void ExplodeDrone(int drone)
+void ExplodeDrone(int drone)
 {
 	float dronePos[3];
 	GetEntPropVector(drone, Prop_Send, "m_vecOrigin", dronePos);
@@ -1707,7 +1693,7 @@ stock void ClampVector(float vec[3], float max, float min = 0.0, float vBuffer[3
 	}
 }
 
-stock void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int drone)
+void SpawnDrone(int client, const char[] drone_name, DroneProp Drone, int drone)
 {
 	//PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
@@ -1787,11 +1773,11 @@ void SetupDrone(DroneProp Drone, KeyValues kv, int drone, float pos[3], float an
 void PlayerEnterDrone(int client, DroneProp Drone)
 {
 	IsInDrone[client] = true;
-	DroneRef[client] = Drone.drone; //Reference to a reference, no need to use GetDrone()
+	DroneRef[client] = Drone.hull;
 	Drone.PlayerPilot(client);
 
 	float angles[3], pos[3];
-	int drone = Drone.GetDrone();
+	int drone = Drone.hull.get();
 	if (IsValidDrone(drone))
 	{
 		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
@@ -1822,7 +1808,7 @@ void SetupWeapon(KeyValues kv, DroneWeapon weapon, int drone)
 	kv.GetString("model", modelname, sizeof modelname);
 	kv.GetString("sound", firesound, sizeof firesound);
 
-	weapon.drone = EntIndexToEntRef(drone);
+	weapon.parent.set(drone);
 	kv.GetVector("offset", offset);
 	weapon.SetOffset(offset, false);
 	kv.GetVector("proj_offset", projoffset);
@@ -1854,6 +1840,8 @@ void SetupViewPosition(int client, int drone, DroneProp Drone, const float pos[3
 	float rPos[3];
 
 	int camera = CreateEntityByName("prop_dynamic_override");
+	if (camera <= MaxClients) return;
+
 	DispatchKeyValue(camera, "model", "models/empty.mdl"); //models/weapons/w_models/w_baseball.mdl
 
 	DispatchSpawn(camera);
@@ -1869,7 +1857,7 @@ void SetupViewPosition(int client, int drone, DroneProp Drone, const float pos[3
 	AcceptEntityInput(camera, "SetParent", drone, camera, 0);
 
 	SetClientViewEntity(client, camera);
-	Drone.camera = EntIndexToEntRef(camera);
+	Drone.camera.set(camera);
 }
 
 //Makes the player invisible and sets the model to something without hitboxes
@@ -1924,7 +1912,7 @@ stock void SetPlayerSeatPosition(int client, int drone, KeyValues kv, const char
 
 int GetClientDrone(int client)
 {
-	int drone = EntRefToEntIndex(DroneRef[client]);
+	int drone = DroneRef[client].get();
 	if (IsValidDrone(drone))
 		return drone;
 
@@ -1959,10 +1947,10 @@ void RemoveWearables(int client)
 
 void SetVehicleUnoccupied(DroneProp drone, int pilot)
 {
-	drone.owner = INVALID_ENT_REFERENCE;
+	drone.owner.clear();
 	drone.occupied = false;
 
-	int camera = drone.GetCamera();
+	int camera = drone.camera.get();
 	if (IsValidEntity(camera) && camera > MaxClients)
 		RemoveEntity(camera);
 
@@ -1979,7 +1967,7 @@ void PlayerExitVehicle(int client)
 {
 	int drone = GetClientDrone(client);
 	SetVehicleUnoccupied(DroneInfo[drone], client);
-	DroneRef[client] = INVALID_ENT_REFERENCE;
+	DroneRef[client].clear();
 
 	SetVariantString("");
 	AcceptEntityInput(client, "SetCustomModel");
@@ -1993,9 +1981,9 @@ void PlayerExitVehicle(int client)
 	TeleportEntity(client, pos, NULL_VECTOR, NULL_VECTOR);
 }
 
-stock bool TryRemoveDrone(DroneProp Drone)
+bool TryRemoveDrone(DroneProp Drone)
 {
-	int drone = Drone.GetDrone();
+	int drone = Drone.hull.get();
 	if (IsValidDrone(drone))
 	{
 		ExplodeDrone(drone);
@@ -2010,34 +1998,34 @@ int GetDroneCamera(int drone)
 {
 	if (IsValidDrone(drone))
 	{
-		int camera = DroneInfo[drone].GetCamera();
+		int camera = DroneInfo[drone].camera.get();
 		return camera;
 	}
 	return -1;
 }
 
-stock int CreateParticle(int iEntity = 0, char[] sParticle, bool bAttach = false, float pos[3]={0.0, 0.0, 0.0})
+stock int CreateParticle(int entity = 0, char[] name, bool attach = false, float pos[3]={0.0, 0.0, 0.0})
 {
-	int iParticle = CreateEntityByName("info_particle_system");
-	if (IsValidEdict(iParticle))
+	int particle = CreateEntityByName("info_particle_system");
+	if (IsValidEntity(particle) && particle)
 	{
-		if (iEntity > 0)
-			GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", pos);
+		if (entity > 0)
+			GetEntPropVector(entity, Prop_Data, "m_vecOrigin", pos);
 
-		TeleportEntity(iParticle, pos, NULL_VECTOR, NULL_VECTOR);
-		DispatchKeyValue(iParticle, "effect_name", sParticle);
+		TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
+		DispatchKeyValue(particle, "effect_name", name);
 
-		if (bAttach)
+		if (attach && entity)
 		{
 			SetVariantString("!activator");
-			AcceptEntityInput(iParticle, "SetParent", iEntity, iParticle, 0);
+			AcceptEntityInput(particle, "SetParent", entity, particle, 0);
 		}
 
-		DispatchSpawn(iParticle);
-		ActivateEntity(iParticle);
-		AcceptEntityInput(iParticle, "Start");
+		DispatchSpawn(particle);
+		ActivateEntity(particle);
+		AcceptEntityInput(particle, "Start");
 	}
-	return iParticle;
+	return particle;
 }
 
 bool InRange(int client, int drone)
@@ -2049,7 +2037,7 @@ bool InRange(int client, int drone)
 	return (GetVectorDistance(cPos, dPos) <= 300.0);
 }
 
-stock bool IsValidDrone(int drone)
+bool IsValidDrone(int drone)
 {
 	if (IsValidEntity(drone) && drone > MaxClients)
 	{
