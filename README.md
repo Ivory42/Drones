@@ -65,7 +65,6 @@ This plugin comes with several forwards and natives to use with other plugins. R
 ## Known Issues
   - Drones can phase through geometry at certain speeds
   - Ground based drones are not properly tested/functioning at this time
-  - Spawning drones seems to create invisible non-networked entities that cause visual bugs with hitscan attacks
 
 
 ## Planned Featurs
