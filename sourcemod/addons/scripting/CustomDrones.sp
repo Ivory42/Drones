@@ -1029,7 +1029,7 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 	char Directory[PLATFORM_MAX_PATH];
 	char FileName[PLATFORM_MAX_PATH];
 	FileType type;
-	
+
 	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
 	Handle hDir = OpenDirectory(Directory);
 
@@ -1037,11 +1037,11 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 	{
 		if (type != FileType_File) continue;
 		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
-		if (StrEqual(drone_name, FileName))
+		if (StrEqual(name, FileName))
 		{
-			//PrintToChatAll("Found drone %s", drone_name);
-			int drone = CreateEntityByName("prop_physics_override");
-			SpawnDrone(client, drone_name, DroneInfo[drone], drone);
+			PrintToChatAll("Found drone %s", drone_name);
+			FDrone drone;
+			drone = SpawnDrone(client, name);
 			CloseHandle(hDir);
 			return;
 		}
@@ -1051,6 +1051,16 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 	//PrintToChatAll("Unable to find drone %s", drone_name);
 	CloseHandle(hDir);
 	return;
+}
+
+/**
+ * Spawn a drone after creating the info for it
+ * 
+ * @return     Return description
+ */
+FDrone SpawnDrone()
+{
+	
 }
 
 /******************
