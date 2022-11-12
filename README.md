@@ -1,6 +1,10 @@
 # Custom Drones for TF2
 
-## 10/2022: I plan to completely rewrite this plugin somewhat soon. It's currently stable but the code really needs to be cleaned up.
+# This branch is currently NOT stable and is far from complete, the Release branch is currently stable and OKAY to use, but may be harder to follow.
+
+## Version 2.0 of Custom Drones. At this point the plugin is more like custom vehicles but I'm not going to bother changing the name as they can still be used as drones as well.
+
+This rewrite completely changes everything about the codebase to make it easier to follow and more modern looking. Structs are used to create a more object oriented look and make the entire plugin easier to follow.
 
 Spawnable drones that can be piloted by the player that owns it. There is an example drone under `configs/drones/example_drone.txt`. Drone plugins are placed under `plugins/drones/` and a template can be found under `scripting/drones/example_drone.sp`.
 
