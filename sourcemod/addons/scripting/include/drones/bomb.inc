@@ -7,7 +7,7 @@
 
 enum struct FDroneBomb
 {
-	FComponent component;
+	FComponent Component;
 
 	bool Valid()
 	{

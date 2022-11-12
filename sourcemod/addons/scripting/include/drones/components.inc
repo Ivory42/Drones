@@ -5,8 +5,8 @@
 
 #include <sdktools>
 #include <tf2_stocks>
-#include <ilib>
 #include "dronetypes.inc"
+#include <ilib>
 
 #define MAXATTACHMENTS 12
 #define MAXWEAPONS 6

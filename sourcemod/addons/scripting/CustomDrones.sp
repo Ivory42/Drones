@@ -13,6 +13,17 @@ GlobalForward DroneAttack;
 // Player drone reference
 FObject DroneRef[MAXPLAYERS+1];
 
+// Drone information for the given entity
+FDrone Drone[2049];
+
+// Weapons tied to drones
+FDroneWeapon DroneWeapons[2049][MAXWEAPONS];
+
+// Seats tied to drones
+FDroneSeat DroneSeats[2049][MAXSEATS];
+
+int ExplosionSprite;
+
 #include "CustomDroneMovement.sp"
 //#include "CustomDroneWeapons.sp"
 
@@ -40,8 +51,26 @@ public void OnPluginStart()
 	DroneExited = CreateGlobalForward("CD_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
 	DroneRemoved = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
-	DroneDestroy = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
+	DroneDestroyed = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
 	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, gunner, weapon, slot, plugin
+}
+
+/***************
+ * Event Hooks
+
+****************/
+
+Action OnRoundStart(Event event, const char[] name, bool dBroad)
+{
+	FClient client;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		client.Set(i);
+		if (client.Valid())
+			ResetClientView(i);
+	}
+
+	return Plugin_Continue;
 }
 
 // Prevent resupplying from causing issues with players piloting drones
@@ -62,12 +91,12 @@ Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
 	client = ConstructClient(event.GetInt("userid"), true);
 	attacker = ConstructClient(event.GetInt("attacker"), true);
 
-	if (IsValidClient(client) && IsInDrone[client])
+	if (client.Valid() && PlayerInDrone(client))
 	{
-		int drone = GetClientDrone(client);
-		if (IsValidDrone(drone))
+		FDrone drone = GetClientDrone(client);
+		if (drone.Valid())
 		{
-			KillDrone(DroneInfo[drone], drone, attacker, 0.0, 0);
+			KillDrone(drone, drone.GetHull(), attacker, 0.0, 0);
 			ResetClientView(client);
 		}
 	}
@@ -170,7 +199,7 @@ public int Native_FireWeapon(Handle plugin, int args)
 	{
 		int droneId = drone.Get();
 
-		if (IsValidDrone(droneId)
+		if (IsValidDrone(droneId))
 		{
 			int slot = Drone[droneId].activeWeapon;
 
@@ -853,7 +882,218 @@ bool FilterDrone(int entity, int mask, int exclude)
 	return true;
 }
 
-/*
-* Drone Creation
-*/
+/****************
+* Client Functions
+****************/
 
+// Reset player variables
+public void OnClientPostAdminCheck(int client)
+{
+	Player[client].InDrone = false;
+}
+
+public void OnClientDisconnect(int clientId)
+{
+	FDrone drone;
+	FClient owner;
+
+	owner.Set(clientId);
+	drone = GetClientDrone(owner);
+
+	if (drone.Valid())
+	{
+		int droneId = drone.Get();
+		int seatIndex = GetPlayerSeat(owner, DroneSeats[droneId]);
+
+		PlayerExitVehicle(drone, DroneSeats[droneId][seatIndex], owner);
+	}
+}
+
+
+/****************
+* Drone Creation
+****************/
+
+// When a new entity is created, lets make sure it is not initialized as a drone
+public void OnEntityDestroyed(int entityId)
+{
+	FObject entity;
+	entity.Set(entityId);
+
+	if (IsValidDrone(entity))
+		Drone[entityId].Clear();
+}
+
+Action CmdDrone(int clientId, int args)
+{
+	char arg1[32];
+	GetCmdArg(1, arg1, sizeof(arg1));
+	char target_name[MAX_TARGET_LENGTH];
+	int target_list[MAXPLAYERS];
+	int	target_count;
+	bool targets = true;
+	bool tn_is_ml;
+	if ((target_count = ProcessTargetString(
+			arg1,
+			clientId,
+			target_list,
+			MAXPLAYERS,
+			0,
+			target_name,
+			sizeof(target_name),
+			tn_is_ml)) <= 0)
+	{
+		targets = false;
+	}
+
+	FClient client;
+	if (targets)
+	{
+		for (int i = 0; i < target_count; i++)
+		{
+			int target = target_list[i];
+
+			client.Set(i);
+
+			if (client.Alive())
+				OpenMenu(client);
+		}
+	}
+	else
+	{
+		client.Set(clientId);
+
+		if (client.Alive())
+			OpenMenu(client);
+	}
+	return Plugin_Handled;
+}
+
+// Open our drone menu so we can select a drone to spawn
+void OpenMenu(FClient client)
+{
+	Menu DroneMenu = new Menu(DroneMenuCallback, MENU_ACTIONS_ALL);
+	DroneMenu.SetTitle("Drone Selection");
+
+	char droneDir[PLATFORM_MAX_PATH];
+	char fileName[PLATFORM_MAX_PATH];
+
+	FileType type;
+	BuildPath(Path_SM, droneDir, sizeof droneDir, "configs/drones");
+
+	Handle dir = OpenDirectory(droneDir);
+	while (ReadDirEntry(dir, fileName, sizeof fileName, type))
+	{
+		char dirName[PLATFORM_MAX_PATH];
+		Format(dirName, sizeof dirName, "%s/%s", droneDir, fileName);
+		if (FileExists(dirName))
+		{
+			ReplaceString(fileName, sizeof fileName, ".txt", "", false);
+			DroneMenu.AddItem(fileName, fileName);
+		}
+	}
+	CloseHandle(dir);
+	SetMenuExitButton(DroneMenu, true);
+	DroneMenu.Display(client.Get(), 60);
+}
+
+// Callback handler for drone menu
+int DroneMenuCallback(Menu menu, MenuAction action, int client, int param1)
+{
+	switch(action)
+	{
+		case MenuAction_Select:
+		{
+			char info[32];
+			menu.GetItem(param1, info, sizeof(info));
+			
+			CreateDroneByName(ConstructClient(client), info);
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+	return 0;
+}
+
+/**
+ * Spawn a drone by name and force enter the given client
+ * 
+ * @param owner     Client owning this drone. Use GetWorld() if spawning with no owner
+ * @param name      Name of the drone to spawn
+ * @return          Object containing the drone information
+ */
+FDrone CreateDroneByName(FClient owner, const char[] name)
+{
+	char Directory[PLATFORM_MAX_PATH];
+	char FileName[PLATFORM_MAX_PATH];
+	FileType type;
+	
+	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
+	Handle hDir = OpenDirectory(Directory);
+
+	while (ReadDirEntry(hDir, FileName, sizeof(FileName), type))
+	{
+		if (type != FileType_File) continue;
+		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
+		if (StrEqual(drone_name, FileName))
+		{
+			//PrintToChatAll("Found drone %s", drone_name);
+			int drone = CreateEntityByName("prop_physics_override");
+			SpawnDrone(client, drone_name, DroneInfo[drone], drone);
+			CloseHandle(hDir);
+			return;
+		}
+		LogMessage("Found Config %s", FileName);
+	}
+
+	//PrintToChatAll("Unable to find drone %s", drone_name);
+	CloseHandle(hDir);
+	return;
+}
+
+/******************
+* Drone Removal
+******************/
+
+
+
+/**
+ * Kills the given drone
+ * 
+ * @param drone        Drone object being killed
+ * @param hull         Physical entity object of the drone
+ * @param attacker     Client that killed the drone, can be the world
+ * @param damage       Damage dealt
+ * @param weapon       Weapon used
+ */
+void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, int weapon)
+{
+	FClient owner;
+	owner = CastToClient(drone.GetOwner());
+
+	if (owner.Valid())
+	{
+		int droneId = hull.Get();
+		int seatIndex = GetPlayerSeat(owner, DroneSeats[droneId]);
+
+		PlayerExitVehicle(drone, DroneSeats[droneId][seatIndex], owner);
+	}
+
+	drone.Health = 0.0;
+	drone.Alive = false;
+	drone.RemoveTimer.Set(3.0);
+
+	hull.AttachParticle("burningplayer_flyingbits");
+
+	Call_StartForward(DroneDestroyed);
+
+	Call_PushArray(hull, sizeof FObject);
+	Call_PushArray(owner, sizeof FClient);
+	Call_PushArray(attacker, sizeof FClient);
+	Call_PushFloat(damage);
+	Call_PushString(drone.Plugin);
+
+	Call_Finish();
+}

@@ -4,7 +4,6 @@
 #define _customdrones_included
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
-#define MAXSEATS 10
 
 #include "drones/components.inc"
 
@@ -13,102 +12,91 @@ bool IsDrone[2049];
 /*
 *   Struct storing information for a drone object
 */
-
 enum struct FDrone
 {
-	// Entity reference of this drone
-	FObject hull;
+	FObject Hull; // Entity reference of this drone
 
-	// Entity reference of the camera for this drone
-	FObject camera;
+	FObject Camera; // Entity reference of the camera for this drone
 
-	// Client currently piloting this drone
-	FClient owner;
+	FClient Owner; // Client currently piloting this drone
 
-	// Optional model to use when drone is destroyed
-	char destroyedModel[256];
+	char DestroyedModel[256]; // Optional model to use when drone is destroyed
 
-	// Display name of this drone
-	char name[64];
+	char Name[64]; // Display name of this drone
 
-	// Camera height for this drone
-	float cameraHeight;
+	float CameraHeight; // Camera height for this drone
 
 
 	/*
 	* Drone stats
 	*/
 
-	float health;
-	float maxHealth;
+	float Health; // Current health of this drone
 
-	// Max speed this drone can move at
-	float maxSpeed;
+	float MaxHealth; // Max health of this drone
 
-	// If non-zero, override our max speed with this value
-	float speedoverride;
+	float MaxSpeed; // Max speed this drone can move at
 
-	// How quickly this drone reaches its max speed
-	float acceleration;
+	float Speedoverride; // If non-zero, override our max speed with this value
 
-	// Weapon count
-	int weapons;
-	int activeWeapon;
-	int oldWeapon;
-	FTimer weaponChangeTimer;
+	float Acceleration; // How quickly this drone reaches its max speed
 
-	// Delay after being destroyed when drone gets removed
-	FTimer removeTimer;
+	int Weapons; // Number of weapons this drone has
 
-	// Logic plugin for basic drone functions
-	char plugin[32];
+	int ActiveWeapon; // Index of this drone's active weapon
 
-	// Config containing drone's info
-	char config[64];
+	int OldWeapon; // Previous weapon switched from
 
-	// Is this drone alive
-	bool alive;
+	FTimer WeaponChangeTimer; // Delay between weapon changes
 
-	// Whether this drone should rotate towards the camera or not
-	bool viewlocked;
+	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
 
-	// Is there currently a player piloting this drone
-	bool occupied;
+	char Plugin[32]; // Logic plugin for basic drone functions
+
+	char Config[64]; // Config containing drone's info
+
+	bool Alive; // Is this drone alive
+
+	bool Viewlocked; // Whether this drone should rotate towards the camera or not
+
+	bool Occupied; // Is there currently a player piloting this drone
 
 	// Returns whether or not this drone's index is valid or not
 	bool Valid()
 	{
-		return this.hull.Valid();
+		return this.Hull.Valid();
 	}
 
 	// Returns the entity index this drone is tied to
 	int Get()
 	{
-		return this.hull.Get();
+		return this.Hull.Get();
 	}
 
+	// Returns the FObject of this drone's hull
 	FObject GetHull()
 	{
-		return this.hull();
+		return this.Hull;
 	}
 
 	// Get the owner of this drone
 	FObject GetOwner()
 	{
-		return this.hull.GetOwner();
+		return this.Hull.GetOwner();
 	}
 
 	// Set the owner of this drone
 	void SetOwner(FObject owner)
 	{
-		this.hull.SetOwner(owner);
+		this.Hull.SetOwner(owner);
 	}
 
-	void PlayerEnterDrone(FClient client)
+	// Clears this drone's reference
+	void Clear()
 	{
-		this.owner = client;
-		SetEntityMoveType(client.Get(), MOVETYPE_NONE);
-		this.occudpied = true;
+		this.Hull.ref = INVALID_ENT_REFERENCE;
+		this.Camera.ref = INVALID_ENT_REFERENCE;
+		this.Owner.Clear();
 	}
 }
 
@@ -118,14 +106,20 @@ enum struct FDrone
 
 enum struct FPlayer
 {
-	// Client's current drone
-	FDrone Drone;
+	FDrone Drone; // Drone this player is currently in
 
-	bool InDrone;
+	bool InDrone; // Is this player in a drone
 
+	// Checks if this player is in a drone
 	bool ValidDrone()
 	{
 		return this.drone.Valid();
+	}
+
+	// Gets the drone this player is currently in
+	FDrone GetDrone()
+	{
+		return this.Drone;
 	}
 }
 FPlayer Player[MAXPLAYERS+1];
@@ -395,14 +389,14 @@ forward void CD_OnWeaponChanged(int drone, int pilot, DroneWeapon weapon, int sl
 /**
  * Forward called after a drone is destroyed but not yet removed
  *
- * @param drone				Drone Index
- * @param pilot				Client index of pilot, can be invalid
- * @param attacker			Client index of attacker
+ * @param drone				Drone object
+ * @param pilot				Client object piloting the drone, can be null
+ * @param attacker			Client object that killed the drone, can be null
  * @param damage			Damage dealt to drone
  * @param plugin_name		Name of plugin defining drone logic
  *
  */
-forward void CD_OnDroneDestroyed(int drone, int pilot, int attacker, float damage, const char[] plugin_name);
+forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker, float damage, const char[] plugin_name);
 
 /**
  * Forward called after a weapon is fired
@@ -518,24 +512,48 @@ stock void CreateTracer(FVector start, FVector end)
 }
 
 // Returns the current drone being piloted by this player
-stock FObject GetClientDrone(FClient client)
+stock FDrone GetClientDrone(FClient client)
 {
-	FObject drone;
+	FDrone drone;
 	if (client.Valid())
 	{
 		int clientId = client.Get();
 
-		FObject check;
-		check = Player[clientId].GetDrone();
-
-		if (IsValidDrone(check))
-			drone = check;
+		drone = Player[clientId].GetDrone();
 	}
 
 	return drone;
 }
 
-// Checks if the given client is in a drone or not
+/**
+ * Checks if the given client is in a drone and returns the seat index
+ * 
+ * @param client     Client to check
+ * @return           Return seat type occupied by this client.
+ */
+stock int GetPlayerSeat(FClient client, FDroneSeat[] seats)
+{
+	int id = client.Get();
+
+	if (Player[id].InDrone)
+	{
+		for (int i = 0; i < MAXSEATS; i++)
+		{
+			if (seats[i].Occupied)
+			{
+				FClient occupy;
+				occupy = seats[i].GetOccupier;
+
+				if (occupy.Get() == client.Get())
+					return i;
+			}
+		}
+	}
+
+	return 0;
+}
+
+// Returns if the player is in a drone or not
 stock bool PlayerInDrone(FClient client)
 {
 	int id = client.Get();
@@ -553,4 +571,59 @@ stock bool IsValidDrone(FObject entity)
 		return IsDrone[id];
 	}
 	return false;
+}
+
+// Sets the given drone as the client's currently occupied drone
+stock void SetClientDrone(FClient client, FDrone drone)
+{
+	int clientId = client.Get();
+
+	Player[clientId].Drone = drone;
+	Player[clientId].InDrone = true;
+}
+
+// Clears the drone info for the given client
+stock void ClearClientDrone(FClient client)
+{
+	int clientId = client.Get();
+
+	Player[clientId].Drone.Clear();
+	Player[clientId].InDrone = false;
+}
+
+// Exits a player from the given drone and frees up the given seat
+stock void PlayerExitVehicle(FDrone drone, FDroneSeat seat, FClient client)
+{
+	if (drone.Valid() && client.Valid())
+	{
+		seat.Occupied = false;
+		seat.Occupier.Clear();
+
+		ClearClientDrone(client);
+
+		SetEntityMoveType(client.Get(), MOVETYPE_WALK);
+
+		switch (seat.Type)
+		{
+			case Seat_Pilot: drone.Owner.Clear();
+		}
+	}
+}
+
+// Enters a player into a specific seat of the given drone
+stock void PlayerEnterVehicle(FDrone drone, FDroneSeat seat, FClient client)
+{
+	if (drone.Valid() && client.Valid())
+	{
+		seat.Occupied = true;
+		seat.Occupier = client;
+
+		SetClientDrone(client, drone);
+
+		SetEntityMoveType(client.Get(), MOVETYPE_NONE);
+		switch (seat.Type)
+		{
+			case Seat_Pilot: drone.Owner = client;
+		}
+	}
 }
