@@ -1,0 +1,21 @@
+#if defined _customdrones_bombs_included
+ #endinput
+#endif
+#define _customdrones_bombs_included
+
+#include "components.inc"
+
+enum struct FDroneBomb
+{
+	FComponent component;
+
+	bool Valid()
+	{
+		return this.component.Valid();
+	}
+
+	int Get()
+	{
+		return this.component.Get();
+	}
+}

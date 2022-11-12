@@ -2,783 +2,555 @@
  #endinput
 #endif
 #define _customdrones_included
-#define MAXWEAPONS 6
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 #define MAXSEATS 10
 
-#include <sdktools>
-#include <entity>
+#include "drones/components.inc"
 
-//Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
-enum ProjType
+bool IsDrone[2049];
+
+/*
+*   Struct storing information for a drone object
+*/
+
+enum struct FDrone
 {
-	DroneProj_None,
-	//rockets
-	DroneProj_Rocket,	//Default rocket
-	DroneProj_Energy,	//Cow mangler rocket
-	DroneProj_Sentry,	//Sentry rocket salvo
-	DroneProj_Impact, 	//Rocket which deals impact damage with no explosion
+	// Entity reference of this drone
+	FObject hull;
 
-	//Bombs
-	DroneProj_Bomb,		//Default bomb, detonates on fuse timer which begins upon spawn
-	DroneProj_BombDelayed,	//Fuse timer starts after touching a surface
-	DroneProj_BombImpact,	//Bomb detonates upon impact rather than a fuse timer
+	// Entity reference of the camera for this drone
+	FObject camera;
 
-	//misc
-	DroneProj_Custom	//Custom projectile type for defining logic within sub plugins
-};
+	// Client currently piloting this drone
+	FClient owner;
 
-enum CDMoveType
-{
-	DroneMove_Hover,	//hovering, moves in all directions
-	DroneMove_Fly,		//flying, can only move forward
-	DroneMove_Ground,	//ground wheeled vehicles, can only steer while moving
-	DroneMove_Tracked	//ground tracked vehicles, such as tanks, can steer without moving
-};
+	// Optional model to use when drone is destroyed
+	char destroyedModel[256];
 
-enum CDDmgType
-{
-	DmgType_Hitscan,	//hitscan generic damage
-	DmgType_Rangeless, 	//hitscan damage with no falloff
+	// Display name of this drone
+	char name[64];
 
-	//Custom damage type for plugins
-	DmgType_Custom
-};
+	// Camera height for this drone
+	float cameraHeight;
 
-enum CDWeaponType
-{
-	CDWeapon_Auto,		//high fire rate weapons
-	CDWeapon_SlowFire,	//slow fire weapons
-	CDWeapon_Laser		//laser weapons
-};
 
-enum CDWeaponState
-{
-	WeaponState_Active,
-	WeaponState_Reloading,
-	WeaponState_Destroyed,
-	WeaponState_Custom
-}
+	/*
+	* Drone stats
+	*/
 
-///
-/// Struct to store all weapon info for specific drone weapons.
-/// These can be accessed in a drone's plugin on specific forwards.
-/// Do NOT directly access the properties 'weapon' or 'drone'.
-///	- Use the methods GetWeapon() and GetDrone() instead.
-///
-
-enum struct DroneWeapon
-{
-	//entity references - DO NOT ACCESS DIRECTLY
-	int weapon;
-	int drone;
-
-	//weapon stats
-	int ammo;
-	int maxammo;
-	float firerate;
-	float attackdelay;
-	float damage;
-	float projspeed;
-	float inaccuracy;
-	float reloadtime;
-	float reloaddelay;
-	char firesound[PLATFORM_MAX_PATH];
-
-	//weapon state
-	CDWeaponState state;
-
-	//max pitch and yaw
-	float pitch;
-	float yaw;
-	bool fixed;
-
-	//appearance
-	char model[PLATFORM_MAX_PATH];
-	char name[MAX_WEAPON_LENGTH];
-	float offset[3];
-	float projoffset[3]; //offset based on weapon offset - this does NOT offset from the drone's world position
-
-	//weapon parameters
-	void SetName(char[] name)
-	{
-		FormatEx(this.name, MAX_WEAPON_LENGTH, name);
-	}
-	void SetModel(char[] model)
-	{
-		FormatEx(this.model, PLATFORM_MAX_PATH, model);
-	}
-	void SetFire(char[] firesound)
-	{
-		FormatEx(this.firesound, PLATFORM_MAX_PATH, firesound);
-	}
-	void SetOffset(float offset[3], bool proj)
-	{
-		for (int i = 0; i < 3; i++)
-		{
-			if (proj)
-				this.projoffset[i] = offset[i];
-			else
-				this.offset[i] = offset[i];
-		}
-	}
-
-	//Weapon functions
-	void Spawn() //spawns the weapon and saves its reference
-	{
-		int wep = CreateEntityByName("prop_dynamic_override");
-		float pos[3], rot[3];
-		int drone = EntRefToEntIndex(this.drone);
-		if (!IsValidEntity(drone)) LogError("Could not spawn drone weapon: Drone entity invalid!");
-
-		DispatchKeyValue(wep, "model", this.model);
-		GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-		GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-		float offset[3];
-		FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
-		GetOffsetPos(pos, rot, offset, pos);
-		TeleportEntity(wep, pos, rot, NULL_VECTOR);
-		DispatchSpawn(wep);
-		SetVariantString("!activator");
-		AcceptEntityInput(wep, "SetParent", drone, wep, 0);
-
-		this.weapon = EntIndexToEntRef(wep);
-	}
-	int GetWeapon() //returns entity being used as this weapon
-	{
-		return EntRefToEntIndex(this.weapon);
-	}
-	int GetDrone()
-	{
-		return EntRefToEntIndex(this.drone);
-	}
-	void SimulateFire(Action action)
-	{
-		this.attackdelay = GetGameTime() + this.firerate;
-		if (this.ammo == -1)
-			return;
-
-		switch (action)
-		{
-			case Plugin_Continue:
-			{
-				this.ammo--;
-				if (this.ammo == 0)
-					this.SimulateReload();
-			}
-		}
-	}
-	void Simulate() //weapon tick event
-	{
-		if (this.reloaddelay <= GetGameTime() && this.ammo == 0 && this.state == WeaponState_Reloading)
-		{
-			this.ammo = this.maxammo;
-			this.state = WeaponState_Active;
-		}
-	}
-	void SimulateReload()
-	{
-		if (this.ammo < this.maxammo)
-		{
-			this.ammo = 0;
-			this.reloaddelay = GetGameTime() + this.reloadtime;
-			this.state = WeaponState_Reloading;
-		}
-	}
-	void GetWeaponTransform(float pos[3], float rot[3])	//retrieve this weapon's physical location in the world. Works regardless of whether the weapon has a model or not
-	{
-		int drone = this.GetDrone();
-		if (IsValidEntity(drone))
-		{
-			GetEntPropVector(drone, Prop_Data, "m_vecOrigin", pos);
-			GetEntPropVector(drone, Prop_Send, "m_angRotation", rot);
-			float offset[3];
-			FormatVector(offset, this.offset[0], this.offset[1], this.offset[2]); //sigh..
-			GetOffsetPos(pos, rot, offset, pos);
-			int weapon = this.GetWeapon();
-			if (IsValidEntity(weapon))
-			{
-				GetEntPropVector(weapon, Prop_Send, "m_angRotation", rot);
-			}
-		}
-	}
-	void GetMuzzleTransform(float pos[3], float rot[3])	//retrieve's this weapon's muzzle location in the world.
-	{
-		this.GetWeaponTransform(pos, rot);
-		float offset[3];
-		FormatVector(offset, this.projoffset[0], this.projoffset[1], this.projoffset[2]); //sigh..
-		GetOffsetPos(pos, rot, offset, pos);
-	}
-	bool CanFire(bool force)	//Can this weapon fire
-	{
-		if (force) //ignore attack delay
-			return (this.ammo != 0 && this.state == WeaponState_Active);
-		else
-		{
-			if (this.ammo != 0 && this.attackdelay <= GetGameTime() && this.state == WeaponState_Active)
-				return true;
-		}
-		return false;
-	}
-	void GetName(char[] buffer, int size)
-	{
-		FormatEx(buffer, size, this.name);
-	}
-}
-
-enum struct DroneProp
-{
-	//entity references - do not access without converting to indexes
-	int drone;
-	int owner;
-	int camera;
-
-	//appearance
-	char model[PLATFORM_MAX_PATH];
-	char destroyedmodel[PLATFORM_MAX_PATH];
-	char name[MAX_DRONE_LENGTH];
-	float cameraheight;
-
-	//stats
 	float health;
-	float maxhealth;
-	float speedoverride;
-	float maxspeed;
-	float acceleration;
-	float turnrate;
+	float maxHealth;
 
-	//logic
-	CDMoveType movetype;
+	// Max speed this drone can move at
+	float maxSpeed;
+
+	// If non-zero, override our max speed with this value
+	float speedoverride;
+
+	// How quickly this drone reaches its max speed
+	float acceleration;
+
+	// Weapon count
+	int weapons;
+	int activeWeapon;
+	int oldWeapon;
+	FTimer weaponChangeTimer;
+
+	// Delay after being destroyed when drone gets removed
+	FTimer removeTimer;
+
+	// Logic plugin for basic drone functions
 	char plugin[32];
-	char config[32];
-	bool dead;
+
+	// Config containing drone's info
+	char config[64];
+
+	// Is this drone alive
+	bool alive;
+
+	// Whether this drone should rotate towards the camera or not
 	bool viewlocked;
+
+	// Is there currently a player piloting this drone
 	bool occupied;
 
-	//weapons
-	int weapons;
-	int activeweapon;
-	int oldweapon;
-	float changecooldown;
-
-	void Clear()
+	// Returns whether or not this drone's index is valid or not
+	bool Valid()
 	{
-		this.drone = INVALID_ENT_REFERENCE;
-		this.owner = INVALID_ENT_REFERENCE;
-		this.camera = INVALID_ENT_REFERENCE;
-		this.occupied = false;
+		return this.hull.Valid();
 	}
-	void SetConfig(const char[] config)
+
+	// Returns the entity index this drone is tied to
+	int Get()
 	{
-		FormatEx(this.config, 32, config);
+		return this.hull.Get();
 	}
-	int GetDrone()
+
+	FObject GetHull()
 	{
-		return EntRefToEntIndex(this.drone);
+		return this.hull();
 	}
-	int GetOwner()
+
+	// Get the owner of this drone
+	FObject GetOwner()
 	{
-		return EntRefToEntIndex(this.owner);
+		return this.hull.GetOwner();
 	}
-	int GetCamera()
+
+	// Set the owner of this drone
+	void SetOwner(FObject owner)
 	{
-		return EntRefToEntIndex(this.camera);
+		this.hull.SetOwner(owner);
 	}
-	int Spawn(KeyValues config, int drone, float pos[3], float angles[3], float vel[3])
+
+	void PlayerEnterDrone(FClient client)
 	{
-		//Spawn drone and get its index
-		//int drone = CreateEntityByName("prop_physics_override");
-
-		//Establish drone attributes
-		config.GetString("name", this.name, MAX_DRONE_LENGTH);
-		config.GetString("model", this.model, PLATFORM_MAX_PATH);
-		config.GetString("destroyed_model", this.destroyedmodel, PLATFORM_MAX_PATH, this.name);
-		this.maxhealth = config.GetFloat("health", 100.0);
-		this.maxspeed = config.GetFloat("speed", 300.0);
-		this.acceleration = config.GetFloat("acceleration", 5.0);
-		this.speedoverride = 0.0;
-		this.turnrate = config.GetFloat("turn_rate", 80.0);
-
-		char movetype[64];
-		config.GetString("movetype", movetype, sizeof movetype, "drone_hover");
-		this.movetype = GetMoveType(movetype);
-
-		config.GetString("plugin", this.plugin, 32, "INVALID_PLUGIN");
-		this.cameraheight = config.GetFloat("camera_height", 30.0);
-
-		//drone appearance
-		DispatchKeyValue(drone, "model", this.model);
-		DispatchKeyValue(drone, "health", "900");
-
-		if(HasEntProp(drone, Prop_Data, "m_takedamage"))
-			SetEntProp(drone, Prop_Data, "m_takedamage", 1);
-		else
-			LogMessage("Tried to spawn a drone with no m_takedamage netprop!");
-		this.health = this.maxhealth;
-		this.dead = false;
-
-		DispatchSpawn(drone);
-		ActivateEntity(drone);
-		TeleportEntity(drone, pos, angles, vel);
-
-		this.oldweapon = 1;
-		this.activeweapon = this.oldweapon;
-		//PrintToChat(client, "Successfully created drone (%s) with owner: %i", drone_name, DroneOwner[hDrone]);
-
-		this.drone = EntIndexToEntRef(drone);
-		PrintToChatAll("Drone reference set to entity: %i", drone);
-		return drone;
-	}
-	void PlayerPilot(int client)
-	{
-		this.owner = EntIndexToEntRef(client);
-		SetEntityMoveType(client, MOVETYPE_NONE);
-		this.occupied = true;
-	}
-	void PlayerEnterSeat(int client, const char[] seatname)
-	{
-		//
+		this.owner = client;
+		SetEntityMoveType(client.Get(), MOVETYPE_NONE);
+		this.occudpied = true;
 	}
 }
 
-//To be reworked, does not work for now
-enum struct DroneBomb
+///
+/// Player struct for organizing owned drones
+///
+
+enum struct FPlayer
 {
-	int bomb;
-	int drone;
-	int explosion;
-	bool touched;
-	bool primed;
-	bool isBomb;
-	float fuseTime;
-	float tickTime;
-	char damage[8];
-	char radius[8];
-	ProjType type;
+	// Client's current drone
+	FDrone Drone;
 
-	void create(int ownerEnt, const char[] model, float baseDamage, float fuse, float dmgRadius, float pos[3])
+	bool InDrone;
+
+	bool ValidDrone()
 	{
-		this.bomb = CreateEntityByName("prop_physics_override");
-		SetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity", ownerEnt);
-		DispatchKeyValue(this.bomb, "Model", model);
-		Format(this.damage, 8, "%.1f", baseDamage);
-		Format(this.radius, 8, "%.1f", dmgRadius);
-		this.fuseTime = fuse;
-		TeleportEntity(this.bomb, pos, NULL_VECTOR, NULL_VECTOR);
-		DispatchSpawn(this.bomb);
-		ActivateEntity(this.bomb);
-		//SetEntityModel(this.bomb, model);
-		SetEntProp(this.bomb, Prop_Data, "m_nNextThinkTick", -1);
-	}
-	void detonate() //detonate our bomb
-	{
-		float detPos[3];
-		GetEntPropVector(this.bomb, Prop_Data, "m_vecOrigin", detPos);
-		int ownerPlayer = GetEntPropEnt(this.bomb, Prop_Send, "m_hOwnerEntity");
-		AcceptEntityInput(this.bomb, "Kill");
-
-		//clear variables
-		this.isBomb = false;
-		this.touched = false;
-		this.primed = false;
-
-		//setup explosion
-		this.explosion = CreateEntityByName("env_explosion");
-		SetEntPropEnt(this.explosion, Prop_Send, "m_hOwnerEntity", ownerPlayer);
-		DispatchKeyValue(this.explosion, "iMagnitude", this.damage);
-		DispatchKeyValue(this.explosion, "iRadiusOverride", this.radius);
-		TeleportEntity(this.explosion, detPos, NULL_VECTOR, NULL_VECTOR);
-		DispatchSpawn(this.explosion);
-		ActivateEntity(this.explosion);
-		AcceptEntityInput(this.explosion, "Explode");
+		return this.drone.Valid();
 	}
 }
+FPlayer Player[MAXPLAYERS+1];
 
 
 /****************************************************************
-
 	NATIVES
-
 ****************************************************************/
 
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
  *
- * @param1 drone - Drone to toggle view lock on
- * @return new view lock value
+ * @param drone		Drone to toggle view lock on
+ * @return			new view lock value
  */
-
 native bool CD_ToggleViewLocked(int drone);
 
 /**
  * Fire a hitscan attack from a drone's weapon
  *
- * @param1 owner - Client index who owns the drone
- * @param2 drone - Drone firing the attack
- * @param3 weapon - Weapon object firing this attack
- * @param4 dmgType - Drone damage type to use for attack | CDDmgType
- * @param5 type - Drone weapon type this bullet is fire from | CDWeaponType
+ * @param owner			Client index who owns the drone
+ * @param drone			Drone index firing the attack
+ * @param weapon		Weapon object firing this attack
+ * @param dmgType		Drone damage type to use for attack
  */
-
-native void CD_FireBullet(int owner, int drone, any weapon[sizeof DroneWeapon], CDDmgType dmgType, CDWeaponType type);
+native void CD_FireBullet(int owner, int drone, any weapon[sizeof FDroneWeapon], EDamageType dmgType);
 
 /**
  * Override max speed of the given drone
  *
- * @param1 drone - Drone to override speed of
- * @param2 speed - Speed override
+ * @param drone		Drone index to override speed of
+ * @param speed		Speed override
  */
-
 native void CD_OverrideMaxSpeed(int drone, float speed);
 
 /**
  * Fire the current drone's active weapon
  *
- * @param1 owner - client owning the drone
- * @param2 drone - Drone firing the weapon
+ * @param owner		client index owning the drone
+ * @param drone		Drone index firing the weapon
  */
-
 native void CD_FireActiveWeapon(int owner, int drone);
-
 
 /**
  * Deal damage to the given drone
  *
- * @param1 drone - Drone to damage
- * @param2 attacker - Entity responsible the damage
- * @param3 inflictor - Entity that dealt the damage
- * @param4 damage - Damage to deal
- * @param5 crit - Is this damage critical
+ * @param drone			Drone index to damage
+ * @param attacker		Entity index responsible for the damage
+ * @param inflictor		Entity index that dealt the damage
+ * @param damage		Damage value to deal
+ * @param crit			Is this damage critical
  */
-
 native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
- * Get Drone Active Weapon
+ * Get a copy of a drone's active weapon
  *
- * @param1 drone - Drone ent index
- * @param2 weapon - Struct to store the weapon info in
+ * @param drone		Drone index
+ * @param weapon	Struct to store the weapon info in
  *
- * @return active slot index
+ * @return		active slot index
  */
-
-native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof DroneWeapon]);
+native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof FDroneWeapon]);
 
 /**
- * Get Drone Weapon from Slot
+ * Get a copy of a drone's weapon in a given slot
  *
- * @param1 drone - Drone ent index
- * @param2 slot - Which slot to get weapon info from
- * @param3 weapon - Struct to store the weapon info in
+ * @param drone		Drone index
+ * @param slot		Which slot to get weapon info from
+ * @param weapon	Struct to store the weapon info in
  *
  */
-
-native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof DroneWeapon]);
+native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof FDroneWeapon]);
 
 /**
- * Set a drone's active weapon
+ * Set a drone's active weapon slot
  *
- * @param1 drone - Drone ent index
- * @param2 weapon - weapon index to swap to
+ * @param drone		Drone index
+ * @param weapon	weapon index to swap to
  */
-
 native void CD_SetDroneActiveWeapon(int drone, int weapon);
 
 /**
- * Get Current Health of drone
+ * Get a drone's current health
  *
- * @param1 drone - Drone ent index
+ * @param drone		Drone index
  *
- * @return current health of drone
+ * @return		current health of the drone
  */
-
 native int CD_GetDroneHealth(int drone);
 
 /**
- * Get Max Health of drone
+ * Get a drone's max health value
  *
- * @param1 drone - Drone ent index
+ * @param drone		Drone index
  *
- * @return max health of drone
+ * @return		max health of the drone
  */
-
 native int CD_GetDroneMaxHealth(int drone);
 
 /**
- * Spawn a drone by name for a specific client
+ * Spawns a drone by config name and forces the given client to pilot it
  *
- * @param1 client - Client index to spawn drone for
- * @param2 drone_name - Name of drone to spawn
+ * @param client		Client index to spawn drone for
+ * @param drone_name	Name of drone to spawn
  *
- * @return max health of drone
  */
-
 native void CD_SpawnDroneByName(int client, const char[] drone_name);
 
 /**
- * Sets a weapon's reload state based on a fire delay
+ * Sets a drone weapon's reload state based on a fire delay
  *
- * @param1 drone - Ent index of drone firing
- * @param2 weapon - Slot of weapon being fired
- * @param3 override - Override reload time if non-zero
+ * @param drone			Drone index
+ * @param weapon		Slot of weapon being fired
+ * @param override		Override reload time if non-zero
  *
  */
-
 native void CD_SetWeaponReloading(int drone, int weapon, float override = 0.0);
 
 /**
  * Retrieves a float parameter from the given drone config
  *
- * @param1 config - config file to check
- * @param2 key - subkey to retrieve value from
- * @param3 weapon - if non-zero, pull attribute for this weapon index
+ * @param config		config file to check
+ * @param key			subkey to retrieve value from
+ * @param weapon		if non-zero, pull attribute for this specific weapon slot
  *
+ * @return 				Float value of drone attribute, or value of a weapon attribute if given a slot
  */
-
 native float CD_GetParamFloat(const char[] config, const char[] key, int weapon = 0);
 
 /**
  * Retrieves an integer parameter from the given drone config
  *
- * @param1 config - config file to check
- * @param2 key - subkey to retrieve value from
- * @param3 weapon - if non-zero, pull attribute for this weapon index
+ * @param config		config file to check
+ * @param key			subkey to retrieve value from
+ * @param weapon		if non-zero, pull attribute for this specific weapon slot
  *
+ * @return 				Integer value of drone attribute, or value of a weapon attribute if given a slot
  */
-
 native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
 
 /**
- * Retrieves an string parameter from the given drone config
+ * Retrieves a string parameter from the given drone config
  *
- * @param1 config - config file to check
- * @param2 key - subkey to retrieve value from
- * @param3 weapon - if non-zero, pull attribute for this weapon index
- * @param4 buffer - buffer to store string in
- * @param5 size - buffer size
+ * @param config		config file to check
+ * @param key			subkey to retrieve value from
+ * @param weapon		if non-zero, pull attribute for this specific weapon slot
+ * @param buffer		buffer to store string in
+ * @param size			buffer size
  *
  * @return true on success
  */
-
 native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
-
-/**
- * Retrieves the attack sound for the given weapon
- *
- * @param1 config - config file to check
- * @param2 weapon - if non-zero, pull attribute for this weapon index
- * @param3 buffer - buffer to store string in
- * @param4 size - buffer size
- *
- * @return true on success
- */
-
-native bool CD_GetWeaponAttackSound(const char[] config, int weapon = 0, char[] buffer, int size);
 
 /**
  * Spawns a rocket based projectile for drones to fire
  *
- * @param1 owner - Player owning the drone
- * @param2 drone - Drone entity index
- * @param3 weapon - Weapon object firing the attack
- * @param4 projectile - Type of rocket to spawn
- * @param5 speed - Speed of the rocket
+ * @param owner			Client index owning the drone
+ * @param drone			Drone index
+ * @param weapon		Weapon object firing the attack
+ * @param projectile	Type of rocket to spawn
  *
- * @return entity index of spawned rocket
+ * @return				entity index of spawned rocket
  *
  */
-
-native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile);
+native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile);
 
 /**
- * Spawns a physics prop to use as a bomb projectile
+ * Spawns a physics prop to use as a bomb projectile - CURRENTLY NOT WORKING
  *
- * @param1 owner - Client damage should credited to
- * @param2 drone - Drone firing the projectile
- * @param3 weapon - Weapon object firing the attack
- * @param4 projectile - Projectile type to use for this bomb
- * @param5 modelname - Model for bomb to use
- * @param6 fuse - Fuse time on bomb
- * @param7 bomb - buffer to store bomb struct
+ * @param owner			Client index owning the drone
+ * @param drone			Drone firing the projectile
+ * @param weapon		Weapon object firing the attack
+ * @param projectile	Projectile type to use for this bomb - Determines function of fuse timer
+ * @param modelname		Model for bomb to use
+ * @param fuse			Fuse time on bomb
+ * @param bomb			buffer to store bomb struct
  *
- * @return true on success
+ * @return				true on success
  *
  */
-
-native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof DroneWeapon], ProjType projectile, const char[] modelname, float fuse = 6.0, any bomb[sizeof DroneBomb]);
+native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile, const char[] modelname, float fuse = 6.0, any bomb[sizeof FDroneBomb]);
 
 
 /**
- * Retrieves the client's drone struct
+ * Retrieves a copy of this client's drone information
  *
- * @param1 client - Client index owning the drone
- * @param2 drone - Buffer struct to store the drone into
+ * @param client	Client index owning the drone
+ * @param drone		Buffer struct to store the drone into
  *
  */
-
-native float CD_GetClientDrone(int client, any drone[sizeof DroneProp]);
+native void CD_GetClientDrone(int client, any drone[sizeof FDrone]);
 
 /**
  * Determines whether an entity is a drone
  *
- * @param1 entity - entity to check
+ * @param entity	entity to check
  *
  */
-
 native bool CD_IsValidDrone(int entity);
 
+
+
 /****************************************************************
-
 	FORWARDS
-
 ****************************************************************/
 
 /**
  * Forward called after a drone spawns
  *
- * @param1 drone - Drone object being spawned
- * @param2 plugin_name - Name of plugin defined in config
- * @param3 config - Config for this drone
+ * @param drone				Drone object being spawned - by reference
+ * @param plugin_name		Name of plugin defined in config
+ * @param config			Config for this drone
  */
+forward void CD_OnDroneCreated(FDrone drone, const char[] plugin_name, const char[] config);
 
-forward void CD_OnDroneCreated(DroneProp drone, const char[] plugin_name, const char[] config);
+/**
+ * Forward called when a weapon is spawned and attached to a drone
+ *
+ * @param drone				Drone owning the weapon - by reference
+ * @param weapon			Weapon object that was spawned - by reference
+ * @param plugin_name		Name of plugin defining this weapon's logic
+ * @param config			Config for the owning drone
+*/
+forward void CD_OnWeaponCreated(FDrone drone, FDroneWeapon weapon, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a player enters a drone
  *
- * @param1 drone - Drone object being spawned
- * @param2 client - Client index of player
- * @param3 seat - Seat player is entering
- * @param4 plugin_name - Name of plugin defined in config
- * @param5 config - Config for this drone
+ * @param drone				Drone object being entered - by reference
+ * @param client			Client index of the player
+ * @param seat				Seat player is entering
+ * @param plugin_name		Name of plugin defined for this drone
+ * @param config			Config for this drone
  */
-
-forward void CD_OnPlayerEnterDrone(DroneProp drone, int client, int seat, const char[] plugin_name, const char[] config);
+forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a player exits a drone
  *
- * @param1 drone - Drone object being spawned
- * @param2 client - Client index of player
- * @param3 seat - Seat player was in
+ * @param drone		Drone object being exited - by reference
+ * @param client	Client index of player
+ * @param seat		Seat player was in
  */
-
 forward void CD_OnPlayerExitDrone(DroneProp drone, int client, int seat);
 
 /**
  * Forward called after a drone is removed
  *
- * @param1 drone - Ent index of drone
- * @param2 plugin_name - Name of plugin defined in config
+ * @param drone				Drone index being removed
+ * @param plugin_name		Name of plugin defined in config
  */
-
 forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
 
 /**
  * Forward called after a drone switches weapons
  *
- * @param1 drone - Ent index of drone
- * @param2 pilot - Client index of pilot
- * @param3 weapon - Weapon object being switched to
- * @param4 slot - Weapon slot being switched to
- * @param5 plugin_name - Name of plugin defined in config
+ * @param drone				Drone index
+ * @param pilot				Client index of owning player
+ * @param weapon			Weapon object being switched to
+ * @param slot				Weapon slot being switched to
+ * @param weapon_logic		Name of plugin defining weapon logic
+ * @param drone_logic		Name of plugin defining drone logic
  */
-
-forward void CD_OnWeaponChanged(int drone, int pilot, DroneWeapon weapon, int slot, const char[] plugin_name);
+forward void CD_OnWeaponChanged(int drone, int pilot, DroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
  *
- * @param1 drone - Ent index of drone
- * @param2 pilot - Client index of pilot, can be invalid
- * @param3 attacker - Client index of attacker
- * @param4 damage - Damage dealt to drone
- * @param5 plugin_name - Name of plugin defined in config
+ * @param drone				Drone Index
+ * @param pilot				Client index of pilot, can be invalid
+ * @param attacker			Client index of attacker
+ * @param damage			Damage dealt to drone
+ * @param plugin_name		Name of plugin defining drone logic
  *
  */
-
 forward void CD_OnDroneDestroyed(int drone, int pilot, int attacker, float damage, const char[] plugin_name);
 
 /**
  * Forward called after a weapon is fired
  *
- * @param1 drone - Ent index of drone
- * @param2 gunner - Client index of player operating the weapon
- * @param3 weapon - Weapon object that is being fired
- * @param4 slot - Weapon slot being used
- * @param4 plugin_name - Name of plugin defined in config
+ * @param drone				Drone index
+ * @param gunner			Client index of player operating the weapon
+ * @param weapon			Weapon object that is being fired
+ * @param slot				Weapon slot being used
+ * @param weapon_logic		Name of plugin defining weapon logic
+ * @param drone_logic		Name of plugin defining drone logic
+ *
+ * @return					How to handle ammo consumption: Anything above Plugin_Continue will not consume ammo
  */
+forward Action CD_OnDroneAttack(int drone, int gunner, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
 
-forward Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin_name);
 
-/*************
 
-STOCKS
-
-*************/
-
-//vectors in structs are annoying, so using this to "format" a vector as needed
-stock void FormatVector(float vec[3], float x, float y, float z)
-{
-	vec[0] = x;
-	vec[1] = y;
-	vec[2] = z;
-}
+/****************************************************************
+	STOCKS
+****************************************************************/
 
 //converts a string into a CDMoveType
-stock CDMoveType GetMoveType(const char[] movetype)
+stock EMoveType GetMoveType(const char[] movetype)
 {
 	if (StrEqual(movetype, "drone_hover"))
-		return DroneMove_Hover;
+		return MoveType_Hover;
 	else if (StrEqual(movetype, "drone_fly"))
-		return DroneMove_Fly;
+		return MoveType_Fly;
 	else if (StrEqual(movetype, "drone_ground"))
-		return DroneMove_Ground;
+		return MoveType_Ground;
+	else if (StrEqual(movetype, "drone_custom"))
+		return MoveType_Custom;
 
-	return DroneMove_Hover;
+	return MoveType_Hover; // Fallback to hover if not a valid entry
 }
 
-stock void GetForwardPos(float origin[3], const float angles[3], float distance, float sideDistance = 0.0, float upDistance = 0.0, float buffer[3])
+/*
+*	Get a position offset from the given origin relative to the given angle
+*
+* @param origin		Starting position to check offset on
+* @param angles		Angle to dictate how the offset is calculated
+* @param offset		Vector to offset the given origin by in respect to the given angle
+*/
+
+stock FVector GetOffsetPos(const FVector origin, const FRotator angles, const FVector offset)
 {
-	float dir[3];
+	FVector direction, result;
+	result = origin;
 
-	GetAngleVectors(angles, dir, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(dir, distance);
-	AddVectors(origin, dir, buffer);
+	direction = angles.GetForwardVector();
+	direction.Scale(offset.x);
+	result.Add(direction);
 
-	GetAngleVectors(angles, NULL_VECTOR, dir, NULL_VECTOR);
-	NegateVector(dir);
-	ScaleVector(dir, sideDistance);
-	AddVectors(buffer, dir, buffer);
+	direction = angles.GetRightVector();
+	direction.Negate();
+	direction.Scale(offset.y);
+	result.Add(direction);
 
-	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
-	ScaleVector(dir, upDistance);
-	AddVectors(buffer, dir, buffer);
+	direction = angles.GetUpVector();
+	direction.Scale(offset.z);
+	result.Add(direction);
+
+	return result;
 }
 
-void GetOffsetPos(float origin[3], float angles[3], any offset[3], float buffer[3])
+/*
+* Create a visual bullet tracer between two positions. The spawned entities are automatically removed
+*
+* @param start		Origin of the bullet tracer
+* @param end		Position where the bullet will travel to
+*
+*/
+stock void CreateTracer(FVector start, FVector end)
 {
-	float dir[3];
+	FObject target;
+	target.Create("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
 
-	GetAngleVectors(angles, dir, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(dir, offset[0]);
-	AddVectors(origin, dir, buffer);
+	char targetname[64];
 
-	GetAngleVectors(angles, NULL_VECTOR, dir, NULL_VECTOR);
-	NegateVector(dir);
-	ScaleVector(dir, offset[1]);
-	AddVectors(buffer, dir, buffer);
+	Format(targetname, sizeof targetname, "target%i", target.Get());
 
-	GetAngleVectors(angles, NULL_VECTOR, NULL_VECTOR, dir);
-	ScaleVector(dir, offset[2]);
-	AddVectors(buffer, dir, buffer);
+	target.SetKeyValue("targetname", targetname);
+
+	target.SetModel("models/empty.mdl");
+
+	target.Teleport(end, FRotator(), FVector());
+	target.Spawn();
+
+	FObject tracer;
+	tracer.Create("env_gunfire"); //create the actual tracer
+
+	tracer.SetKeyValue("target", targetname);
+	
+	tracer.SetKeyValue("minburstsize", "1");
+	tracer.SetKeyValue("maxburstsize", "1");
+
+	tracer.SetKeyValue("minburstdelay", "5.0");
+	tracer.SetKeyValue("maxburstdelay", "10.0");
+
+	tracer.SetKeyValue("rateoffire", "1.0");
+	tracer.SetKeyValue("collisions", "1");
+	tracer.SetKeyValue("spread", "0");
+
+	tracer.Teleport(start, FRotator(), FVector());
+
+	tracer.Spawn();
+	tracer.Activate();
+
+	TeleportEntity(tracer, start, NULL_VECTOR, NULL_VECTOR);
+
+	target.KillOnDelay(0.5);
+	trace.KillOnDelay(0.5);
 }
 
-stock bool IsValidClient(int client)
+// Returns the current drone being piloted by this player
+stock FObject GetClientDrone(FClient client)
 {
-    if (!( 1 <= client <= MaxClients ) || !IsClientInGame(client))
-        return false;
+	FObject drone;
+	if (client.Valid())
+	{
+		int clientId = client.Get();
 
-    return true;
+		FObject check;
+		check = Player[clientId].GetDrone();
+
+		if (IsValidDrone(check))
+			drone = check;
+	}
+
+	return drone;
+}
+
+// Checks if the given client is in a drone or not
+stock bool PlayerInDrone(FClient client)
+{
+	int id = client.Get();
+
+	return Player[id].InDrone;
+}
+
+// Returns true if the given FObject is a drone
+stock bool IsValidDrone(FObject entity)
+{
+	if (entity.Valid())
+	{
+		int id = entity.Get();
+
+		return IsDrone[id];
+	}
+	return false;
 }
