@@ -1,30 +1,10 @@
 #pragma semicolon 1
 #include <customdrones>
 
-GlobalForward DroneCreated;
-GlobalForward DroneCreatedWeapon;
-GlobalForward DroneEntered;
-GlobalForward DroneExited;
-GlobalForward DroneRemoved;
-GlobalForward DroneDestroyed;
-GlobalForward DroneChangeWeapon;
-GlobalForward DroneAttack;
-
-// Player drone reference
-FObject DroneRef[MAXPLAYERS+1];
-
-// Drone information for the given entity
-FDrone Drone[2049];
-
-// Weapons tied to drones
-FDroneWeapon DroneWeapons[2049][MAXWEAPONS];
-
-// Seats tied to drones
-FDroneSeat DroneSeats[2049][MAXSEATS];
-
 int ExplosionSprite;
 
 #include "CustomDroneMovement.sp"
+#include "CustomDroneProperties.sp"
 //#include "CustomDroneWeapons.sp"
 
 public Plugin MyInfo = {
@@ -42,8 +22,6 @@ public void OnPluginStart()
 	HookEvent("teamplay_round_start", OnRoundStart);
 	HookEvent("post_inventory_application", OnPlayerResupply);
 
-	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
-
 	//Forwards
 	DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_String); //drone struct, plugin, config
 	DroneCreatedWeapon = CreateGlobalForward("CD_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_String); //drone, weapon, weapon plugin, config
@@ -52,7 +30,78 @@ public void OnPluginStart()
 	DroneRemoved = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
 	DroneDestroyed = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
-	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, gunner, weapon, slot, plugin
+	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Cell, Param_String, Param_String); //drone, gunner, weapon, slot, weapon plugin, drone plugin
+}
+
+public void OnMapStart()
+{
+	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
+}
+
+public void OnConfigsExecuted()
+{
+	LoadConfigs();
+}
+
+void LoadConfigs()
+{
+	char DroneDir[PLATFORM_MAX_PATH];
+	char FileName[PLATFORM_MAX_PATH];
+	char PathName[PLATFORM_MAX_PATH];
+	int droneCount, pluginCount;
+	FileType type;
+	BuildPath(Path_SM, DroneDir, sizeof DroneDir, "configs/drones");
+
+	if (!DirExists(DroneDir))
+		SetFailState("Drones directory (%s) does not exist!", DroneDir);
+
+	Handle dir = OpenDirectory(DroneDir);
+	while (ReadDirEntry(dir, FileName, sizeof FileName, type))
+	{
+		if (type != FileType_File) continue;
+		Format(PathName, sizeof PathName, "%s/%s", DroneDir, FileName);
+
+		KeyValues kv = new KeyValues("Drone");
+		if (!kv.ImportFromFile(PathName))
+		{
+			LogMessage("Unable to open %s. It will be excluded from drone list.", PathName);
+			CloseHandle(dir);
+			delete kv;
+			continue;
+		}
+		if (!kv.JumpToKey("plugin"))
+		{
+			LogMessage("Drone config %s does not have a specified plugin, please specify a plugin for this drone!", PathName);
+			CloseHandle(dir);
+			delete kv;
+			continue;
+		}
+		LogMessage("Found Drone Config: %s", FileName);
+		droneCount++;
+		kv.Rewind();
+		delete kv;
+	}
+
+	CloseHandle(dir);
+
+	char directory[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, directory, sizeof directory, "plugins/drones");
+	if (!DirExists(directory))
+		SetFailState("Plugin directory (%s) does not exist!", directory);
+
+	dir = OpenDirectory(directory);
+
+	while (ReadDirEntry(dir, FileName, sizeof FileName, type))
+	{
+		if (type != FileType_File) continue;
+		if (StrContains(FileName, ".smx") == -1) continue;
+		Format(FileName, sizeof FileName, "drones/%s", FileName);
+		//ServerCommand("sm plugins load %s", FileName);
+		pluginCount++;
+	}
+	CloseHandle(dir);
+
+	LogMessage("Custom Drones loaded successfully with %i drones and %i plugins.", droneCount, pluginCount);
 }
 
 /***************
@@ -67,7 +116,7 @@ Action OnRoundStart(Event event, const char[] name, bool dBroad)
 	{
 		client.Set(i);
 		if (client.Valid())
-			ResetClientView(i);
+			ResetClientView(client);
 	}
 
 	return Plugin_Continue;
@@ -143,745 +192,6 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 ********************************************************************************/
 
-public any Native_ViewLock(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-	
-	if (drone.Valid())
-	{
-		if (IsValidDrone(drone.Get()))
-		{
-			int droneId = drone.Get();
-			Drone[droneId].viewlocked = !Drone[droneId].viewlocked;
-		}
-		else
-			ThrowNativeError(017, "Entity index %i is not a valid drone", drone);
-
-		return DroneInfo[droneId].viewlocked;
-	}
-	else
-		ThrowNativeError(017, "Entity index %i is not valid!", drone.Get());
-
-	return false;
-}
-
-public int Native_OverrideMaxSpeed(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	float speed = GetNativeCell(2);
-
-	if (drone.Valid())
-	{
-		int droneId = drone.Get();
-		if (IsValidDrone(droneId))
-			Drone[droneId].speedoverride = speed;
-		else
-		   ThrowNativeError(017, "Entity index %i is not a valid drone", drone); 
-	}
-	else
-		ThrowNativeError(017, "Entity index %i is not valid!", drone.Get());
-
-	return 0;
-}
-
-public int Native_FireWeapon(Handle plugin, int args)
-{
-	FClient owner;
-	FObject drone;
-
-	owner = FClient(GetNativeCell(1), false);
-	drone = FObject(GetNativeCell(2));
-
-	if (owner.Valid() && drone.Valid())
-	{
-		int droneId = drone.Get();
-
-		if (IsValidDrone(droneId))
-		{
-			int slot = Drone[droneId].activeWeapon;
-
-			if (DroneWeapons[droneId][slot].CanFire(true))
-				FireWeapon(owner, drone, slot, DroneWeapons[droneId][slot]);
-		}
-	}
-
-	return 0;
-}
-
-public int Native_DroneTakeDamage(Handle plugin, int args)
-{
-	FObject drone, inflictor;
-	FClient attacker;
-
-	drone = FObject(GetNativeCell(1));
-	attacker = FClient(GetNativeCell(2));
-	inflictor = FObject(GetNativeCell(3));
-
-	float damage = GetNativeCell(4);
-
-	bool crit = view_as<bool>(GetNativeCell(5));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-
-		DroneTakeDamage(Drone[droneId], drone, attacker, inflictor, damage, crit);
-	}
-
-	return 0;
-}
-
-public int Native_ValidDrone(Handle plugin, int args)
-{
-	if (IsValidDrone(FObject(GetNativeCell(1))))
-		return true;
-
-	return false;
-}
-
-public int Native_GetDroneHealth(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-		return RoundFloat(Drone[droneId].health);
-	}
-
-	return 0;
-}
-
-public int Native_GetDroneMaxHealth(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-		return RoundFloat(Drone[droneId].maxHealth);
-	}
-
-	return 0;
-}
-
-public any Native_GetDroneWeapon(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-		int slot = GetNativeCell(2);
-
-		SetNativeArray(3, DroneWeapons[droneId][slot], sizeof FDroneWeapon);
-	}
-}
-
-public any Native_GetDroneActiveWeapon(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-		SetNativeArray(2, DroneWeapons[droneId][Drone[droneId].activeWeapon], sizeof FDroneWeapon);
-	}
-
-	return 0;
-}
-
-public int Native_SetDroneWeapon(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-
-		int slot = GetNativeCell(2);
-
-		Drone[droneId].activeWeapon = slot;
-	}
-
-	return 0;
-}
-
-public int Native_SpawnDroneName(Handle plugin, int args)
-{
-	FClient client;
-	client = FClient(GetNativeCell(1));
-
-	char name[128];
-	GetNativeString(2, name, sizeof(name));
-
-	TryCreateDrone(client, name);
-}
-
-public int Native_SetWeaponReload(Handle plugin, int args)
-{
-	FObject drone;
-	drone = FObject(GetNativeCell(1));
-
-	if (IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-		int slot = GetNativeCell(2);
-		float delay = GetNativeCell(3);
-
-		if (!delay)
-			delay = DroneWeapons[droneId][slot].reloadTime;
-
-		DroneWeapons[droneId][slot].SimulateReload();
-	}
-}
-
-public any Native_GetFloatParam(Handle plugin, int args)
-{
-	float result;
-
-	char config[64], key[64], weapon[64];
-
-	int slot = GetNativeCell(3);
-
-	GetNativeString(1, config, sizeof config);
-	GetNativeString(2, key, sizeof key);
-	
-	// TODO - Store keyvalues in a global array so we don't have to keep creating new ones
-	KeyValues drone = new KeyValues("Drone");
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
-	drone.ImportFromFile(path);
-
-	if (slot)
-	{
-		drone.JumpToKey("weapons");
-		Format(weapon, sizeof weapon, "weapon%i", slot);
-		drone.JumpToKey(weapon);
-	}
-	result = drone.GetFloat(key);
-	delete drone;
-
-	return result;
-}
-
-public any Native_GetIntParam(Handle plugin, int args)
-{
-	int result;
-
-	char config[64], key[64], weapon[64];
-
-	int slot = GetNativeCell(3);
-
-	GetNativeString(1, config, sizeof config);
-	GetNativeString(2, key, sizeof key);
-
-	KeyValues drone = new KeyValues("Drone");
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
-	drone.ImportFromFile(path);
-
-	if (slot)
-	{
-		drone.JumpToKey("weapons");
-		Format(weapon, sizeof weapon, "weapon%i", slot);
-		drone.JumpToKey(weapon);
-	}
-	result = drone.GetNum(key);
-	delete drone;
-
-	return result;
-}
-
-public any Native_GetString(Handle plugin, int args)
-{
-	char config[64], key[64], weapon[64];
-
-	int slot = GetNativeCell(3);
-
-	GetNativeString(1, config, sizeof config);
-	GetNativeString(2, key, sizeof key);
-
-	int size = GetNativeCell(5);
-	char[] result = new char[size];
-
-	KeyValues drone = new KeyValues("Drone");
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", config);
-	drone.ImportFromFile(path);
-
-	if (slot)
-	{
-		drone.JumpToKey("weapons");
-		Format(weapon, sizeof weapon, "weapon%i", slot);
-		drone.JumpToKey(weapon);
-	}
-	drone.GetString(key, result, size);
-	delete drone;
-
-	SetNativeString(4, result, size);
-}
-
-public any Native_HitscanAttack(Handle plugin, int args)
-{
-	FClient owner;
-	FObject drone;
-
-	owner = FClient(GetNativeCell(1));
-	drone = FObject(GetNativeCell(2));
-
-	FDroneWeapon weapon;
-	GetNativeArray(3, weapon, sizeof FDroneWeapon);
-	
-	FTransform spawn;
-
-	spawn = weapon.GetMuzzleTransform(); //get our weapon's muzzle position
-
-	EDamageType dmgType = view_as<EDamageType>(GetNativeCell(4));
-
-	if (owner.Valid() && IsValidDrone(drone))
-	{
-		int droneId = drone.Get();
-
-		float angle[3], aimPos[3], aimVec[3], aimAngle[3], cameraPos[3], droneAngle[3], dronePos[3];
-
-		FVector aimPos, aimVec, cameraPos, dronePos;
-		FRotator angle, aimAngle, droneAngle;
-		
-		aimAngle = owner.GetEyeAngles();
-
-		droneAngle = drone.GetAngles();
-		dronePos = drone.GetPosition();
-
-		FVector offset;
-		offset = FVector(0.0, 0.0, Drone[droneId].cameraHeight);
-
-		cameraPos = GetOffsetPos(dronePos, droneAngle, offset); //Get our camera height relative to our drone's forward vector
-
-		aimPos = GetDroneAimPosition(drone, cameraPos, aimAngle);	//find where the client is aiming at in relation to the drone
-
-		Vector_MakeFromPoints(pos, aimPos, aimVec);
-
-		Vector_GetAngles(aimVec, angle);
-
-		//TODO - restrict angles at which attacks can be fired
-
-		if (weapon.inaccuracy)
-		{
-			angle.pitch += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
-			angle.yaw += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
-		}
-
-
-
-		// Damage our hit entity below and create our tracer effect
-		FObject victim;
-		bool isDrone = false;
-
-		RayTrace bullet = new RayTrace(pos, aimPos, MASK_SHOT, FilterDroneShoot, drone.Get());
-		if (bullet.DidHit())
-		{
-			victim = bullet.GetHitEntity();
-			isDrone = IsValidDrone(victim);
-		}
-		delete bullet;
-
-		switch (type)
-		{
-			case WeaponType_Gun:
-			{
-				CreateTracer(pos, endPos);
-			}
-			case CDWeapon_Laser:
-			{
-				//TODO
-			}
-		}
-
-		if (victim.Valid())
-		{
-			switch (dmgType)
-			{
-				case DamageType_Rangeless: //no damage falloff
-				{
-					if (isDrone)
-					{
-						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, weapon.damage, false);
-					}
-					else if (victim.Valid())
-						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), weapon.damage, DMG_ENERGYBEAM);
-				}
-				default:
-				{
-					float damage = Damage_Hitscan(victim, drone, weapon.damage);
-					if (isDrone)
-					{
-						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, damage, false);
-					}
-					else
-						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), damage, DMG_ENERGYBEAM);
-				}
-			}
-		}
-	}
-}
-
-bool FilterDroneShoot(int entity, int mask, int drone)
-{
-	FObject owner, hit;
-	owner = Drone[drone].GetOwner();
-
-	hit = FObject(entity);
-
-	FClient player, check;
-	
-	player = CastToClient(owner);
-	check = CastToClient(hit);
-
-	if (player.Valid() && check.Valid())
-	{
-		if (player.GetTeam() == check.GetTeam()) // ignore teammates
-			return false;
-	}
-
-	if (entity == drone)
-		return false;
-
-	return true;
-}
-
-float Damage_Hitscan(FObject victim, FObject drone, float baseDamage)
-{
-	FVector pos, vicPos;
-	float distance;
-
-	//Setup distance between drone and target
-	pos = drone.GetPosition();
-	vicPos = victim.GetPosition();
-
-	distance = pos.DistanceTo(vicPos);
-
-	float dmgMod = ClampFloat((512.0 / distance), 1.5, 0.528);
-	baseDamage *= dmgMod;
-
-	return baseDamage;
-}
-
-public any Native_SpawnRocket(Handle Plugin, int args)
-{
-	FClient owner;
-	FObject drone;
-
-	owner = FClient(GetNativeCell(1));
-	drone = FObject(GetNativeCell(2));
-
-	FDroneWeapon weapon;
-	GetNativeArray(3, weapon, sizeof FDroneWeapon);
-	
-	FTransform spawn;
-
-	spawn = weapon.GetMuzzleTransform(); //get our weapon's muzzle position
-
-	EProjType projectile = GetNativeCell(4);
-
-	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
-
-	FVector pos, aimPos, aimVec, camearPos;
-	FRotator aimAngle, droneAngle;
-
-	char netname[64], classname[64];
-
-	FRocket rocket;
-
-	if (IsValidDrone(drone))
-	{
-		//Get Spawn Position
-		aimAngle = owner.GetEyeAngles();
-		droneAngle = drone.GetAngles();
-		dronePos = drone.GetPosition();
-
-		FVector offset;
-		offset = FVector(0.0, 0.0, Drone[droneId].cameraHeight);
-
-		cameraPos = GetOffsetPos(dronePos, droneAngle, offset); //Get our camera height relative to our drone's forward vector
-
-		aimPos = GetDroneAimPosition(drone, cameraPos, aimAngle);	//find where the client is aiming at in relation to the drone
-
-		Vector_MakeFromPoints(spawn.position, aimPos, aimVec);
-
-		Vector_GetAngles(aimVec, angle);
-
-		if (weapon.inaccuracy)
-		{
-			aimAngle.pitch += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
-			aimAngle.yaw += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
-		}
-		rocket = CreateDroneRocket(owner, spawn.position, projectile, weapon.projspeed, weapon.damage);
-
-		rocket.Fire(aimAngle);
-
-		if (projectile == DroneProj_Impact)
-			SDKHook(rocket.Get(), SDKHook_Touch, OnProjHit);
-
-	}
-	
-	return rocket.Get();
-}
-
-Action OnProjHit(int entity, int victim)
-{
-	FObject hit, rocket;
-	FClient client, owner;
-
-	hit = FObject(victim);
-	rocket = FObject(entity);
-
-	client = CastToClient(hit);
-	owner = CastToClient(rocket.GetOwner());
-
-	if (!client.Valid()) // Not a client
-	{
-		if (IsValidDrone(hit)) // Is a drone
-		{
-			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
-			DroneTakeDamage(Drone[victim], FObject(victim), owner, rocket, damage, false);
-			
-			rocket.Kill();
-
-			return Plugin_Handled;
-		}
-
-		char classname[64];
-		hit.GetClassname(classname, sizeof classname);
-
-		if (victim == 0 || !StrContains(classname, "prop_", false))
-		{
-			rocket.Kill();
-
-			return Plugin_Handled;
-		}
-
-		else if (StrContains(classname, "obj_", false)) //engineer buildings
-		{
-			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
-
-			SDKHooks_TakeDamage(victim, entity, owner.Get(), damage, DMG_ENERGYBEAM);
-
-			rocket.Kill();
-
-			return Plugin_Handled;
-		}
-		else return Plugin_Continue;
-	}
-	else // Entity hit is a client
-	{
-		if (owner.Valid())
-		{
-			if (owner.GetTeam() != client.GetTeam())
-			{
-				FObject drone;
-				drone = GetClientDrone(owner);
-
-				FVector pos, vicPos;
-				float damage, distance;
-
-				damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4);
-
-				//Setup distance between drone and target
-				pos = drone.GetPosition();
-				
-				vicPos = client.GetPosition();
-				distance = pos.DistanceTo(vicPos);
-
-				//Standard rampup and falloff for rockets
-				float dmgMod = ClampFloat((512.0 / distance), 1.25, 0.528);
-				damage *= dmgMod;
-				SDKHooks_TakeDamage(victim, entity, owner.Get(), damage, DMG_ENERGYBEAM);
-
-				rocket.Kill();
-
-				return Plugin_Handled;
-			}
-		}
-		else 
-			return Plugin_Handled; // Should allow rockets to pass through teammates without exploding
-	}
-	
-	rocket.Kill();
-	return Plugin_Handled;
-}
-
-///
-///	Drone Bomb Functions
-///
-
-public any Native_SpawnBomb(Handle Plugin, int args)
-{
-	int drone = GetNativeCell(2);
-	int owner = GetNativeCell(1);
-	DroneWeapon weapon;
-	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3];
-	float angle[3];
-	weapon.GetMuzzleTransform(pos, angle);
-	ProjType projectile = GetNativeCell(4);
-	char modelname[256];
-	GetNativeString(5, modelname, sizeof modelname);
-	float fuse = GetNativeCell(6);
-	DroneBomb bombEnt;
-	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, pos);
-	SetEntPropEnt(bombEnt.bomb, Prop_Send, "m_hOwnerEntity", owner);
-	bombEnt.type = projectile;
-	bombEnt.isBomb = true;
-	bombEnt.drone = drone;
-	switch (projectile)
-	{
-		case DroneProj_BombDelayed:
-		{
-			BombInfo[bombEnt.bomb] = bombEnt;
-			SDKHook(bombEnt.bomb, SDKHook_VPhysicsUpdate, BombDelayUpdate);
-		}
-		case DroneProj_BombImpact:
-		{
-			BombInfo[bombEnt.bomb] = bombEnt;
-			SDKHook(bombEnt.bomb, SDKHook_VPhysicsUpdate, BombImpactUpdate);
-		}
-		case DroneProj_Custom:
-		{
-			//Use this type to prevent any default behavior with bombs.
-			//Everything can safely be handled within your sub-plugin if using this type.
-		}
-		default:
-		{
-			BombInfo[bombEnt.bomb] = bombEnt;
-			CreateTimer(bombEnt.fuseTime, DetonateBombTimer, bombEnt.bomb, TIMER_FLAG_NO_MAPCHANGE);
-		}
-	}
-	SetNativeArray(7, bombEnt, sizeof bombEnt);
-	return IsValidEntity(bombEnt.bomb);
-}
-
-Action DetonateBombTimer(Handle timer, int bomb)
-{
-	if (IsValidEntity(bomb) && bomb > MaxClients)
-	{
-		BombInfo[bomb].detonate();
-	}
-}
-
-Action BombDelayUpdate(int bomb)
-{
-	if (IsValidEntity(bomb))
-	{
-		if (BombInfo[bomb].type == DroneProj_BombDelayed)
-		{
-			if (!BombInfo[bomb].primed && BombCollision(bomb))
-			{
-				CreateTimer(BombInfo[bomb].fuseTime, DetonateBombTimer, bomb, TIMER_FLAG_NO_MAPCHANGE);
-				BombInfo[bomb].primed = true;
-				SDKUnhook(bomb, SDKHook_VPhysicsUpdate, BombDelayUpdate);
-			}
-		}
-	}
-}
-
-Action BombImpactUpdate(int bomb)
-{
-	if (IsValidEntity(bomb))
-	{
-		if (BombInfo[bomb].type == DroneProj_BombImpact)
-		{
-			if (!BombInfo[bomb].primed && BombCollision(bomb))
-			{
-				BombInfo[bomb].touched = true;
-				BombInfo[bomb].detonate();
-			}
-		}
-	}
-}
-
-//SDKHook_Touch does not reliably detect when physics props collide with the world.. so we have to check manually
-bool BombCollision(int bomb)
-{
-	bool result = false;
-	if (BombInfo[bomb].isBomb && BombInfo[bomb].tickTime <= GetGameTime())
-	{
-		BombInfo[bomb].tickTime = GetGameTime() + 0.1;
-		float min[3], max[3], pos[3];
-		GetEntPropVector(bomb, Prop_Data, "m_vecOrigin", pos);
-		GetEntPropVector(bomb, Prop_Send, "m_vecMins", min);
-		GetEntPropVector(bomb, Prop_Send, "m_vecMaxs", max);
-
-		Handle hull = TR_TraceHullFilterEx(pos, pos, min, max, MASK_SOLID, BombTraceFilter, bomb);
-		if (TR_DidHit(hull))
-			result = true;
-
-		CloseHandle(hull);
-	}
-	return result;
-}
-
-bool BombTraceFilter(int entity, int mask, int bomb)
-{
-	if (BombInfo[bomb].isBomb)
-	{
-		if (entity == bomb || entity == BombInfo[bomb].drone)
-			return false;
-
-		return true;
-	}
-	return false;
-}
-
-public any Native_GetDrone(Handle plugin, int args)
-{
-	int client = GetNativeCell(1);
-	int drone = GetClientDrone(client);
-	SetNativeArray(2, DroneInfo[drone], sizeof DroneProp);
-}
-
-FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
-{
-	// Max range on attacks is 10000 hu
-	FVector end;
-	end = angle.GetForwardVector();
-	end.Scale(10000.0);
-	end.Add(pos);
-
-	FVector result;
-
-	RayTrace trace = RayTrace(pos, end, MASK_SHOT, FilterDrone, drone.Get());
-	if (trace.DidHit())
-		result = trace.GetEndPosition();
-	else
-		result = end;
-
-	delete trace;
-
-	return result;
-}
-
-bool FilterDrone(int entity, int mask, int exclude)
-{
-	FObject owner = Drone[exclude].GetOwner();
-	if (entity == owner.Get())
-		return false;
-	if (entity == exclude)
-		return false;
-
-	return true;
-}
-
 /****************
 * Client Functions
 ****************/
@@ -909,6 +219,17 @@ public void OnClientDisconnect(int clientId)
 	}
 }
 
+void ResetClientView(FClient client)
+{
+	if (client.Valid())
+	{
+		int clientId = client.Get();
+
+		SetClientViewEntity(clientId, clientId);
+		Player[clientId].InDrone = false;
+		SetEntityMoveType(clientId, MOVETYPE_WALK);
+	}
+}
 
 /****************
 * Drone Creation
@@ -1031,43 +352,201 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 	FileType type;
 
 	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
-	Handle hDir = OpenDirectory(Directory);
+	Handle dir = OpenDirectory(Directory);
 
-	while (ReadDirEntry(hDir, FileName, sizeof(FileName), type))
+	while (ReadDirEntry(dir, FileName, sizeof FileName, type))
 	{
 		if (type != FileType_File) continue;
 		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
 		if (StrEqual(name, FileName))
 		{
-			PrintToChatAll("Found drone %s", drone_name);
+			//PrintToChatAll("Found drone %s", drone_name);
 			FDrone drone;
-			drone = SpawnDrone(client, name);
-			CloseHandle(hDir);
+			drone = SpawnDrone(owner, name);
+			CloseHandle(dir);
 			return;
 		}
 		LogMessage("Found Config %s", FileName);
 	}
 
-	//PrintToChatAll("Unable to find drone %s", drone_name);
-	CloseHandle(hDir);
+	//PrintToChatAll("Unable to find drone %s", name);
+	CloseHandle(dir);
 	return;
 }
 
-/**
- * Spawn a drone after creating the info for it
- * 
- * @return     Return description
- */
-FDrone SpawnDrone()
+// Prepare our drone to be spawned
+FDrone SpawnDrone(FClient owner, const char[] name)
 {
-	
+	//PrintToChatAll("Drone spawned");
+	KeyValues kv = new KeyValues("Drone");
+	char path[64];
+	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", name);
+
+	if (!FileExists(path))
+	{
+		Handle file = OpenFile(path, "w");
+		CloseHandle(file);
+	}
+	kv.ImportFromFile(path);
+
+	FTransform spawn;
+	FObject clientRef;
+
+	spawn.rotation = owner.GetEyeAngles();
+	spawn.position = owner.GetEyePosition();
+
+	clientRef = owner.GetReference();
+
+	clientRef.GetPropVector(Prop_Data, "m_vecVelocity", spawn.velocity);
+
+	FDrone drone;
+
+	drone = SetupDrone(kv, spawn);
+
+	drone.Config = name;
+
+	switch (drone.Movetype)
+	{
+		case MoveType_Ground:
+		{
+			Drone.Viewlocked = false;
+			SetEntityGravity(drone, 1.0);
+		}
+		default:
+		{
+			Drone.Viewlocked = true;
+			SetEntityGravity(drone, 0.01);
+		}
+	}
+
+	int droneId = drone.Get();
+
+	//Find total number of weapons and seats for this drone
+	char number[8];
+	drone.Weapons = 0;
+
+	if (kv.JumpToKey("weapons"))
+	{
+		for (int i = 1; i <= MAXWEAPONS; i++)
+		{
+			FormatEx(number, sizeof number, "weapon%i", i);
+			if (kv.JumpToKey(number))
+			{
+				DroneWeapons[droneId][i] = SetupWeapon(kv, drone);
+				kv.GoBack();
+			}
+			else
+			{
+				LogMessage("Found %i weapons for drone: %s", drone.Weapons, name);
+				break;
+			}
+			drone.weapons++;
+		}
+		kv.Rewind();
+	}
+
+	// Now let's setup our seats
+	drone.Seats = 0;
+
+	if (kv.JumpToKey("seats"))
+	{
+		for (int i = 1; i <= MAXSEATS; i++)
+		{
+			FormatEx(number, sizeof number, "seat%i", i);
+			if (kv.JumpToKey(number))
+			{
+				DroneSeats[droneId][i] = SetupSeat(kv, drone);
+				kv.GoBack();
+			}
+			else
+			{
+				LogMessage("Found %i seats for drone: %s", drone.Seats, name);
+				break;
+			}
+			drone.Seats++;
+		}
+	}
+	delete kv;
+
+	Call_StartForward(DroneCreated);
+
+	Call_PushArray(drone, sizeof FDrone);
+	Call_PushString(drone.Plugin);
+	Call_PushString(name);
+
+	Call_Finish();
+
+	int pilotIndex = GetPilotSeatIndex(drone);
+
+	// Enter pilot seat
+	if (pilotIndex)
+		PlayerEnterVehicle(drone, DroneSeats[droneId][pilotIndex], owner);
+	else
+		LogError("ERROR: No pilot seat found for drone: %s! This drone will not be pilotable!", name);
+}
+
+// Physically spawn our drone in the world
+FDrone SetupDrone(KeyValues config, FTransform spawn)
+{
+	FDrone drone;
+	FComponent hull;
+
+	hull = CreateDeferredComponent("prop_physics_multiplayer");
+	drone.Hull = hull;
+
+	char modelname[PLATFORM_MAX_PATH];
+
+	config.GetString("name", drone.Name, MAX_DRONE_LENGTH);
+	config.GetString("model", modelname, sizeof modelname);
+	config.GetString("destroyed_model", drone.DestroyedModel, PLATFORM_MAX_PATH);
+
+	drone.MaxHealth = config.GetFloat("health", 100.0);
+	drone.MaxSpeed = config.GetFloat("speed", 300.0);
+	drone.Acceleration = config.GetFloat("acceleration", 5.0);
+	drone.SpeedOverride = 0.0;
+	drone.TurnRate = config.GetFloat("turn_rate", 80.0);
+
+	char movetype[64];
+	config.GetString("mopvetype", movetype, sizeof movetype);
+	drone.Movetype = GetMoveType(movetype);
+
+	config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
+	drone.CameraHeight = config.GetFloat("camera_height", 30.0);
+
+	FObject ref;
+	ref = hull.GetObject();
+
+	ref.SetKeyValue("model", modelname);
+
+	if (ref.HasProp(Prop_Data, "m_takedamage"))
+		ref.SetProp(Prop_Data, "m_takedamage", 1);
+
+	drone.Health = drone.MaxHealth;
+	drone.Alive = true;
+
+	FinishComponent(hull);
+
+	ref.Teleport(spawn.position, spawn.rotation, spawn.velocity);
+
+	drone.OldWeapon = 1;
+	drone.ActiveWeapon = drone.OldWeapon;
+
+	return drone;
+}
+
+FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
+{
+
+}
+
+FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
+{
+
 }
 
 /******************
 * Drone Removal
 ******************/
-
-
 
 /**
  * Kills the given drone
@@ -1106,4 +585,32 @@ void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, int w
 	Call_PushString(drone.Plugin);
 
 	Call_Finish();
+}
+
+/******************
+* Helper Functions
+******************/
+
+// Structs can't be returned as references so lets get the index we need instead
+int GetPilotSeatIndex(FDrone drone)
+{
+	if (drone.Valid())
+	{
+		int droneId = drone.Get();
+
+		for (int i = 0; i < MAXSEATS; i++)
+		{
+			if (DroneSeats[droneId].GetSeatType() == Seat_Pilot)
+				return i;
+		}
+	}
+
+	// No pilot seat found
+	return 0;
+}
+
+// Clamps a float value between two bounds
+float ClampFloat(float value, float max, float min)
+{
+	return (value > max ? max : value < min ? min : value);
 }

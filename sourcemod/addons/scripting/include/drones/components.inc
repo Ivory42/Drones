@@ -6,22 +6,17 @@
 #include <sdktools>
 #include <tf2_stocks>
 #include "dronetypes.inc"
+#include "rocket.inc"
 #include <ilib>
 
 #define MAXATTACHMENTS 12
 #define MAXWEAPONS 6
 #define MAXSEATS 6
 
-///
-/// General component object to attach to drones
-///
-
+// Component object for drone attachments. If using a physical attachment, this component struct will house the FObject entity reference.
 enum struct FComponent
 {
-	FObject Comp;
-
-	// Model for this component
-	char Model[256];
+	FObject Reference;
 
 	// Max health for this component
 	int MaxHealth;
@@ -31,25 +26,37 @@ enum struct FComponent
 
 	bool Valid()
 	{
-		return this.comp.Valid();
+		return this.Reference.Valid();
 	}
 
 	// Returns the entity index tied to this component
 	int Get()
 	{
-		this.comp.Get();
+		this.Reference.Get();
 	}
 
 	// Sets this component's pointer reference
 	void Set(int entity)
 	{
-		this.Comp.Set(entity);
+		this.Reference.Set(entity);
+	}
+
+	// Sets the owner of this component
+	void SetOwner(FObject owner)
+	{
+		this.Reference.SetOwner(owner);
+	}
+
+	// Returns the owner of this component
+	FObject GetOwner()
+	{
+		return this.Reference.GetOwner();
 	}
 
 	// Returns the FObject associated with this component
 	FObject GetObject()
 	{
-		return this.comp;
+		return this.Reference;
 	}
 }
 
@@ -137,7 +144,7 @@ enum struct FDroneWeapon
 	// Returns the object this entity is attached to
 	FObject GetObject()
 	{
-		return this.Component.Comp;
+		return this.Component.Reference;
 	}
 
 	// Returns the component this weapon is tied to
@@ -229,7 +236,7 @@ enum struct FDroneWeapon
 	FVector GetRelativePosition()
 	{
 		if (this.Valid())
-			return this.Component.Comp.GetPosition();
+			return this.Component.Reference.GetPosition();
 		
 		// if we don't have a physical entity, return our offset
 		return this.Offset;
@@ -330,9 +337,9 @@ enum struct FDroneSeat
 stock FComponent CreateNewComponent(const char[] classname)
 {
 	FComponent component;
-	component.Comp.Create(classname);
+	component.Reference.Create(classname);
 
-	component.Comp.Spawn();
+	component.Reference.Spawn();
 	return component;
 }
 
@@ -346,11 +353,12 @@ stock FComponent CreateNewComponent(const char[] classname)
 stock FComponent CreateDeferredComponent(const char[] classname)
 {
 	FComponent component;
-	component.Comp.Create(classname);
+	component.Reference.Create(classname);
 
 	return component;
 }
 
+// Finishes setup of a deferred component and spawns it
 stock void FinishComponent(FComponent component)
 {
 	FObject reference;
@@ -358,4 +366,18 @@ stock void FinishComponent(FComponent component)
 
 	reference.Spawn();
 	reference.Activate();
+}
+
+/**
+ * Returns an FComponent reference from the given entity index
+ * 
+ * @param entityId     Entity index to use as this component's FObject reference
+ * @return             FComponent containing a reference to the given entity
+ */
+stock FComponent GetComponentFromEntity(int entityId)
+{
+	FComponent component;
+	component.Reference = ConstructObject(entityId);
+
+	return component;
 }

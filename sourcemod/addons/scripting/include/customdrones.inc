@@ -6,6 +6,7 @@
 #define MAX_DRONE_LENGTH 32
 
 #include "drones/components.inc"
+#include <sdkhooks>
 
 bool IsDrone[2049];
 
@@ -14,15 +15,15 @@ bool IsDrone[2049];
 */
 enum struct FDrone
 {
-	FObject Hull; // Entity reference of this drone
+	FComponent Hull; // Entity reference of this drone
 
-	FObject Camera; // Entity reference of the camera for this drone
+	FComponent Camera; // Entity reference of the camera for this drone
 
 	FClient Owner; // Client currently piloting this drone
 
 	char DestroyedModel[256]; // Optional model to use when drone is destroyed
 
-	char Name[64]; // Display name of this drone
+	char Name[MAX_DRONE_LENGTH]; // Display name of this drone
 
 	float CameraHeight; // Camera height for this drone
 
@@ -37,9 +38,11 @@ enum struct FDrone
 
 	float MaxSpeed; // Max speed this drone can move at
 
-	float Speedoverride; // If non-zero, override our max speed with this value
+	float SpeedOverride; // If non-zero, override our max speed with this value
 
 	float Acceleration; // How quickly this drone reaches its max speed
+
+	float TurnRate; // Rate at which this drone can turn, in degrees per second
 
 	int Weapons; // Number of weapons this drone has
 
@@ -51,7 +54,7 @@ enum struct FDrone
 
 	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
 
-	char Plugin[32]; // Logic plugin for basic drone functions
+	char Plugin[MAX_DRONE_LENGTH]; // Logic plugin for basic drone functions
 
 	char Config[64]; // Config containing drone's info
 
@@ -60,6 +63,10 @@ enum struct FDrone
 	bool Viewlocked; // Whether this drone should rotate towards the camera or not
 
 	bool Occupied; // Is there currently a player piloting this drone
+
+	int Seats; // How many seats this drone has
+
+	EMoveType Movetype; // Defines how this drone should move
 
 	// Returns whether or not this drone's index is valid or not
 	bool Valid()
@@ -73,10 +80,16 @@ enum struct FDrone
 		return this.Hull.Get();
 	}
 
-	// Returns the FObject of this drone's hull
-	FObject GetHull()
+	// Returns the FComponent of this drone's hull
+	FComponent GetHull()
 	{
 		return this.Hull;
+	}
+
+	// Returns the FObject reference of this drone
+	FObject GetObject()
+	{
+		return this.Hull.GetObject();
 	}
 
 	// Get the owner of this drone
@@ -94,8 +107,8 @@ enum struct FDrone
 	// Clears this drone's reference
 	void Clear()
 	{
-		this.Hull.ref = INVALID_ENT_REFERENCE;
-		this.Camera.ref = INVALID_ENT_REFERENCE;
+		this.Hull.Comp.ref = INVALID_ENT_REFERENCE;
+		this.Camera.Comp.ref = INVALID_ENT_REFERENCE;
 		this.Owner.Clear();
 	}
 }
@@ -401,8 +414,8 @@ forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker,
 /**
  * Forward called after a weapon is fired
  *
- * @param drone				Drone index
- * @param gunner			Client index of player operating the weapon
+ * @param drone				Drone hull component that weapon is attached to
+ * @param gunner			Client that fired this weapon
  * @param weapon			Weapon object that is being fired
  * @param slot				Weapon slot being used
  * @param weapon_logic		Name of plugin defining weapon logic
@@ -410,7 +423,7 @@ forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker,
  *
  * @return					How to handle ammo consumption: Anything above Plugin_Continue will not consume ammo
  */
-forward Action CD_OnDroneAttack(int drone, int gunner, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
+forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
 
 
 

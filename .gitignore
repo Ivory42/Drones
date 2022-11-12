@@ -1,0 +1,12 @@
+# Ignore everything
+/*
+# Un-ignore specific folders/files
+!/.gitignore
+!/sourcemod/addons/scripting/include/customdrones.inc
+!/sourcemod/addons/scripting/CustomDroneMovement.sp
+!/sourcemod/addons/scripting/CustomDroneProperties.sp
+!/sourcemod/addons/scripting/CustomDrones.sp
+!/sourcemod/addons/configs/**
+!/sourcemod/addons/scripting/drones/**
+!/sourcemod/addons/scripting/include/drones/**
+!/sourcemod/addons/scripting/modules/**

@@ -86,6 +86,8 @@ stock FRocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, floa
 
 	rocket.Speed = speed;
 
+	//TODO - Pass through weapon object and set the launcher of this rocket
+
 	int team = owner.GetTeam();
 
 	FObject proj;
