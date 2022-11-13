@@ -127,10 +127,12 @@ Action OnPlayerResupply(Event event, const char[] name, bool dBroad)
 {
 	int clientId = GetClientOfUserId(event.GetInt("userid"));
 
-	if (Player[clientId].inDrone)
+	if (Player[clientId].InDrone)
 	{
 		CreateTimer(0.5, DroneResupplied, clientId, TIMER_FLAG_NO_MAPCHANGE); // Need a longer delay than RequestFrame
 	}
+
+	return Plugin_Continue;
 }
 
 Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
@@ -142,10 +144,12 @@ Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
 
 	if (client.Valid() && PlayerInDrone(client))
 	{
-		FDrone drone = GetClientDrone(client);
+		FDrone drone;
+		drone = GetClientDrone(client);
+
 		if (drone.Valid())
 		{
-			KillDrone(drone, drone.GetHull(), attacker, 0.0, 0);
+			KillDrone(drone, drone.GetObject(), attacker, 0.0, drone.GetObject());
 			ResetClientView(client);
 		}
 	}
@@ -154,8 +158,10 @@ Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
 
 Action DroneResupplied(Handle timer, int clientId)
 {
-	RemoveWearables(clientId);
+	RemoveWearables(ConstructClient(clientId));
 	//TF2_RemoveAllWeapons(client);
+
+	return Plugin_Stop;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -164,7 +170,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("CD_GetDroneHealth", Native_GetDroneHealth);
 	CreateNative("CD_GetDroneMaxHealth", Native_GetDroneMaxHealth);
 	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneActiveWeapon);
-	CreateNative("CD_GetWeaponAttackSound", Native_AttackSound);
+	//CreateNative("CD_GetWeaponAttackSound", Native_AttackSound);
 	
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneWeapon", Native_GetDroneWeapon);
@@ -231,6 +237,35 @@ void ResetClientView(FClient client)
 	}
 }
 
+void RemoveWearables(FClient client)
+{
+	if (client.Valid())
+	{
+		int entity = MaxClients + 1;
+		while((entity = FindEntityByClassname(entity, "tf_wearable")) != -1)
+		{
+			if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
+			{
+				switch(GetEntProp(entity, Prop_Send, "m_iItemDefinitionIndex"))
+				{
+					default:
+					{
+						TF2_RemoveWearable(client.Get(), entity);
+					}
+				}
+			}
+		}
+		entity = MaxClients + 1;
+		while((entity = FindEntityByClassname(entity, "tf_powerup_bottle")) != -1) //mvm canteens
+		{
+			if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
+			{
+				TF2_RemoveWearable(client.Get(), entity);
+			}
+		}
+	}
+}
+
 /****************
 * Drone Creation
 ****************/
@@ -274,7 +309,7 @@ Action CmdDrone(int clientId, int args)
 		{
 			int target = target_list[i];
 
-			client.Set(i);
+			client.Set(target);
 
 			if (client.Alive())
 				OpenMenu(client);
@@ -354,6 +389,8 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
 	Handle dir = OpenDirectory(Directory);
 
+	FDrone drone;
+
 	while (ReadDirEntry(dir, FileName, sizeof FileName, type))
 	{
 		if (type != FileType_File) continue;
@@ -361,17 +398,14 @@ FDrone CreateDroneByName(FClient owner, const char[] name)
 		if (StrEqual(name, FileName))
 		{
 			//PrintToChatAll("Found drone %s", drone_name);
-			FDrone drone;
 			drone = SpawnDrone(owner, name);
-			CloseHandle(dir);
-			return;
 		}
 		LogMessage("Found Config %s", FileName);
 	}
 
 	//PrintToChatAll("Unable to find drone %s", name);
 	CloseHandle(dir);
-	return;
+	return drone;
 }
 
 // Prepare our drone to be spawned
@@ -403,19 +437,19 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 
 	drone = SetupDrone(kv, spawn);
 
-	drone.Config = name;
+	FormatEx(drone.Config, 64, name);
 
 	switch (drone.Movetype)
 	{
 		case MoveType_Ground:
 		{
-			Drone.Viewlocked = false;
-			SetEntityGravity(drone, 1.0);
+			drone.Viewlocked = false;
+			SetEntityGravity(drone.Get(), 1.0);
 		}
 		default:
 		{
-			Drone.Viewlocked = true;
-			SetEntityGravity(drone, 0.01);
+			drone.Viewlocked = true;
+			SetEntityGravity(drone.Get(), 0.01);
 		}
 	}
 
@@ -440,7 +474,7 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 				LogMessage("Found %i weapons for drone: %s", drone.Weapons, name);
 				break;
 			}
-			drone.weapons++;
+			drone.Weapons++;
 		}
 		kv.Rewind();
 	}
@@ -483,15 +517,17 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 		PlayerEnterVehicle(drone, DroneSeats[droneId][pilotIndex], owner);
 	else
 		LogError("ERROR: No pilot seat found for drone: %s! This drone will not be pilotable!", name);
+
+	return drone;
 }
 
 // Physically spawn our drone in the world
 FDrone SetupDrone(KeyValues config, FTransform spawn)
 {
 	FDrone drone;
-	FComponent hull;
+	FObject hull;
 
-	hull = CreateDeferredComponent("prop_physics_multiplayer");
+	hull.Create("prop_physics_multiplayer");
 	drone.Hull = hull;
 
 	char modelname[PLATFORM_MAX_PATH];
@@ -513,20 +549,15 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 	config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
 	drone.CameraHeight = config.GetFloat("camera_height", 30.0);
 
-	FObject ref;
-	ref = hull.GetObject();
+	hull.SetKeyValue("model", modelname);
 
-	ref.SetKeyValue("model", modelname);
-
-	if (ref.HasProp(Prop_Data, "m_takedamage"))
-		ref.SetProp(Prop_Data, "m_takedamage", 1);
+	if (hull.HasProp(Prop_Data, "m_takedamage"))
+		hull.SetProp(Prop_Data, "m_takedamage", 1);
 
 	drone.Health = drone.MaxHealth;
 	drone.Alive = true;
 
-	FinishComponent(hull);
-
-	ref.Teleport(spawn.position, spawn.rotation, spawn.velocity);
+	hull.Teleport(spawn.position, spawn.rotation, spawn.velocity);
 
 	drone.OldWeapon = 1;
 	drone.ActiveWeapon = drone.OldWeapon;
@@ -536,12 +567,18 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 
 FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
 {
+	FDroneWeapon weapon;
 
+
+	return weapon;
 }
 
 FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 {
+	FDroneSeat seat;
 
+
+	return seat;
 }
 
 /******************
@@ -550,14 +587,8 @@ FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 
 /**
  * Kills the given drone
- * 
- * @param drone        Drone object being killed
- * @param hull         Physical entity object of the drone
- * @param attacker     Client that killed the drone, can be the world
- * @param damage       Damage dealt
- * @param weapon       Weapon used
  */
-void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, int weapon)
+void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, FObject weapon)
 {
 	FClient owner;
 	owner = CastToClient(drone.GetOwner());
@@ -570,11 +601,16 @@ void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, int w
 		PlayerExitVehicle(drone, DroneSeats[droneId][seatIndex], owner);
 	}
 
+	if (weapon.Valid())
+	{
+		// Want to try sending a kill event for the killfeed, just not sure how to handle it yet
+	}
+
 	drone.Health = 0.0;
 	drone.Alive = false;
 	drone.RemoveTimer.Set(3.0);
 
-	hull.AttachParticle("burningplayer_flyingbits");
+	hull.AttachParticle("burningplayer_flyingbits", ConstructVector());
 
 	Call_StartForward(DroneDestroyed);
 
@@ -600,7 +636,7 @@ int GetPilotSeatIndex(FDrone drone)
 
 		for (int i = 0; i < MAXSEATS; i++)
 		{
-			if (DroneSeats[droneId].GetSeatType() == Seat_Pilot)
+			if (DroneSeats[droneId][i].GetSeatType() == Seat_Pilot)
 				return i;
 		}
 	}

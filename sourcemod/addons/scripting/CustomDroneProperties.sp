@@ -30,7 +30,7 @@ public any Native_ViewLock(Handle plugin, int args)
 	{
 		int droneId = drone.Get();
 		if (IsValidDrone(drone.GetObject()))
-			Drone[droneId].viewlocked = !Drone[droneId].Viewlocked;
+			Drone[droneId].Viewlocked = !Drone[droneId].Viewlocked;
 		else
 			ThrowNativeError(017, "Entity index %i is not a valid drone", droneId);
 
@@ -103,16 +103,16 @@ void FireWeapon(FClient gunner, FComponent droneHull, int slot, FDroneWeapon wea
 
 	Call_Finish(result);
 
-	weapon.SimulateFire(result);
+	weapon.SimulateFire(result, 1);
 }
 
 public int Native_DroneTakeDamage(Handle plugin, int args)
 {
 	FObject inflictor;
 	FClient attacker;
-	FComponent drone;
+	FObject drone;
 
-	drone = GetComponentFromEntity(GetNativeCell(1));
+	drone = ConstructObject(GetNativeCell(1));
 	attacker = ConstructClient(GetNativeCell(2));
 	inflictor = ConstructObject(GetNativeCell(3));
 
@@ -120,19 +120,24 @@ public int Native_DroneTakeDamage(Handle plugin, int args)
 
 	bool crit = view_as<bool>(GetNativeCell(5));
 
-	if (IsValidDrone(drone.GetObject()))
+	if (IsValidDrone(drone))
 	{
 		int droneId = drone.Get();
 
-		DroneTakeDamage(Drone[droneId], drone, attacker, inflictor, damage, crit);
+		DroneTakeDamage(Drone[droneId], drone, attacker, inflictor, damage, crit, drone);
 	}
 
 	return 0;
 }
 
-void DroneTakeDamage(FDrone drone, FComponent hull, FClient attacker, FObject inflictor, float &damage, bool crit, FObject weapon)
+void DroneTakeDamage(FDrone drone, FObject hull, FClient attacker, FObject inflictor, float &damage, bool crit, FObject weapon)
 {
 	bool sendEvent = true;
+
+	if (inflictor.Valid())
+	{
+		//
+	}
 
 	if (!drone.Alive)
 		return;
@@ -147,7 +152,7 @@ void DroneTakeDamage(FDrone drone, FComponent hull, FClient attacker, FObject in
 		SendDamageEvent(drone, attacker, damage, crit);
 
 	drone.Health -= damage;
-	if (Drone.Health <= 0.0)
+	if (drone.Health <= 0.0)
 	{
 		KillDrone(drone, hull, attacker, damage, weapon);
 	}
@@ -217,6 +222,8 @@ public any Native_GetDroneWeapon(Handle plugin, int args)
 
 		SetNativeArray(3, DroneWeapons[droneId][slot], sizeof FDroneWeapon);
 	}
+
+	return 0;
 }
 
 public any Native_GetDroneActiveWeapon(Handle plugin, int args)
@@ -258,7 +265,10 @@ public int Native_SpawnDroneName(Handle plugin, int args)
 	char name[128];
 	GetNativeString(2, name, sizeof name);
 
-	CreateDroneByName(client, name);
+	FDrone drone;
+	drone = CreateDroneByName(client, name);
+
+	return drone.Get();
 }
 
 public int Native_SetWeaponReload(Handle plugin, int args)
@@ -277,6 +287,8 @@ public int Native_SetWeaponReload(Handle plugin, int args)
 
 		DroneWeapons[droneId][slot].SimulateReload();
 	}
+
+	return 0;
 }
 
 public any Native_GetFloatParam(Handle plugin, int args)
@@ -363,15 +375,17 @@ public any Native_GetString(Handle plugin, int args)
 	delete drone;
 
 	SetNativeString(4, result, size);
+
+	return 0;
 }
 
 public any Native_HitscanAttack(Handle plugin, int args)
 {
 	FClient owner;
-	FComponent drone;
+	FObject drone;
 
-	owner = FClient(GetNativeCell(1));
-	drone = GetComponentFromEntity(GetNativeCell(2));
+	owner = ConstructClient(GetNativeCell(1));
+	drone = ConstructObject(GetNativeCell(2));
 
 	FDroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof FDroneWeapon);
@@ -382,7 +396,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 
 	EDamageType dmgType = view_as<EDamageType>(GetNativeCell(4));
 
-	if (owner.Valid() && IsValidDrone(drone.GetObject()))
+	if (owner.Valid() && IsValidDrone(drone))
 	{
 		int droneId = drone.Get();
 
@@ -395,7 +409,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 		dronePos = drone.GetPosition();
 
 		FVector offset;
-		offset = FVector(0.0, 0.0, Drone[droneId].cameraHeight);
+		offset = ConstructVector(0.0, 0.0, Drone[droneId].CameraHeight);
 
 		cameraPos = GetOffsetPos(dronePos, droneAngle, offset); //Get our camera height relative to our drone's forward vector
 
@@ -407,10 +421,10 @@ public any Native_HitscanAttack(Handle plugin, int args)
 
 		//TODO - restrict angles at which attacks can be fired
 
-		if (weapon.inaccuracy)
+		if (weapon.Inaccuracy)
 		{
-			angle.pitch += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
-			angle.yaw += GetRandomFloat((weapon.inaccuracy * -1.0), weapon.inaccuracy);
+			angle.pitch += GetRandomFloat((weapon.Inaccuracy * -1.0), weapon.Inaccuracy);
+			angle.yaw += GetRandomFloat((weapon.Inaccuracy * -1.0), weapon.Inaccuracy);
 		}
 
 
@@ -451,18 +465,18 @@ public any Native_HitscanAttack(Handle plugin, int args)
 					if (isDrone)
 					{
 						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], GetComponentFromEntity(victim.Get()), owner, drone.GetObject(), weapon.damage, false, weapon.GetObject());
+						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, weapon.Damage, false, weapon.GetObject());
 					}
 					else if (victim.Valid())
 						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), weapon.Damage, DMG_ENERGYBEAM);
 				}
 				default:
 				{
-					float damage = Damage_Hitscan(victim, drone.GetObject(), weapon.Damage);
+					float damage = Damage_Hitscan(victim, drone, weapon.Damage);
 					if (isDrone)
 					{
 						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], GetComponentFromEntity(victim.Get()), owner, drone.GetObject(), damage, false, weapon.GetObject());
+						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, damage, false, weapon.GetObject());
 					}
 					else
 						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), damage, DMG_ENERGYBEAM);
@@ -470,6 +484,8 @@ public any Native_HitscanAttack(Handle plugin, int args)
 			}
 		}
 	}
+
+	return 0;
 }
 
 bool FilterDroneShoot(int entity, int mask, int drone)
@@ -516,10 +532,10 @@ float Damage_Hitscan(FObject victim, FObject drone, float baseDamage)
 public any Native_SpawnRocket(Handle Plugin, int args)
 {
 	FClient owner;
-	FComponent drone;
+	FObject drone;
 
 	owner = ConstructClient(GetNativeCell(1));
-	drone = GetComponentFromEntity(GetNativeCell(2));
+	drone = ConstructObject(GetNativeCell(2));
 
 	FDroneWeapon weapon;
 	GetNativeArray(3, weapon, sizeof FDroneWeapon);
@@ -532,15 +548,14 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 	//PrintToConsole(owner, "Damage: %.1f\nSpeed: %.1f\noffset x: %.1f\noffset y: %.1f\noffset z: %.1f", damage, speed, overrideX, overrideY, overrideZ);
 
-	FVector pos, aimPos, aimVec, camearPos;
+	FVector dronePos, aimPos, aimVec, cameraPos;
 	FRotator aimAngle, droneAngle;
-
-	char netname[64], classname[64];
 
 	FRocket rocket;
 
-	if (IsValidDrone(drone.Get()))
+	if (IsValidDrone(drone))
 	{
+		int droneId = drone.Get();
 		//Get Spawn Position
 		aimAngle = owner.GetEyeAngles();
 		droneAngle = drone.GetAngles();
@@ -555,15 +570,15 @@ public any Native_SpawnRocket(Handle Plugin, int args)
 
 		Vector_MakeFromPoints(spawn.position, aimPos, aimVec);
 
-		Vector_GetAngles(aimVec, angle);
+		Vector_GetAngles(aimVec, aimAngle);
 
-		if (weapon.inaccuracy)
+		if (weapon.Inaccuracy)
 		{
 			aimAngle.pitch += GetRandomFloat((weapon.Inaccuracy * -1.0), weapon.Inaccuracy);
 			aimAngle.yaw += GetRandomFloat((weapon.Inaccuracy * -1.0), weapon.Inaccuracy);
 		}
 		
-		rocket = CreateDroneRocket(owner, spawn.position, projectile, weapon.projspeed, weapon.damage);
+		rocket = CreateDroneRocket(owner, spawn.position, projectile, weapon.ProjSpeed, weapon.Damage);
 
 		rocket.Fire(aimAngle);
 
@@ -591,7 +606,7 @@ Action OnProjHit(int entity, int victim)
 		if (IsValidDrone(hit)) // Is a drone
 		{
 			float damage = GetEntDataFloat(entity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4); //get our damage
-			DroneTakeDamage(Drone[victim], GetComponentFromEntity(victim), owner, rocket, damage, false, ConstructObject());
+			DroneTakeDamage(Drone[victim], hit, owner, rocket, damage, false, rocket);
 			
 			rocket.Kill();
 
@@ -626,7 +641,7 @@ Action OnProjHit(int entity, int victim)
 		{
 			if (owner.GetTeam() != client.GetTeam())
 			{
-				FObject drone;
+				FDrone drone;
 				drone = GetClientDrone(owner);
 
 				FVector pos, vicPos;
@@ -659,23 +674,32 @@ Action OnProjHit(int entity, int victim)
 }
 
 ///
-///	Drone Bomb Functions
+///	Drone Bomb Functions - Bombs do not currently work, need to be redone.
 ///
 
 public any Native_SpawnBomb(Handle Plugin, int args)
 {
-	int drone = GetNativeCell(2);
-	int owner = GetNativeCell(1);
-	DroneWeapon weapon;
-	GetNativeArray(3, weapon, sizeof DroneWeapon);
-	float pos[3];
-	float angle[3];
-	weapon.GetMuzzleTransform(pos, angle);
-	ProjType projectile = GetNativeCell(4);
+	/*
+	FComponent drone;
+	drone = GetComponentFromEntity(GetNativeCell(2));
+
+	FClient owner;
+	owner = ConstructClient(GetNativeCell(1));
+
+	FDroneWeapon weapon;
+	GetNativeArray(3, weapon, sizeof FDroneWeapon);
+
+	FTransform spawn;
+	spawn = weapon.GetMuzzleTransform();
+
+	EProjType projectile = GetNativeCell(4);
+
 	char modelname[256];
 	GetNativeString(5, modelname, sizeof modelname);
+
 	float fuse = GetNativeCell(6);
-	DroneBomb bombEnt;
+
+	FDroneBomb bombEnt;
 	bombEnt.create(owner, modelname, weapon.damage, fuse, 200.0, pos);
 	SetEntPropEnt(bombEnt.bomb, Prop_Send, "m_hOwnerEntity", owner);
 	bombEnt.type = projectile;
@@ -706,8 +730,11 @@ public any Native_SpawnBomb(Handle Plugin, int args)
 	}
 	SetNativeArray(7, bombEnt, sizeof bombEnt);
 	return IsValidEntity(bombEnt.bomb);
+	*/
+	return 0;
 }
 
+/*
 Action DetonateBombTimer(Handle timer, int bomb)
 {
 	if (IsValidEntity(bomb) && bomb > MaxClients)
@@ -779,12 +806,24 @@ bool BombTraceFilter(int entity, int mask, int bomb)
 	}
 	return false;
 }
+*/
 
 public any Native_GetDrone(Handle plugin, int args)
 {
-	int client = GetNativeCell(1);
-	int drone = GetClientDrone(client);
-	SetNativeArray(2, DroneInfo[drone], sizeof DroneProp);
+	FClient client;
+	client = ConstructClient(GetNativeCell(1));
+
+	FDrone drone;
+	drone = GetClientDrone(client); // This only gets a copy, but we want to get a reference, so just pull the entity index this way
+
+	if (drone.Valid())
+	{
+		int droneId = drone.Get();
+
+		SetNativeArray(2, Drone[droneId], sizeof FDrone);
+	}
+
+	return 0;
 }
 
 FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
@@ -797,7 +836,7 @@ FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
 
 	FVector result;
 
-	RayTrace trace = RayTrace(pos, end, MASK_SHOT, FilterDrone, drone.Get());
+	RayTrace trace = new RayTrace(pos, end, MASK_SHOT, FilterDrone, drone.Get());
 	if (trace.DidHit())
 		result = trace.GetEndPosition();
 	else
@@ -810,7 +849,9 @@ FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
 
 bool FilterDrone(int entity, int mask, int exclude)
 {
-	FObject owner = Drone[exclude].GetOwner();
+	FObject owner;
+	owner = Drone[exclude].GetOwner();
+
 	if (entity == owner.Get())
 		return false;
 	if (entity == exclude)

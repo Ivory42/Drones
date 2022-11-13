@@ -2,6 +2,7 @@
 
 *.exe
 *.json
+*.smx
 !/sourcemod/addons/scripting
 /sourcemod/addons/scripting/include/*
 !/sourcemod/addons/scripting/include/customdrones.inc

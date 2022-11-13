@@ -57,7 +57,7 @@ enum EDamageType
 // Enumeration for weapon states
 enum EWeaponState
 {
-	WeaponSate_Ready, // Reloaded and ready to fire
+	WeaponState_Ready, // Reloaded and ready to fire
 
 	WeaponState_Reloading, // Currently reloading and cannot be fired
 

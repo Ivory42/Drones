@@ -11,11 +11,11 @@ enum struct FDroneBomb
 
 	bool Valid()
 	{
-		return this.component.Valid();
+		return this.Component.Valid();
 	}
 
 	int Get()
 	{
-		return this.component.Get();
+		return this.Component.Get();
 	}
 }

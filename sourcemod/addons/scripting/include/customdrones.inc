@@ -6,6 +6,8 @@
 #define MAX_DRONE_LENGTH 32
 
 #include "drones/components.inc"
+#include <drones/rocket>
+#include <drones/bomb>
 #include <sdkhooks>
 
 bool IsDrone[2049];
@@ -15,9 +17,9 @@ bool IsDrone[2049];
 */
 enum struct FDrone
 {
-	FComponent Hull; // Entity reference of this drone
+	FObject Hull; // Entity reference of this drone
 
-	FComponent Camera; // Entity reference of the camera for this drone
+	FObject Camera; // Entity reference of the camera for this drone
 
 	FClient Owner; // Client currently piloting this drone
 
@@ -80,16 +82,10 @@ enum struct FDrone
 		return this.Hull.Get();
 	}
 
-	// Returns the FComponent of this drone's hull
-	FComponent GetHull()
-	{
-		return this.Hull;
-	}
-
 	// Returns the FObject reference of this drone
 	FObject GetObject()
 	{
-		return this.Hull.GetObject();
+		return this.Hull;
 	}
 
 	// Get the owner of this drone
@@ -97,7 +93,18 @@ enum struct FDrone
 	{
 		return this.Hull.GetOwner();
 	}
+	
+	// Returns the position of this drone
+	FVector GetPosition()
+	{
+		return this.Hull.GetPosition();
+	}
 
+	// Returns the angles of this drone
+	FRotator GetAngles()
+	{
+		return this.Hull.GetAngles();
+	}
 	// Set the owner of this drone
 	void SetOwner(FObject owner)
 	{
@@ -107,8 +114,8 @@ enum struct FDrone
 	// Clears this drone's reference
 	void Clear()
 	{
-		this.Hull.Comp.ref = INVALID_ENT_REFERENCE;
-		this.Camera.Comp.ref = INVALID_ENT_REFERENCE;
+		this.Hull.ref = INVALID_ENT_REFERENCE;
+		this.Camera.ref = INVALID_ENT_REFERENCE;
 		this.Owner.Clear();
 	}
 }
@@ -126,7 +133,7 @@ enum struct FPlayer
 	// Checks if this player is in a drone
 	bool ValidDrone()
 	{
-		return this.drone.Valid();
+		return this.Drone.Valid();
 	}
 
 	// Gets the drone this player is currently in
@@ -377,7 +384,7 @@ forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const cha
  * @param client	Client index of player
  * @param seat		Seat player was in
  */
-forward void CD_OnPlayerExitDrone(DroneProp drone, int client, int seat);
+forward void CD_OnPlayerExitDrone(FDrone drone, int client, int seat);
 
 /**
  * Forward called after a drone is removed
@@ -397,7 +404,7 @@ forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
  * @param weapon_logic		Name of plugin defining weapon logic
  * @param drone_logic		Name of plugin defining drone logic
  */
-forward void CD_OnWeaponChanged(int drone, int pilot, DroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
+forward void CD_OnWeaponChanged(int drone, int pilot, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
@@ -454,7 +461,7 @@ stock EMoveType GetMoveType(const char[] movetype)
 * @param offset		Vector to offset the given origin by in respect to the given angle
 */
 
-stock FVector GetOffsetPos(const FVector origin, const FRotator angles, const FVector offset)
+stock FVector GetOffsetPos(FVector origin, FRotator angles, FVector offset)
 {
 	FVector direction, result;
 	result = origin;
@@ -495,8 +502,9 @@ stock void CreateTracer(FVector start, FVector end)
 
 	target.SetModel("models/empty.mdl");
 
-	target.Teleport(end, FRotator(), FVector());
 	target.Spawn();
+
+	target.Teleport(end, ConstructRotator(), ConstructVector());
 
 	FObject tracer;
 	tracer.Create("env_gunfire"); //create the actual tracer
@@ -513,15 +521,13 @@ stock void CreateTracer(FVector start, FVector end)
 	tracer.SetKeyValue("collisions", "1");
 	tracer.SetKeyValue("spread", "0");
 
-	tracer.Teleport(start, FRotator(), FVector());
-
 	tracer.Spawn();
 	tracer.Activate();
 
-	TeleportEntity(tracer, start, NULL_VECTOR, NULL_VECTOR);
+	tracer.Teleport(start, ConstructRotator(), ConstructVector());
 
 	target.KillOnDelay(0.5);
-	trace.KillOnDelay(0.5);
+	tracer.KillOnDelay(0.5);
 }
 
 // Returns the current drone being piloted by this player
@@ -555,7 +561,7 @@ stock int GetPlayerSeat(FClient client, FDroneSeat[] seats)
 			if (seats[i].Occupied)
 			{
 				FClient occupy;
-				occupy = seats[i].GetOccupier;
+				occupy = seats[i].GetOccupier();
 
 				if (occupy.Get() == client.Get())
 					return i;

@@ -6,7 +6,6 @@
 #include <sdktools>
 #include <tf2_stocks>
 #include "dronetypes.inc"
-#include "rocket.inc"
 #include <ilib>
 
 #define MAXATTACHMENTS 12
@@ -32,7 +31,7 @@ enum struct FComponent
 	// Returns the entity index tied to this component
 	int Get()
 	{
-		this.Reference.Get();
+		return this.Reference.Get();
 	}
 
 	// Sets this component's pointer reference
@@ -191,7 +190,7 @@ enum struct FDroneWeapon
 			if (this.Valid())
 				EmitSoundToAll(this.Firesound, this.Get()); //emit from weapon if physical entity exists
 			else
-				EmitSoundToAll(this.Firesound, this.GetParent()); //otherwise just emit from the drone
+				EmitSoundToAll(this.Firesound, this.GetParent().Get()); //otherwise just emit from the drone
 		}
 	}
 	
@@ -201,7 +200,7 @@ enum struct FDroneWeapon
 		if (this.ReloadTimer.Expired() && this.Ammo == 0 && this.State == WeaponState_Reloading)
 		{
 			this.Ammo = this.MaxAmmo;
-			this.State = WeaponState_Active;
+			this.State = WeaponState_Ready;
 		}
 	}
 
@@ -224,9 +223,9 @@ enum struct FDroneWeapon
 	bool CanFire(bool force)
 	{
 		if (force) //ignore attack delay
-			return (this.Ammo != 0 && this.State == WeaponState_Active);
+			return (this.Ammo != 0 && this.State == WeaponState_Ready);
 
-		else if (this.Ammo != 0 && this.AttackTimer.Expired() && this.State == WeaponState_Active)
+		else if (this.Ammo != 0 && this.AttackTimer.Expired() && this.State == WeaponState_Ready)
 			return true;
 
 		return false;
@@ -263,7 +262,7 @@ enum struct FDroneWeapon
 		FTransform muzzle;
 
 		// If we don't have an attachment defined, fallback to getting our position from our projectile offset
-		if (!GetAttachmentTransform(this.GetComponent(), this.MuzzleAttachment, muzzle))
+		if (!GetAttachmentTransform(this.GetObject(), this.MuzzleAttachment, muzzle))
 		{
 			FVector origin, offset;
 

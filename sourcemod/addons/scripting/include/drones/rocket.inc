@@ -24,7 +24,7 @@ enum struct FRocket
 	// Returns the FObject of this rocket
 	FObject GetObject()
 	{
-		return this.Component.Comp;
+		return this.Component.GetObject();
 	}
 
 	// Returns the component of this rocket
@@ -42,7 +42,7 @@ enum struct FRocket
 		vel.Scale(this.Speed);
 
 		FObject rocket;
-		rocket = this.GetComponent();
+		rocket = this.GetObject();
 
 		rocket.SetVelocityRotation(angle, vel);
 	}
@@ -62,6 +62,8 @@ enum struct FRocket
 stock FRocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, float speed, float damage)
 {
 	FRocket rocket;
+	char classname[64], netname[64];
+
 	switch (type)
 	{
 		case DroneProj_Energy:
