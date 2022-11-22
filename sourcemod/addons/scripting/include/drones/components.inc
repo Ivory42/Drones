@@ -8,7 +8,7 @@
 #include "dronetypes.inc"
 #include <ilib>
 
-#define MAXATTACHMENTS 12
+#define MAXATTACHMENTS 6
 #define MAXWEAPONS 6
 #define MAXSEATS 6
 
@@ -16,12 +16,6 @@
 enum struct FComponent
 {
 	FObject Reference;
-
-	// Max health for this component
-	int MaxHealth;
-
-	// Current health for this component
-	int Health;
 
 	bool Valid()
 	{
@@ -65,7 +59,7 @@ enum struct FComponent
 */
 enum struct FDroneWeapon
 {
-	FComponent Component; // Physical component this weapon is tied to
+	FComponent Component; // Physical component this weapon is tied to.
 
 	FObject Parent; /*
 					 * Usually the drone this weapon is attached to, however it can theoretically be another component as well.
@@ -87,6 +81,8 @@ enum struct FDroneWeapon
 	float Inaccuracy; // Error in angle for this weapon upon consecutive attacks
 
 	float ReloadTime; // How long this weapon reloads for
+
+	float Modifier; // How much extra damage this drone takes when this weapon is hit
 
 	FTimer ReloadTimer; // Game time when this weapon should be reloaded
 
@@ -116,7 +112,9 @@ enum struct FDroneWeapon
 
 	FVector ProjOffset; // Fallback offset to use if this weapon has no muzzle attachment defined
 
-	char MuzzleAttachment[64]; // Name of muzzle attachment for attack origination
+	char AttachmentPoint[256]; // Attachment point on parent to attach this weapon to
+
+	char MuzzleAttachment[256]; // Name of muzzle attachment for attack origination
 
 	/*
 	 * Weapon methods
@@ -246,15 +244,28 @@ enum struct FDroneWeapon
 	{
 		FVector parentPos, position;
 
-		parentPos = this.Parent.GetPosition();
+		if (this.Parent.Valid())
+		{
+			int id = LookupEntityAttachment(this.Parent.Get(), this.AttachmentPoint);
 
-		// We can't get the world position of a parented entity normally, so get the relative position
-		position = this.GetRelativePosition();
+			FTransform transform;
+			
+			if (id)
+				Vector_GetEntityAttachment(this.GetParent(), id, transform);
 
-		// Add our parent position to our relative position to get our world position
-		position.Add(parentPos);
+			parentPos = transform.position;
 
-		return position;
+			// We can't get the world position of a parented entity normally, so get the relative position first
+			position = this.GetRelativePosition();
+
+			// Then we add our parent position to get our attached entity's world position
+			position.Add(parentPos);
+
+			return position;
+		}
+
+		// If for whatever reason we don't have a parent (that should not happen, weapons must be attached to a drone) then we will just return the position
+		return this.GetObject().GetPosition();
 	}
 
 	FTransform GetMuzzleTransform()

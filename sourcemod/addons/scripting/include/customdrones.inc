@@ -29,7 +29,6 @@ enum struct FDrone
 
 	float CameraHeight; // Camera height for this drone
 
-
 	/*
 	* Drone stats
 	*/

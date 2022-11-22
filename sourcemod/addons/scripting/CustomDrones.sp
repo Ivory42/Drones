@@ -3,9 +3,10 @@
 
 int ExplosionSprite;
 
-#include "CustomDroneMovement.sp"
-#include "CustomDroneProperties.sp"
-//#include "CustomDroneWeapons.sp"
+#include "DroneProperties.sp"
+
+#include "DroneController.sp"
+#include "DroneWeapons.sp"
 
 public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones 2",
@@ -25,6 +26,7 @@ public void OnPluginStart()
 	//Forwards
 	DroneCreated = CreateGlobalForward("CD_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_String); //drone struct, plugin, config
 	DroneCreatedWeapon = CreateGlobalForward("CD_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_String); //drone, weapon, weapon plugin, config
+	DroneWeaponDestroyed = CreateGlobalForward("CD_OnWeaponDestroyed", ET_Ignore, Param_Any, Param_Any, Param_String, Param_String); //drone, weapon, weapon plugin, config
 	DroneEntered = CreateGlobalForward("CD_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
 	DroneExited = CreateGlobalForward("CD_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Cell, Param_Cell, Param_String, Param_String); //drone struct, client, seat, plugin, config
 	DroneRemoved = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
@@ -563,14 +565,6 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 	drone.ActiveWeapon = drone.OldWeapon;
 
 	return drone;
-}
-
-FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
-{
-	FDroneWeapon weapon;
-
-
-	return weapon;
 }
 
 FDroneSeat SetupSeat(KeyValues kv, FDrone drone)

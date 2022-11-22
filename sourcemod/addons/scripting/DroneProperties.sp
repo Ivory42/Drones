@@ -1,7 +1,6 @@
 #include <customdrones>
 
 GlobalForward DroneCreated;
-GlobalForward DroneCreatedWeapon;
 GlobalForward DroneEntered;
 GlobalForward DroneExited;
 GlobalForward DroneRemoved;
@@ -9,23 +8,21 @@ GlobalForward DroneDestroyed;
 GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 
-// Player drone reference
-FObject DroneRef[MAXPLAYERS+1];
+FObject DroneRef[MAXPLAYERS+1]; // Player drone reference
 
-// Drone information for the given entity
-FDrone Drone[2049];
+FDrone Drone[2049]; // Drone information for the given entity - This can be for drone entities and the entities used as attachments for a drone
 
-// Weapons tied to drones
-FDroneWeapon DroneWeapons[2049][MAXWEAPONS+1];
+FDroneWeapon DroneWeapons[2049][MAXWEAPONS+1]; // Weapons tied to drones
 
-// Seats tied to drones
-FDroneSeat DroneSeats[2049][MAXSEATS+1];
+FDroneSeat DroneSeats[2049][MAXSEATS+1]; // Seats tied to drones
+
+FComponent Attachments[2049][MAXATTACHMENTS+1]; // Attachments tied to drones
 
 public any Native_ViewLock(Handle plugin, int args)
 {
 	FComponent drone;
 	drone = GetComponentFromEntity(GetNativeCell(1));
-	
+
 	if (drone.Valid())
 	{
 		int droneId = drone.Get();
