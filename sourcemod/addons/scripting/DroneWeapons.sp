@@ -50,6 +50,7 @@ FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
 	weapon.Fixed = view_as<bool>(kv.GetNum("fixed", 1)); // Will not rotate with camera
 	weapon.Damage = kv.GetFloat("damage", 1.0);
 	weapon.ProjSpeed = kv.GetFloat("speed", 1100.0);
+	weapon.Modifier = kv.GetFloat("dmg_mod", 1.0); // Damage modifier when this weapon takes damage (How much extra damage this drone takes when this weapon is hit)
 
 	// Fixed or not fixed
 	if (!weapon.Fixed)

@@ -302,15 +302,13 @@ enum struct FDroneSeat
 
 	bool Occupied; // Whether or not this seat is occupied
 
-	bool Visible; // Is the client in this seat visible
-
 	ESeatType Type; // What type of seat this is, defines what the client occupying this seat can do.
 
-	FVector Offset; // If no attachment position, where this seat is located offset from the vehicle.
+	int WeaponIndex[MAXWEAPONS+1]; // Index of drone weapons to use for this seat, when changing weapons, this seat will cycle through this array of indices
 
-	FDroneWeapon Weapon; // If a gunner/pilot seat, the weapon associated with this seat.
+	int ActiveWeapon; // Current weapon active for this seat
 
-	char AttachmentPoint[64]; // Attachment point to use for this seat
+	FTimer WeaponChangeTimer; // Delay between weapon changes
 
 	// Returns the client occupying this seat
 	FClient GetOccupier()

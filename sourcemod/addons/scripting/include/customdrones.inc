@@ -47,12 +47,6 @@ enum struct FDrone
 
 	int Weapons; // Number of weapons this drone has
 
-	int ActiveWeapon; // Index of this drone's active weapon
-
-	int OldWeapon; // Previous weapon switched from
-
-	FTimer WeaponChangeTimer; // Delay between weapon changes
-
 	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
 
 	char Plugin[MAX_DRONE_LENGTH]; // Logic plugin for basic drone functions

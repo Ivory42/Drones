@@ -7,10 +7,10 @@
 	"health"	"1500"
 	"speed"		"350"
 	"acceleration"	"5"
-	"movetype"	"drone_hover"
+	"movetype"	"drone_helo"
 	"plugin"	"attack_chopper"
 	
-	//optional attachments to use for custom plugins
+	//optional attachments to use for custom plugins - WIP
 	"attachments"
 	{
 		"rotor_base"
@@ -49,6 +49,7 @@
 			"damage"	"15.0"
 			"attack_time"	"0.08"
 			"inaccuracy"	"1.5"
+			"plugin_name"	"chaingun"
 			
 			//Custom properties
 			"attack_acceleration"	"0.2" 					//rate at which attack speed increases while attacking
@@ -60,7 +61,6 @@
 			
 			"max_angle_y"	"40.0"
 			"max_angle_x"	"35.0"
-			"fixed"			"1"
 			"sound"		"weapons/stinger_fire1.wav"
 			"damage"	"60.0"
 			"attack_time"	"0.4"
@@ -79,6 +79,14 @@
 			"reload_time"	"6.0"
 			"fuse"		"1.25"
 			"proj_model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
+		}
+	}
+	"seats"
+	{
+		"seat1"
+		{
+			"type"	"0" // 0 = pilot; 1 = gunner; 2 = passenger
+			"weapons"	"ALL"
 		}
 	}
 }

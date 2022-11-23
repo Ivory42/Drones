@@ -570,7 +570,24 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 {
 	FDroneSeat seat;
+	seat.Type = view_as<ESeatType>(kv.GetNum("type")); // 0 = pilot, 1 = gunner, 2 = passenger
 
+	// If this is not a passenger seat, let's find the associated weapons that this seat can use
+	if (seat.Type != Seat_Passenger)
+	{
+		char weapons[32];
+		kv.GetString("weapons", weapons, sizeof weapons);
+
+		char indices[8];
+		ExplodeString(weapons, indices, sizeof indices, ";");
+
+		for (int i = 1; i <= MAXWEAPONS; i++)
+			seat.WeaponIndex[i] = StringToInt(indices[i]);
+
+		seat.ActiveWeapon = seat.WeaponIndex[1]; // Set active weapon to first index
+	}
+
+	seat.Occupied = false;
 
 	return seat;
 }

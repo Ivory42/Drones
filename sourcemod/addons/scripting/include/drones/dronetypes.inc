@@ -34,11 +34,11 @@ enum EProjType
 // Drone move types
 enum EMoveType
 {
-	MoveType_Hover, // Helicopter movement: hovers in the air with directional movement. Defined in configs as "drone_hover"
+	MoveType_Helo, // Helicopter movement: hovers in the air with directional movement. Defined in configs as "drone_helo"
 
 	MoveType_Fly, // Plane/Jet like movement: always moves forward. Defined in configs as "drone_fly"
 
-	MoveType_Ground, // WIP - Ground movement with 4 wheels. Defined in configs as "drone_ground"
+	MoveType_Hover, // WIP - Hovercraft like movement: Hovers just above the ground and uses 8 directional movement
 
 	MoveType_Custom // Custom movetype if defining logic in a sub plugin. Defined in configs as "drone_custom"
 };
@@ -79,8 +79,6 @@ enum EWeaponType
 // Enumeration for seat types
 enum ESeatType
 {
-	Seat_None, // Client is not in a drone
-
 	Seat_Pilot, // Pilot's seat, this seat controls the vehicle's movement.
 
 	Seat_Gunner, // Gunner seat, this seat controls the associated weapon.
