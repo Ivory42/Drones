@@ -3,9 +3,9 @@
 *.exe
 *.json
 *.smx
-!/sourcemod/addons/scripting
-/sourcemod/addons/scripting/include/*
-!/sourcemod/addons/scripting/include/customdrones.inc
-!/sourcemod/addons/scritping/include/drones
-!/sourcemod/addons/scritping/drones
+!/addons/sourcemod/scripting
+/addons/sourcemod/scripting/include/*
+!/addons/sourcemod/scripting/include/customdrones.inc
+!/addons/sourcemod/scritping/include/drones
+!/addons/sourcemod/scritping/drones
 
