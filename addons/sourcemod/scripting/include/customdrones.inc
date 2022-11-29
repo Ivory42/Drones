@@ -421,9 +421,9 @@ forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker,
  * @param weapon_logic		Name of plugin defining weapon logic
  * @param drone_logic		Name of plugin defining drone logic
  *
- * @return					How to handle ammo consumption: Anything above Plugin_Continue will not consume ammo
+ * @return					How to handle ammo consumption: Plugin_Continue expends 1 ammo. Plugin_Changed expends the value ammo was set to. Plugin_Stop/Plugin_Handled will not expend any ammo
  */
-forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
+forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, int& ammo, const char[] weapon_logic, const char[] drone_logic);
 
 
 
@@ -435,11 +435,11 @@ forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weap
 stock EMoveType GetMoveType(const char[] movetype)
 {
 	if (StrEqual(movetype, "drone_hover"))
-		return MoveType_Hover;
+		return MoveType_Helo;
 	else if (StrEqual(movetype, "drone_fly"))
 		return MoveType_Fly;
-	else if (StrEqual(movetype, "drone_ground"))
-		return MoveType_Ground;
+	else if (StrEqual(movetype, "drone_hover"))
+		return MoveType_Hover;
 	else if (StrEqual(movetype, "drone_custom"))
 		return MoveType_Custom;
 
@@ -541,6 +541,7 @@ stock FDrone GetClientDrone(FClient client)
  * Checks if the given client is in a drone and returns the seat index
  * 
  * @param client     Client to check
+ * @param seats		 Array of drone seats to check
  * @return           Return seat type occupied by this client.
  */
 stock int GetPlayerSeat(FClient client, FDroneSeat[] seats)

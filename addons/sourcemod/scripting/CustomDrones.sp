@@ -32,7 +32,7 @@ public void OnPluginStart()
 	DroneRemoved = CreateGlobalForward("CD_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	DroneChangeWeapon = CreateGlobalForward("CD_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
 	DroneDestroyed = CreateGlobalForward("CD_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
-	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Cell, Param_String, Param_String); //drone, gunner, weapon, slot, weapon plugin, drone plugin
+	DroneAttack = CreateGlobalForward("CD_OnDroneAttack", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Cell, Param_CellByRef, Param_String, Param_String); //drone, gunner, weapon, slot, weapon plugin, drone plugin
 }
 
 public void OnMapStart()
@@ -171,12 +171,12 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	// Deprecated Natives, will still work but use CD_GetClientDrone to retrieve properties easier
 	CreateNative("CD_GetDroneHealth", Native_GetDroneHealth);
 	CreateNative("CD_GetDroneMaxHealth", Native_GetDroneMaxHealth);
-	CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneActiveWeapon);
+	//CreateNative("CD_GetDroneActiveWeapon", Native_GetDroneActiveWeapon);
 	//CreateNative("CD_GetWeaponAttackSound", Native_AttackSound);
 	
 	CreateNative("CD_SpawnDroneByName", Native_SpawnDroneName);
 	CreateNative("CD_GetDroneWeapon", Native_GetDroneWeapon);
-	CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon);
+	//CreateNative("CD_SetDroneActiveWeapon", Native_SetDroneWeapon);
 	CreateNative("CD_SetWeaponReloading", Native_SetWeaponReload);
 	CreateNative("CD_GetParamFloat", Native_GetFloatParam);
 	CreateNative("CD_GetParamInteger", Native_GetIntParam);
@@ -193,12 +193,6 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 	return APLRes_Success;
 }
-
-
-/********************************************************************************
-	NATIVE FUNCTIONS AND HELPERS
-
-********************************************************************************/
 
 /****************
 * Client Functions
@@ -443,7 +437,7 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 
 	switch (drone.Movetype)
 	{
-		case MoveType_Ground:
+		case MoveType_Hover:
 		{
 			drone.Viewlocked = false;
 			SetEntityGravity(drone.Get(), 1.0);
@@ -491,7 +485,7 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 			FormatEx(number, sizeof number, "seat%i", i);
 			if (kv.JumpToKey(number))
 			{
-				DroneSeats[droneId][i] = SetupSeat(kv, drone);
+				DroneSeats[droneId][i] = SetupSeat(kv);
 				kv.GoBack();
 			}
 			else
@@ -514,10 +508,8 @@ FDrone SpawnDrone(FClient owner, const char[] name)
 
 	int pilotIndex = GetPilotSeatIndex(drone);
 
-	// Enter pilot seat
-	if (pilotIndex)
-		PlayerEnterVehicle(drone, DroneSeats[droneId][pilotIndex], owner);
-	else
+	// Check for pilot seat
+	if (!pilotIndex)
 		LogError("ERROR: No pilot seat found for drone: %s! This drone will not be pilotable!", name);
 
 	return drone;
@@ -561,13 +553,10 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 
 	hull.Teleport(spawn.position, spawn.rotation, spawn.velocity);
 
-	drone.OldWeapon = 1;
-	drone.ActiveWeapon = drone.OldWeapon;
-
 	return drone;
 }
 
-FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
+FDroneSeat SetupSeat(KeyValues kv)
 {
 	FDroneSeat seat;
 	seat.Type = view_as<ESeatType>(kv.GetNum("type")); // 0 = pilot, 1 = gunner, 2 = passenger
@@ -578,8 +567,8 @@ FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 		char weapons[32];
 		kv.GetString("weapons", weapons, sizeof weapons);
 
-		char indices[8];
-		ExplodeString(weapons, indices, sizeof indices, ";");
+		char indices[MAXWEAPONS+1][8];
+		ExplodeString(weapons, ";", indices, sizeof indices, sizeof indices[]);
 
 		for (int i = 1; i <= MAXWEAPONS; i++)
 			seat.WeaponIndex[i] = StringToInt(indices[i]);

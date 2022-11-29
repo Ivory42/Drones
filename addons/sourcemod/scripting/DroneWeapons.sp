@@ -30,12 +30,6 @@ FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
 	char muzzlename[256]; // Attachment point for projectile/bullet spawns
 	kv.GetString("muzzle", muzzlename, sizeof muzzlename);
 
-	// TODO - Search through drone attachments to find proper parent if name is given
-
-	// Fallback positions if no attachments are found
-	weapon.Offset = Vector_GetFromKV(kv, "offset");
-	weapon.ProjOffset = Vector_GetFromKV(kv, "proj_offset");
-
 	weapon.AttachmentPoint = attachname;
 	weapon.MuzzleAttachment = muzzlename;
 

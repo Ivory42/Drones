@@ -62,45 +62,52 @@ public int Native_OverrideMaxSpeed(Handle plugin, int args)
 
 public int Native_FireWeapon(Handle plugin, int args)
 {
-	FClient owner;
-	FComponent drone;
+	FClient gunner;
+	FObject drone;
 
-	owner = ConstructClient(GetNativeCell(1));
-	drone = GetComponentFromEntity(GetNativeCell(2));
+	gunner = ConstructClient(GetNativeCell(1));
+	drone = ConstructObject(GetNativeCell(2));
 
-	if (owner.Valid() && drone.Valid())
+	if (gunner.Valid() && drone.Valid())
 	{
 		int droneId = drone.Get();
 
-		if (IsValidDrone(drone.GetObject()))
+		if (IsValidDrone(drone))
 		{
-			int slot = Drone[droneId].ActiveWeapon;
+			int seat = GetPlayerSeat(gunner, DroneSeats[droneId]);
 
-			if (DroneWeapons[droneId][slot].CanFire(true))
-				FireWeapon(owner, drone, slot, DroneWeapons[droneId][slot]);
+			if (seat)
+			{
+				int slot = DroneSeats[droneId][seat].ActiveWeapon;
+
+				if (DroneWeapons[droneId][slot].CanFire(true))
+					FireWeapon(gunner, drone, slot, DroneWeapons[droneId][slot]);
+			}
 		}
 	}
 
 	return 0;
 }
 
-void FireWeapon(FClient gunner, FComponent droneHull, int slot, FDroneWeapon weapon)
+void FireWeapon(FClient gunner, FObject drone, int slot, FDroneWeapon weapon)
 {
 	Action result = Plugin_Continue;
 	Call_StartForward(DroneAttack);
 
-	int droneId = droneHull.Get();
+	int droneId = drone.Get();
 
-	Call_PushArray(droneHull, sizeof FComponent);
+	int ammo = 1;
+
+	Call_PushArray(drone, sizeof FObject);
 	Call_PushArray(gunner, sizeof FClient);
 	Call_PushArray(weapon, sizeof FDroneWeapon);
 	Call_PushCell(slot);
-	Call_PushString(weapon.Plugin);
+	Call_PushCellRef(ammo);
 	Call_PushString(Drone[droneId].Plugin);
 
 	Call_Finish(result);
 
-	weapon.SimulateFire(result, 1);
+	weapon.SimulateFire(result, ammo);
 }
 
 public int Native_DroneTakeDamage(Handle plugin, int args)
@@ -218,37 +225,6 @@ public any Native_GetDroneWeapon(Handle plugin, int args)
 		int slot = GetNativeCell(2);
 
 		SetNativeArray(3, DroneWeapons[droneId][slot], sizeof FDroneWeapon);
-	}
-
-	return 0;
-}
-
-public any Native_GetDroneActiveWeapon(Handle plugin, int args)
-{
-	FComponent drone;
-	drone = GetComponentFromEntity(GetNativeCell(1));
-
-	if (IsValidDrone(drone.GetObject()))
-	{
-		int droneId = drone.Get();
-		SetNativeArray(2, DroneWeapons[droneId][Drone[droneId].ActiveWeapon], sizeof FDroneWeapon);
-	}
-
-	return 0;
-}
-
-public int Native_SetDroneWeapon(Handle plugin, int args)
-{
-	FComponent drone;
-	drone = GetComponentFromEntity(GetNativeCell(1));
-
-	if (IsValidDrone(drone.GetObject()))
-	{
-		int droneId = drone.Get();
-
-		int slot = GetNativeCell(2);
-
-		Drone[droneId].ActiveWeapon = slot;
 	}
 
 	return 0;
