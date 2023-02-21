@@ -96,18 +96,18 @@ void FireWeapon(FClient gunner, FObject drone, int slot, FDroneWeapon weapon)
 
 	int droneId = drone.Get();
 
-	int ammo = 1;
+	int ammoUsed = weapon.AmmoPerShot;
 
 	Call_PushArray(drone, sizeof FObject);
 	Call_PushArray(gunner, sizeof FClient);
 	Call_PushArray(weapon, sizeof FDroneWeapon);
 	Call_PushCell(slot);
-	Call_PushCellRef(ammo);
+	Call_PushCellRef(ammoUsed);
 	Call_PushString(Drone[droneId].Plugin);
 
 	Call_Finish(result);
 
-	weapon.SimulateFire(result, ammo);
+	weapon.SimulateFire(result, ammoUsed);
 }
 
 public int Native_DroneTakeDamage(Handle plugin, int args)
@@ -134,7 +134,7 @@ public int Native_DroneTakeDamage(Handle plugin, int args)
 	return 0;
 }
 
-void DroneTakeDamage(FDrone drone, FObject hull, FClient attacker, FObject inflictor, float &damage, bool crit, FObject weapon)
+void DroneTakeDamage(FDrone drone, const FObject hull, const FClient attacker, const FObject inflictor, float &damage, bool crit, const FObject weapon)
 {
 	bool sendEvent = true;
 
@@ -162,7 +162,7 @@ void DroneTakeDamage(FDrone drone, FObject hull, FClient attacker, FObject infli
 	}
 }
 
-void SendDamageEvent(FDrone drone, FClient attacker, float damage, bool crit)
+void SendDamageEvent(const FDrone drone, const FClient attacker, float damage, bool crit)
 {
 	if (attacker.Valid() && drone.Valid())
 	{
@@ -485,7 +485,7 @@ bool FilterDroneShoot(int entity, int mask, int drone)
 	return true;
 }
 
-float Damage_Hitscan(FObject victim, FObject drone, float baseDamage)
+float Damage_Hitscan(const FObject victim, const FObject drone, float baseDamage)
 {
 	FVector pos, vicPos;
 	float distance;
@@ -799,7 +799,7 @@ public any Native_GetDrone(Handle plugin, int args)
 	return 0;
 }
 
-FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
+FVector GetDroneAimPosition(const FObject drone, const FVector pos, const FRotator angle)
 {
 	// Max range on attacks is 10000 hu
 	FVector end;
@@ -831,4 +831,68 @@ bool FilterDrone(int entity, int mask, int exclude)
 		return false;
 
 	return true;
+}
+
+public Action OnPlayerRunCmd(int clientId, int& buttons)
+{
+	FClient client;
+	client = ConstructClient(clientId);
+
+	if (PlayerInDrone(client))
+	{
+		// We can safely get a copy of this drone since we won't be modifying anything and only reading from it
+		FDrone drone;
+		drone = GetClientDrone(client);
+
+		if (!drone.Valid())
+			return Plugin_Continue;
+
+		int droneId = drone.Get();
+
+		FDroneSeat seat;
+		int seatIndex = GetPlayerSeat(client, DroneSeats[droneId]);
+
+		seat = DroneSeats[seatIndex];
+
+		switch (seat.Type)
+		{
+			case Seat_Pilot, Seat_Gunner: // handling weapons for this seat
+			{
+				if (buttons & IN_ATTACK)
+				{
+					OnDroneAttack(client, seat, drone);
+					buttons &= ~IN_ATTACK; // Remove the attack flag
+				}
+				if (buttons & IN_ATTACK2)
+				{
+					CycleNextWeapon(client, seat, drone);
+					buttons &= ~IN_ATTACK2;
+				}
+
+				OnDroneAimChanged();
+			}
+			case Seat_Pilot: // Strictly drone movement
+			{
+				if (buttons & IN_FORWARD)
+					OnDroneMoveForward(client, drone, 1.0);
+
+				if (buttons & IN_BACK)
+					OnDroneMoveForward(client, drone, -1.0);
+
+				if (buttons & IN_RIGHT)
+					OnDroneMoveRight(client, drone, 1.0);
+
+				if (buttons & IN_LEFT)
+					OnDroneMoveRight(client, drone, -1.0);
+
+				if (buttons & IN_JUMP)
+					OnDroneMoveUp(client, drone, 1.0);
+
+				if (buttons & IN_DUCK)
+					OnDroneMoveUp(client, drone, -1.0);
+			}
+		}
+	}
+
+	return Plugin_Continue;
 }

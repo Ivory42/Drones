@@ -77,46 +77,76 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 	// Make sure our parent exists before doing anything else
 	if (parent.Valid())
 	{
-		FComponent component;
-		component = CreateDeferredComponent("prop_physics_multiplayer"); // Create physics component to use
+		FObject receiver, mount;
+		receiver = CreateObjectDeferred("prop_physics_multiplayer"); // Create physics component to use
 
-		FObject entity;
-		entity = component.GetObject();
-
-		entity.SetKeyValue("model", modelname);
-		
+		// Health value gets shared between mount and receiver if applicable
 		int health = kv.GetNum("health", 0);
-		entity.SetProp(Prop_Data, "m_iHealth", health);
+
+		// Do we have a mount?
+		if (strlen(weapon.MountModel) > 3)
+		{
+			// Mounts will act as the part of the weapon that can rotate with the player's camera yaw values
+			// The receiver itself will rotate to match the player's pitch
+			mount = CreateObjectDeferred("prop_dynamic_override");
+			mount.SetKeyValue("model", weapon.MountModel);
+
+			// Flags this object as a mount so it can properly share health with the weapon itself
+			int mountId = mount.Get();
+			IsMount[mountId] = true;
+			LinkedReceiver[mountId] = receiver;
+
+			SDKHook(mountId, SDKHook_OnTakeDamage, OnMountDamaged);
+
+			// Player's angles are split between the mount and the receiver to give a proper look to the weapon's angles
+			weapon.ComplexAngles = true;
+		}
+
+		receiver.SetKeyValue("model", modelname);
+
+		receiver.SetProp(Prop_Data, "m_iHealth", health);
 		if (health)
 		{
-			if (entity.HasProp(Prop_Data, "m_takedamage"))
-				entity.SetProp(Prop_Data, "m_takedamage", 1);
+			if (receiver.HasProp(Prop_Data, "m_takedamage"))
+				receiver.SetProp(Prop_Data, "m_takedamage", 1);
 		}
 
-		SDKHook(entity.Get(), SDKHook_OnTakeDamage, OnWeaponDamaged);
+		SDKHook(receiver.Get(), SDKHook_OnTakeDamage, OnWeaponDamaged);
 		
 		// Now let's get our spawn transform
+
+		int id;
 		FTransform spawn;
-		int id = LookupEntityAttachment(component.Get(), weapon.AttachmentPoint);
-		if (id)
-			Vector_GetEntityAttachment(component.GetObject(), id, spawn);
-		else
+
+		// if we have a mount, let's attach that first
+		if (mount.Valid())
 		{
-			// If we do not have an attachment point, fallback to using this weapons offset
-			spawn.position = parent.GetPosition();
-			spawn.rotation = parent.GetAngles();
+			id = LookupEntityAttachment(parent.Get(), weapon.AttachmentPoint);
+			if (id)
+				Vector_GetEntityAttachment(parent, id, spawn);
+			else
+				LogError("Error: [Attach Mount] Cannot find attachment point '%s' assigned to this weapon! Make sure the attachment point exists on the parent model!", weapon.AttachmentPont);
 
-			spawn.position.Add(weapon.Offset);
+			FinishSpawn(mount, spawn);
+			mount.SetParent(parent);
+			// Our new parent for this weapon's receiver
+			parent = mount;
 		}
-
-		entity.Teleport(spawn.position, spawn.rotation, spawn.velocity);
-
-		entity.SetParent(parent);
+		
+		// Now let's attach the receiver
+		id = LookupEntityAttachment(parent.Get(), weapon.AttachmentPoint);
+		if (id)
+			Vector_GetEntityAttachment(parent, id, spawn);
+		else
+			LogError("Error: [Attach Reciever] No attachment point found with name: %s!\nIf you are using a mount, it MUST have an attachment point with the same name that the mount attaches to on the drone!", weapon.AttachmentPoint);
 
 		// Finish up our spawning
-		FinishComponent(component);
+		FinishSpawn(receiver, spawn);
 
-		weapon.Component = component;
+		receiver.SetParent(parent);
+
+		weapon.Mount = mount;
+		weapon.Receiver = receiver;
 
 		// Set this weapon's drone as the attached drone
 		int entityId = entity.Get();
@@ -124,15 +154,48 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 	}
 }
 
+// Whenever the mount takes damage, send that damage over to the weapon itself
+Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
+{
+	FObject mount;
+	mount = ConstructObject(mountId);
+
+	if (mount.Valid())
+	{
+		// Get our weapon to decide how to damage the drone
+		if (LinkedReceiver[mountId].Valid())
+		{
+			int weaponId = LinkedReceiver[mountId].Get();
+
+			if (Drone[weaponId].Valid())
+			{
+				FDroneWeapon weapon;
+				FindDroneWeapon(ConstructObject(weaponId), Drone[weaponId].GetObject(), weapon);
+
+				// Go straight to damaging the drone if the weapon is already destroyed
+				if (weapon.State == WeaponState_Destroyed)
+				{
+					DroneTakeDamage(Drone[weaponId], Drone[weaponId].GetObject(), ConstructClient(attackerId), ConstructObject(inflictorId), damage, false, ConstructObject(attackerId))
+				}
+				else // Otherwise send the damage directly to the weapon
+				{
+					OnWeaponDamaged(weaponId, attackerId, inflictorId, damage, damagetype);
+				}
+			}
+		}
+	}
+}
+
 Action OnWeaponDamaged(int weaponId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
 {
 	FObject weapon;
-	weapon.Set(weaponId);
+	weapon = ConstructObject(weaponId);
 
 	if (weapon.Valid() && Drone[weaponId].Valid() && Drone[weaponId].Alive)
 	{
 		int health = weapon.GetHealth();
 
+		// Get our actual weapon object
 		FDroneWeapon droneWeapon;
 		FindDroneWeapon(weapon, Drone[weaponId].GetObject(), droneWeapon);
 
@@ -165,6 +228,8 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 	{
 		// Deal damage to the drone?
 	}
+
+	// Need to add some explosion effects and stuffs
 
 	Call_StartForward(DroneWeaponDestroyed);
 

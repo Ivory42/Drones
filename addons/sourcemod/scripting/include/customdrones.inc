@@ -10,7 +10,7 @@
 #include <drones/bomb>
 #include <sdkhooks>
 
-bool IsDrone[2049];
+public bool IsDrone[2049];
 
 /*
 *   Struct storing information for a drone object
@@ -523,7 +523,7 @@ stock void CreateTracer(FVector start, FVector end)
 	tracer.KillOnDelay(0.5);
 }
 
-// Returns the current drone being piloted by this player
+// Returns a copy of the current drone being piloted by this player
 stock FDrone GetClientDrone(FClient client)
 {
 	FDrone drone;
