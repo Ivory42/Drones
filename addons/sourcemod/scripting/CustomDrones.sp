@@ -532,6 +532,11 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 	return drone;
 }
 
+bool DroneSpawnTrace(int entity, int mask, int exclude)
+{
+	return (entity != exclude);
+}
+
 // Physically spawn our drone in the world
 FDrone SetupDrone(KeyValues config, FTransform spawn)
 {
@@ -568,9 +573,7 @@ FDrone SetupDrone(KeyValues config, FTransform spawn)
 	drone.Health = drone.MaxHealth;
 	drone.Alive = true;
 
-	hull.FinishSpawn();
-
-	hull.Teleport(spawn.position, spawn.rotation, spawn.velocity);
+	FinishSpawn(hull, spawn);
 
 	return drone;
 }

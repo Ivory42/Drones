@@ -149,7 +149,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 		weapon.Receiver = receiver;
 
 		// Set this weapon's drone as the attached drone
-		int entityId = entity.Get();
+		int entityId = receiver.Get();
 		Drone[entityId] = drone;
 	}
 }

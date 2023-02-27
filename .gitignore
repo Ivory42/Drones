@@ -6,6 +6,6 @@
 !/addons/sourcemod/scripting
 /addons/sourcemod/scripting/include/*
 !/addons/sourcemod/scripting/include/customdrones.inc
-!/addons/sourcemod/scritping/include/drones
-!/addons/sourcemod/scritping/drones
+!/addons/sourcemod/scripting/include/drones/
+!/addons/sourcemod/scripting/drones
 

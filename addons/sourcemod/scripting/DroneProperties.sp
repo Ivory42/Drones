@@ -8,6 +8,9 @@ GlobalForward DroneDestroyed;
 GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 
+bool IsMount[2049];
+FObject LinkedReceiver[2049];
+
 FObject DroneRef[MAXPLAYERS+1]; // Player drone reference
 
 FDrone Drone[2049]; // Drone information for the given entity - This can be for drone entities and the entities used as attachments for a drone
@@ -485,7 +488,7 @@ bool FilterDroneShoot(int entity, int mask, int drone)
 	return true;
 }
 
-float Damage_Hitscan(const FObject victim, const FObject drone, float baseDamage)
+float Damage_Hitscan(FObject victim, FObject drone, float baseDamage)
 {
 	FVector pos, vicPos;
 	float distance;
@@ -799,7 +802,7 @@ public any Native_GetDrone(Handle plugin, int args)
 	return 0;
 }
 
-FVector GetDroneAimPosition(const FObject drone, const FVector pos, const FRotator angle)
+FVector GetDroneAimPosition(const FObject drone, FVector pos, FRotator angle)
 {
 	// Max range on attacks is 10000 hu
 	FVector end;
@@ -852,11 +855,11 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 		FDroneSeat seat;
 		int seatIndex = GetPlayerSeat(client, DroneSeats[droneId]);
 
-		seat = DroneSeats[seatIndex];
+		seat = DroneSeats[drone.Get()][seatIndex];
 
 		switch (seat.Type)
 		{
-			case Seat_Pilot, Seat_Gunner: // handling weapons for this seat
+			case Seat_Gunner: // handling weapons for this seat
 			{
 				if (buttons & IN_ATTACK)
 				{
@@ -873,6 +876,19 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 			}
 			case Seat_Pilot: // Strictly drone movement
 			{
+				if (buttons & IN_ATTACK)
+				{
+					OnDroneAttack(client, seat, drone);
+					buttons &= ~IN_ATTACK; // Remove the attack flag
+				}
+				if (buttons & IN_ATTACK2)
+				{
+					CycleNextWeapon(client, seat, drone);
+					buttons &= ~IN_ATTACK2;
+				}
+				OnDroneAimChanged();
+
+				// Drone movement
 				if (buttons & IN_FORWARD)
 					OnDroneMoveForward(client, drone, 1.0);
 
