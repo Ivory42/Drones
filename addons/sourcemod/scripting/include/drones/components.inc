@@ -12,10 +12,16 @@
 #define MAXWEAPONS 6
 #define MAXSEATS 6
 
-// Component object for drone attachments. If using a physical attachment, this component struct will house the FObject entity reference.
+/*
+* Struct used for any misc attachments given to a drone. These are not necessarily functional and can be used primarily for cosmetic reasons.
+*/
 enum struct FComponent
 {
 	FObject Reference;
+
+	float Modifier; // Extra damage to deal to the owning drone if this component is hit
+
+	float MaxHealth; // Max health of this component
 
 	bool Valid()
 	{
@@ -59,7 +65,9 @@ enum struct FComponent
 */
 enum struct FDroneWeapon
 {
-	FComponent Component; // Physical component this weapon is tied to.
+	FObject Mount; // Optional physical mount to use for the weapon. This will rotate with the player's yaw
+	
+	FObject Receiver; // Optional model to use for this weapon. If a mount exists, this will only rotate with the player's pitch
 
 	FObject Parent; /*
 					 * Usually the drone this weapon is attached to, however it can theoretically be another component as well.
@@ -70,7 +78,9 @@ enum struct FDroneWeapon
 
 	int MaxAmmo; // Max ammo that can be loaded at once
 
-	float Firerate; // How fast this weapon fires, measured in rounds per second
+	float FireRate; // How fast this weapon fires, measured in rounds per second
+
+	float MaxHealth; // Max health value for this weapon
 
 	FTimer AttackTimer; // Game time when this weapon is ready to fire again
 
@@ -92,11 +102,15 @@ enum struct FDroneWeapon
 
 	EWeaponType Type; // Weapon type
 
+	float TurnRate; // How quickly this weapon rotates
+
 	float MaxPitch; // max pitch this weapon can fire at
 
 	float MaxYaw; // max yaw this weapon can fire at
 
 	bool Fixed; // Whether this weapon model is fixed or rotates
+
+	bool ComplexAngles; // Should the angles on this be distributed between the receiver and mount
 
 	char Name[MAX_WEAPON_LENGTH]; // Display name for this weapon
 
@@ -161,7 +175,7 @@ enum struct FDroneWeapon
 	 * Handles ammo and initiating reloads on drone weapons
 	 * 
 	 * @param action     Action to handle ammo management (See OnDroneAttack forward)
-	 * @param decrease   Ammo to decrease by if Plugin_Handled is passed
+	 * @param decrease   Ammo to decrease by if Plugin_Changed is passed
 	 */
 	void SimulateFire(Action action, int decrease)
 	{
@@ -173,7 +187,7 @@ enum struct FDroneWeapon
 		if (this.Ammo == -1)
 			return;
 
-		// Determine how we handle ammo counts - Plugin_Continue decrements ammo by one. Plugin_Handled reduces ammo by the given amount
+		// Determine how we handle ammo counts - Plugin_Continue decrements ammo by one. Plugin_Changed reduces ammo by the given amount
 		switch (action)
 		{
 			case Plugin_Continue: this.Ammo--;
@@ -210,7 +224,7 @@ enum struct FDroneWeapon
 		if (this.Ammo < this.MaxAmmo)
 		{
 			this.Ammo = 0;
-			this.ReloadTimer.Set(this.ReloadTime);
+			this.ReloadTimer.Set(this.ReloadTime, false);
 			this.State = WeaponState_Reloading;
 		}
 	}
@@ -283,7 +297,7 @@ enum struct FDroneSeat
 
 	FTimer WeaponChangeTimer; // Delay between weapon changes
 
-	char attachment[64]; // Attachment point for this seat
+	char Attachment[64]; // Attachment point for this seat
 
 	// Returns the client occupying this seat
 	FClient GetOccupier()
@@ -301,6 +315,17 @@ enum struct FDroneSeat
 	ESeatType GetSeatType()
 	{
 		return this.Type;
+	}
+
+	// Returns true if this seat has an active weapon index
+	bool HasWeapon()
+	{
+		if (this.Type == Seat_Passenger) // Passenger seats have no weapons
+			return false;
+
+		int index = this.GetWeaponIndex();
+
+		return (index >= 0 && index < MAXSEATS);
 	}
 }
 
@@ -352,7 +377,7 @@ stock void FinishComponent(FComponent component)
 }
 
 /**
- * Returns an FComponent reference from the given entity index
+ * Returns an FComponent object reference from the given entity index
  * 
  * @param entityId     Entity index to use as this component's FObject reference
  * @return             FComponent containing a reference to the given entity

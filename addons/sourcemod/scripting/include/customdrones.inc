@@ -33,8 +33,6 @@ enum struct FDrone
 	* Drone stats
 	*/
 
-	float Health; // Current health of this drone
-
 	float MaxHealth; // Max health of this drone
 
 	float MaxSpeed; // Max speed this drone can move at
@@ -73,6 +71,12 @@ enum struct FDrone
 	int Get()
 	{
 		return this.Hull.Get();
+	}
+
+	// Returns the move type of this drone
+	EMoveType GetMoveType()
+	{
+		return this.Movetype;
 	}
 
 	// Returns the FObject reference of this drone

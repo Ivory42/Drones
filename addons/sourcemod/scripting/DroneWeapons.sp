@@ -40,11 +40,12 @@ FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
 	weapon.Ammo = weapon.MaxAmmo;
 	weapon.Inaccuracy = kv.GetFloat("inaccuracy", 0.0);
 	weapon.ReloadTime = kv.GetFloat("reload_time", 1.0);
-	weapon.Firerate = kv.GetFloat("attack_time");
+	weapon.FireRate = kv.GetFloat("attack_time");
 	weapon.Fixed = view_as<bool>(kv.GetNum("fixed", 1)); // Will not rotate with camera
 	weapon.Damage = kv.GetFloat("damage", 1.0);
 	weapon.ProjSpeed = kv.GetFloat("speed", 1100.0);
 	weapon.Modifier = kv.GetFloat("dmg_mod", 1.0); // Damage modifier when this weapon takes damage (How much extra damage this drone takes when this weapon is hit)
+	weapon.TurnRate = kv.GetFloat("turn_rate", 100.0); // rotation speed of weapon
 
 	// Fixed or not fixed
 	if (!weapon.Fixed)
@@ -82,6 +83,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 
 		// Health value gets shared between mount and receiver if applicable
 		int health = kv.GetNum("health", 0);
+		weapon.MaxHealth = health;
 
 		// Do we have a mount?
 		if (strlen(weapon.MountModel) > 3)
@@ -184,6 +186,8 @@ Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& dam
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 Action OnWeaponDamaged(int weaponId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
@@ -195,6 +199,9 @@ Action OnWeaponDamaged(int weaponId, int& attackerId, int& inflictorId, float& d
 	{
 		int health = weapon.GetHealth();
 
+		if (health <= 0)
+			return Plugin_Stop;
+
 		// Get our actual weapon object
 		FDroneWeapon droneWeapon;
 		FindDroneWeapon(weapon, Drone[weaponId].GetObject(), droneWeapon);
@@ -202,13 +209,9 @@ Action OnWeaponDamaged(int weaponId, int& attackerId, int& inflictorId, float& d
 		if (droneWeapon.State == WeaponState_Destroyed) // Do not damage if this weapon is already destroyed
 			return Plugin_Stop;
 
-		if (droneWeapon.Modifier > 1.0)
-			damage *= droneWeapon.Modifier;
+		damage *= droneWeapon.Modifier;
 
-		if (health <= 0)
-			return Plugin_Stop;
-
-		health -= damage;
+		health -= RoundFloat(damage);
 
 		if (health <= 0)
 			DestroyWeapon(droneWeapon, Drone[weaponId]);

@@ -855,7 +855,7 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 		FDroneSeat seat;
 		int seatIndex = GetPlayerSeat(client, DroneSeats[droneId]);
 
-		seat = DroneSeats[drone.Get()][seatIndex];
+		seat = DroneSeats[droneId][seatIndex];
 
 		switch (seat.Type)
 		{
@@ -863,32 +863,36 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 			{
 				if (buttons & IN_ATTACK)
 				{
-					OnDroneAttack(client, seat, drone);
+					OnDroneAttack(client, DroneSeats[droneId][seatIndex], drone); // We have to pass a reference of the actual seat struct and not the created copy
 					buttons &= ~IN_ATTACK; // Remove the attack flag
 				}
 				if (buttons & IN_ATTACK2)
 				{
-					CycleNextWeapon(client, seat, drone);
+					CycleNextWeapon(client, DroneSeats[droneId][seatIndex], drone);
 					buttons &= ~IN_ATTACK2;
 				}
 
-				OnDroneAimChanged();
+				OnDroneAimChanged(client, DroneSeats[droneId][seatIndex], drone);
 			}
-			case Seat_Pilot: // Strictly drone movement
+			case Seat_Pilot: // Mostly movement, can also control specific weapons
 			{
 				if (buttons & IN_ATTACK)
 				{
-					OnDroneAttack(client, seat, drone);
+					OnDroneAttack(client, DroneSeats[droneId][seatIndex], drone);
 					buttons &= ~IN_ATTACK; // Remove the attack flag
 				}
 				if (buttons & IN_ATTACK2)
 				{
-					CycleNextWeapon(client, seat, drone);
+					CycleNextWeapon(client, DroneSeats[droneId][seatIndex], drone);
 					buttons &= ~IN_ATTACK2;
 				}
-				OnDroneAimChanged();
+
+				OnDroneAimChanged(client, DroneSeats[droneId][seatIndex], drone);
 
 				// Drone movement
+
+				bool idle = DroneInputPressed(buttons);
+
 				if (buttons & IN_FORWARD)
 					OnDroneMoveForward(client, drone, 1.0);
 
@@ -906,9 +910,23 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 				if (buttons & IN_DUCK)
 					OnDroneMoveUp(client, drone, -1.0);
+
+				SimulateDrone(drone, idle);
 			}
 		}
 	}
 
 	return Plugin_Continue;
+}
+
+// Checks if any of the movement inputs are being pressed
+bool DroneInputPressed(int buttons)
+{
+	return (buttons & (IN_FORWARD | IN_BACK | IN_RIGHT | IN_LEFT | IN_JUMP | IN_DUCK) != 0);
+}
+
+// All passive actions for drones while idling
+void SimulateDrone(FDrone drone, bool idle)
+{
+
 }
