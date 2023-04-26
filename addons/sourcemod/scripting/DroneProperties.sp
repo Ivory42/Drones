@@ -21,6 +21,18 @@ FDroneSeat DroneSeats[2049][MAXSEATS+1]; // Seats tied to drones
 
 FComponent Attachments[2049][MAXATTACHMENTS+1]; // Attachments tied to drones
 
+float DroneYaw[2049][2]; // Used to determine turn rate each frame on flying drones
+
+float DroneSpeeds[2049][6]; // Used to track a drone's current speed in each direction
+/*
+	0 - forwards
+	1 - backwards
+	2 - right
+	3 - left
+	4 - up
+	5 - down
+*/
+
 public any Native_ViewLock(Handle plugin, int args)
 {
 	FComponent drone;
@@ -849,7 +861,7 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 	if (PlayerInDrone(client))
 	{
-		// We can safely get a copy of this drone since we won't be modifying anything and only reading from it
+		// We can safely get a copy of this drone since we won't be modifying any properties and only reading from it
 		FDrone drone;
 		drone = GetClientDrone(client);
 
@@ -858,16 +870,33 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 		int droneId = drone.Get();
 
+		// Movement stats
+		float maxSpeed = drone.SpeedOverride > 0.0 ? drone.SpeedOverride : drone.MaxSpeed;
+
 		// Prepare displays for drone pilot
 		int droneHp = RoundFloat(drone.Health);
-		//int activeWeapon = drone.ActiveWeapon;
-		char weaponName[MAX_WEAPON_LENGTH], ammo[32];
-		//float maxSpeed = drone.
-
 		FDroneSeat seat;
 		int seatIndex = GetPlayerSeat(client, DroneSeats[droneId]);
 
 		seat = DroneSeats[droneId][seatIndex];
+		int activeWeapon = seat.ActiveWeapon;
+		char ammo[32], hudString[256];
+		FormatAmmoString(DroneWeapons[droneId][activeWeapon], ammo, sizeof ammo);
+
+		SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
+		FormatEx(hudString, sizeof hudString, "Health: %i\nWeapon: %s\n%s", droneHp, weapon.Name, ammo);
+		ShowHudText(clientId, -1, hudString);
+
+		// Setup player position to given seat
+		FTransform seatLoc;
+		if (!GetAttachmentTransform(droneId, seat.Attachment, seatLoc)) // fallback to drone position if seat attachment not found
+		{
+			FVector offset;
+			offset.z = 30.0;
+			seatLoc.position = drone.GetPosition();
+			OffsetVector(seatLoc.position, drone.GetAngles(), offset);
+		}
+		client.Teleport(seatLoc.position, client.GetEyeAngles(), ConstructVector());
 
 		switch (seat.Type)
 		{
@@ -942,6 +971,22 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 	}
 
 	return Plugin_Continue;
+}
+
+// Setup our ammo text for the Drone UI
+void FormatAmmoString(FDroneWeapon weapon, char[] buffer, int size)
+{
+	switch (weapon.State)
+	{
+		case WeaponState_Reloading: FormatEx(buffer, size, "Reloading...");
+		case WeaponState_Ready:
+		{
+			if (weapon.Ammo == -1)
+				buffer = ""; // No text if weapon has bottomless ammo
+			
+			FormatEx(buffer, size, "Ammo: %i", weapon.Ammo);
+		}
+	}
 }
 
 // All passive actions for drones while idling
