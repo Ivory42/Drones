@@ -86,12 +86,14 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 		weapon.MaxHealth = health;
 
 		// Do we have a mount?
-		if (strlen(weapon.MountModel) > 3)
+		char mountmodel[64];
+		kv.GetString("mount", mountmodel, sizeof mountmodel);
+		if (strlen(mountmodel) > 3)
 		{
 			// Mounts will act as the part of the weapon that can rotate with the player's camera yaw values
 			// The receiver itself will rotate to match the player's pitch
 			mount = CreateObjectDeferred("prop_dynamic_override");
-			mount.SetKeyValue("model", weapon.MountModel);
+			mount.SetKeyValue("model", mountmodel);
 
 			// Flags this object as a mount so it can properly share health with the weapon itself
 			int mountId = mount.Get();
@@ -127,7 +129,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 			if (id)
 				Vector_GetEntityAttachment(parent, id, spawn);
 			else
-				LogError("Error: [Attach Mount] Cannot find attachment point '%s' assigned to this weapon! Make sure the attachment point exists on the parent model!", weapon.AttachmentPont);
+				LogError("Error: [Attach Mount] Cannot find attachment point '%s' assigned to this weapon! Make sure the attachment point exists on the parent model!", weapon.AttachmentPoint);
 
 			FinishSpawn(mount, spawn);
 			mount.SetParent(parent);
@@ -225,7 +227,7 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 {
 	weapon.State = WeaponState_Destroyed;
 
-	weapon.GetObject().Input("ClearParent");
+	weapon.GetReceiver().Input("ClearParent");
 
 	if (drone.Valid())
 	{

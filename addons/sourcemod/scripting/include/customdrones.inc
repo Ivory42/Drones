@@ -35,6 +35,8 @@ enum struct FDrone
 
 	float MaxHealth; // Max health of this drone
 
+	float Health; // Current health of this drone
+
 	float MaxSpeed; // Max speed this drone can move at
 
 	float SpeedOverride; // If non-zero, override our max speed with this value
@@ -102,6 +104,13 @@ enum struct FDrone
 	{
 		return this.Hull.GetAngles();
 	}
+
+	// Sets this drone's angles
+	void SetAngles(FRotator angles)
+	{
+		this.Hull.SetAngles(angles);
+	}
+
 	// Set the owner of this drone
 	void SetOwner(FObject owner)
 	{
@@ -244,7 +253,7 @@ native int CD_GetDroneMaxHealth(int drone);
  * @param drone_name	Name of drone to spawn
  *
  */
-native void CD_SpawnDroneByName(int client, const char[] drone_name);
+native void CD_SpawnDroneByName(int client, const char[] drone_name, const float position[3]);
 
 /**
  * Sets a drone weapon's reload state based on a fire delay

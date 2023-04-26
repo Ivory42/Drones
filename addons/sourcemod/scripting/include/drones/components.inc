@@ -8,6 +8,7 @@
 #include "dronetypes.inc"
 #include <ilib>
 
+// Would be nice if const could be used for array sizes...
 #define MAXATTACHMENTS 6
 #define MAXWEAPONS 6
 #define MAXSEATS 6
@@ -21,7 +22,7 @@ enum struct FComponent
 
 	float Modifier; // Extra damage to deal to the owning drone if this component is hit
 
-	float MaxHealth; // Max health of this component
+	int MaxHealth; // Max health of this component
 
 	bool Valid()
 	{
@@ -80,7 +81,7 @@ enum struct FDroneWeapon
 
 	float FireRate; // How fast this weapon fires, measured in rounds per second
 
-	float MaxHealth; // Max health value for this weapon
+	int MaxHealth; // Max health value for this weapon
 
 	FTimer AttackTimer; // Game time when this weapon is ready to fire again
 
@@ -137,31 +138,31 @@ enum struct FDroneWeapon
 	// Returns true if this is a valid weapon
 	bool Valid()
 	{
-		return this.Component.Valid();
+		return this.Receiver.Valid();
 	}
 
 	// Returns the entity index of this weapon
 	int Get()
 	{
-		return this.Component.Get();
+		return this.Receiver.Get();
 	}
 
 	// Sets this weapon's pointer reference
 	void Set(int entity)
 	{
-		this.Component.Set(entity);
+		this.Receiver.Set(entity);
 	}
 
-	// Returns the object this entity is attached to
-	FObject GetObject()
+	// Returns the receiver object for this weapon
+	FObject GetReceiver()
 	{
-		return this.Component.Reference;
+		return this.Receiver;
 	}
 
-	// Returns the component this weapon is tied to
-	FComponent GetComponent()
+	// Returns the mount of the receiver of this weapon
+	FObject GetMount()
 	{
-		return this.Component;
+		return this.Mount;
 	}
 
 	// Returns the parent object of this weapon
@@ -250,7 +251,7 @@ enum struct FDroneWeapon
 	{
 		FVector position;
 
-		position = this.GetObject().GetRelativePosition();
+		position = this.GetReceiver().GetRelativePosition();
 
 		return position;
 	}
@@ -260,7 +261,7 @@ enum struct FDroneWeapon
 	{
 		FVector position;
 
-		position = this.GetObject().GetPosition();
+		position = this.GetReceiver().GetPosition();
 
 		return position;
 	}
@@ -270,7 +271,7 @@ enum struct FDroneWeapon
 		FTransform muzzle;
 
 		// Retrieve the muzzle attachment according to the attachment point
-		GetAttachmentTransform(this.GetObject(), this.MuzzleAttachment, muzzle);
+		GetAttachmentTransform(this.GetReceiver(), this.MuzzleAttachment, muzzle);
 
 		return muzzle;
 	}
@@ -291,7 +292,7 @@ enum struct FDroneSeat
 
 	ESeatType Type; // What type of seat this is, defines what the client occupying this seat can do.
 
-	int WeaponIndex[MAXWEAPONS+1]; // Index of drone weapons to use for this seat, when changing weapons, this seat will cycle through this array of indices
+	int WeaponIndex[MAXWEAPONS + 1]; // Index of drone weapons to use for this seat, when changing weapons, this seat will cycle through this array of indices
 
 	int ActiveWeapon; // Current weapon active for this seat
 

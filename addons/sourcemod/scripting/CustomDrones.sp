@@ -436,13 +436,24 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 		FVector start, end;
 		start = owner.GetEyePosition();
 		end = start;
-		end += start.Scale(3000.0);
+		start.Scale(3000.0);
+		end.Add(start);
 
 		RayTrace trace = new RayTrace(start, end, MASK_PLAYERSOLID, DroneSpawnTrace, owner.Get());
-		spawn.position = trace.GetNormalVector();
-		spawn.position += spawn.position.Scale(60.0); // elevate slightly off surface
+		if (trace.DidHit())
+		{
+			FVector normal;
+			normal = trace.GetNormalVector();
 
-		clientRef = owner.GetReference();
+			spawn.position = normal;
+			normal.Scale(60.0);
+
+			spawn.position.Add(normal);
+		}
+		else
+			spawn.position = trace.GetEndPosition();
+
+		clientRef = owner.GetObject();
 		clientRef.GetPropVector(Prop_Data, "m_vecVelocity", spawn.velocity);
 	}
 

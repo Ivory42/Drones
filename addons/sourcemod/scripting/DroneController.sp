@@ -5,17 +5,17 @@ void OnDroneAttack(const FClient client, const FDroneSeat seat, FDrone drone)
 
 }
 
-void OnDroneMoveForward(const FClient pilot, FDrone drone, float axisValue)
+void OnDroneMoveForward(FDrone drone, float axisValue, FVector velocity)
 {
 
 }
 
-void OnDroneMoveRight(const FClient pilot, FDrone drone, float axisValue)
+void OnDroneMoveRight(FDrone drone, float axisValue, FVector velocity)
 {
 
 }
 
-void OnDroneMoveUp(const FClient pilot, FDrone drone, float axisValue)
+void OnDroneMoveUp(FDrone drone, float axisValue, FVector velocity)
 {
 
 }

@@ -99,7 +99,7 @@ void FireWeapon(FClient gunner, FObject drone, int slot, FDroneWeapon weapon)
 
 	int droneId = drone.Get();
 
-	int ammoUsed = weapon.AmmoPerShot;
+	int ammoUsed = 1; // Plugin can determine how much ammo is needed for a single shot
 
 	Call_PushArray(drone, sizeof FObject);
 	Call_PushArray(gunner, sizeof FClient);
@@ -137,7 +137,7 @@ public int Native_DroneTakeDamage(Handle plugin, int args)
 	return 0;
 }
 
-void DroneTakeDamage(FDrone drone, const FObject hull, const FClient attacker, const FObject inflictor, float &damage, bool crit, const FObject weapon)
+void DroneTakeDamage(FDrone drone, FObject hull, FClient attacker, FObject inflictor, float &damage, bool crit, FObject weapon)
 {
 	bool sendEvent = true;
 
@@ -165,7 +165,7 @@ void DroneTakeDamage(FDrone drone, const FObject hull, const FClient attacker, c
 	}
 }
 
-void SendDamageEvent(const FDrone drone, const FClient attacker, float damage, bool crit)
+void SendDamageEvent(FDrone drone, FClient attacker, float damage, bool crit)
 {
 	if (attacker.Valid() && drone.Valid())
 	{
@@ -241,8 +241,14 @@ public int Native_SpawnDroneName(Handle plugin, int args)
 	char name[128];
 	GetNativeString(2, name, sizeof name);
 
+	FVector position;
+
+	float sub[3];
+	GetNativeArray(3, sub, 3);
+	Vector_MakeFromFloat(position, sub);
+
 	FDrone drone;
-	drone = CreateDroneByName(client, name);
+	drone = CreateDroneByName(client, name, position);
 
 	return drone.Get();
 }
@@ -441,7 +447,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 					if (isDrone)
 					{
 						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, weapon.Damage, false, weapon.GetObject());
+						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, weapon.Damage, false, weapon.GetReceiver());
 					}
 					else if (victim.Valid())
 						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), weapon.Damage, DMG_ENERGYBEAM);
@@ -452,7 +458,7 @@ public any Native_HitscanAttack(Handle plugin, int args)
 					if (isDrone)
 					{
 						int hitDroneId = victim.Get();
-						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, damage, false, weapon.GetObject());
+						DroneTakeDamage(Drone[hitDroneId], victim, owner, drone, damage, false, weapon.GetReceiver());
 					}
 					else
 						SDKHooks_TakeDamage(victim.Get(), owner.Get(), owner.Get(), damage, DMG_ENERGYBEAM);
@@ -802,7 +808,7 @@ public any Native_GetDrone(Handle plugin, int args)
 	return 0;
 }
 
-FVector GetDroneAimPosition(const FObject drone, FVector pos, FRotator angle)
+FVector GetDroneAimPosition(FObject drone, FVector pos, FRotator angle)
 {
 	// Max range on attacks is 10000 hu
 	FVector end;
@@ -847,10 +853,16 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 		FDrone drone;
 		drone = GetClientDrone(client);
 
-		if (!drone.Valid())
+		if (!drone.Valid() || !drone.Alive)
 			return Plugin_Continue;
 
 		int droneId = drone.Get();
+
+		// Prepare displays for drone pilot
+		int droneHp = RoundFloat(drone.Health);
+		//int activeWeapon = drone.ActiveWeapon;
+		char weaponName[MAX_WEAPON_LENGTH], ammo[32];
+		//float maxSpeed = drone.
 
 		FDroneSeat seat;
 		int seatIndex = GetPlayerSeat(client, DroneSeats[droneId]);
@@ -891,27 +903,40 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 				// Drone movement
 
-				bool idle = DroneInputPressed(buttons);
+				float inputVal = 0.0;
+				FVector velocity;
 
+				// Forward and backward
 				if (buttons & IN_FORWARD)
-					OnDroneMoveForward(client, drone, 1.0);
-
+					inputVal = 1.0;
 				if (buttons & IN_BACK)
-					OnDroneMoveForward(client, drone, -1.0);
+					inputVal = -1.0;
+				else
+					inputVal = 0.0;
 
+				OnDroneMoveForward(drone, inputVal, velocity);
+
+				// Left and right
 				if (buttons & IN_RIGHT)
-					OnDroneMoveRight(client, drone, 1.0);
-
+					inputVal = 1.0;
 				if (buttons & IN_LEFT)
-					OnDroneMoveRight(client, drone, -1.0);
+					inputVal = -1.0;
+				else
+					inputVal = 0.0;
 
+				OnDroneMoveRight(drone, inputVal, velocity);
+
+				// Up and down
 				if (buttons & IN_JUMP)
-					OnDroneMoveUp(client, drone, 1.0);
-
+					inputVal = 1.0;
 				if (buttons & IN_DUCK)
-					OnDroneMoveUp(client, drone, -1.0);
+					inputVal = -1.0;
+				else
+					inputVal = 0.0;
 
-				SimulateDrone(drone, idle);
+				OnDroneMoveUp(drone, inputVal, velocity);
+
+				SimulateDrone(drone, velocity);
 			}
 		}
 	}
@@ -919,14 +944,15 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 	return Plugin_Continue;
 }
 
-// Checks if any of the movement inputs are being pressed
-bool DroneInputPressed(int buttons)
-{
-	return (buttons & (IN_FORWARD | IN_BACK | IN_RIGHT | IN_LEFT | IN_JUMP | IN_DUCK) != 0);
-}
-
 // All passive actions for drones while idling
-void SimulateDrone(FDrone drone, bool idle)
+void SimulateDrone(FDrone drone, FVector velocity)
 {
+	// Drones will passively counteract gravity
+	FVector grav;
 
+	grav.z = 12.0;
+
+	velocity.Add(grav);
+
+	drone.GetObject().Teleport(drone.GetPosition(), drone.GetAngles(), velocity);
 }
