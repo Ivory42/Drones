@@ -5,6 +5,10 @@
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 
+#define Cast view_as // Yes this isn't actually a cast but I just prefer it for methodmaps
+
+const int MaxWeapons = 4;
+
 #include "drones/components.inc"
 #include <drones/rocket>
 #include <drones/bomb>
@@ -12,52 +16,177 @@
 
 public bool IsDrone[2049];
 
-/*
-*   Struct storing information for a drone object
-*/
-enum struct FDrone
+static TObjectMap DroneMap;
+
+methodmap ADrone < APersistentObject
 {
-	FObject Hull; // Entity reference of this drone
+	public ADrone(FObject drone)
+	{
+		APersistentObject properties;
+		if (drone.Valid())
+		{
+			// check if our drone object already exists, if it does then clear it
+			if (DroneMap.Contains(drone))
+			{
+				properties = DroneMap.GetMap(drone);
+				if (properties)
+					delete properties;
 
-	FObject Camera; // Entity reference of the camera for this drone
+				DroneMap.RemoveObject(drone);
+			}
 
-	FClient Owner; // Client currently piloting this drone
+			properties = new APersistentObject(drone);
+			DroneMap.SetMap(drone, properties);
+		}
 
-	char DestroyedModel[256]; // Optional model to use when drone is destroyed
+		return Cast<ADrone>(properties);
+	}
 
-	char Name[MAX_DRONE_LENGTH]; // Display name of this drone
+	property float CameraHeight
+	{
+		public set(float height)
+		{
+			this.SetValue("CameraHeight", height);
+		}
+		public get()
+		{
+			return this.GetPropFloat("CameraHeight");
+		}
+	}
 
-	float CameraHeight; // Camera height for this drone
+	property int MaxHealth
+	{
+		public set(int health)
+		{
+			this.SetValue("MaxHealth", health);
+		}
+		public get()
+		{
+			return this.GetProp("MaxHealth");
+		}
+	}
 
-	/*
-	* Drone stats
-	*/
+	property int Health
+	{
+		public set(int health)
+		{
+			this.SetValue("Health", health);
+		}
+		public get()
+		{
+			return this.GetProp("Health");
+		}
+	}
 
-	float MaxHealth; // Max health of this drone
+	property float MaxSpeed
+	{
+		public set(float speed)
+		{
+			this.SetValue("MaxSpeed", speed);
+		}
+		public get()
+		{
+			return this.GetPropFloat("MaxSpeed");
+		}
+	}
 
-	float Health; // Current health of this drone
+	property float SpeedOverride
+	{
+		public set(float speed)
+		{
+			this.SetValue("SpeedOverride", speed);
+		}
+		public get()
+		{
+			return this.GetPropFloat("SpeedOverride");
+		}
+	}
 
-	float MaxSpeed; // Max speed this drone can move at
+	property float Acceleration
+	{
+		public set(float accel)
+		{
+			this.SetValue("Acceleration", accel);
+		}
+		public get()
+		{
+			this.GetPropFloat("Acceleration");
+		}
+	}
 
-	float SpeedOverride; // If non-zero, override our max speed with this value
+	property float TurnRate
+	{
+		public set(float rate)
+		{
+			this.SetValue("TurnRate", rate);
+		}
+		public get()
+		{
+			this.GetPropFloat("TurnRate");
+		}
+	}
 
-	float Acceleration; // How quickly this drone reaches its max speed
+	property bool Alive
+	{
+		public set(bool value)
+		{
+			this.SetValue("Alive", value);
+		}
+		public get()
+		{
+			return this.GetPropBool("Alive");
+		}
+	}
 
-	float TurnRate; // Rate at which this drone can turn, in degrees per second
+	property bool Viewlocked
+	{
+		public set(bool value)
+		{
+			this.SetValue("Viewlocked", value);
+		}
+		public get()
+		{
+			return this.GetPropBool("Viewlocked");
+		}
+	}
 
-	int Weapons; // Number of weapons this drone has
+	property bool Occupied
+	{
+		public set(bool value)
+		{
+			this.SetValue("Occupied", value);
+		}
+		public get()
+		{
+			return this.GetPropBool("Occupied");
+		}
+	}
+
+	public ADroneWeapon GetActiveWeapon()
+	{
+		return Cast<ADroneWeapon>(this.GetProp("ActiveWeapon"));
+	}
+
+	public void SetActiveWeapon(ADroneWeapon weapon)
+	{
+		TObjectMap weapons = this.GetWeapons();
+		if (weapons && weapons.Contains(weapon.GetObject()))
+		{
+			this.SetProp("ActiveWeapon", weapon);
+		}
+	}
+
+	public TObjectMap GetWeapons()
+	{
+		return Cast<TObjectMap>(this.GetProp("OwnedWeapons"));
+	}
+}
 
 	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
 
 	char Plugin[MAX_DRONE_LENGTH]; // Logic plugin for basic drone functions
 
 	char Config[64]; // Config containing drone's info
-
-	bool Alive; // Is this drone alive
-
-	bool Viewlocked; // Whether this drone should rotate towards the camera or not
-
-	bool Occupied; // Is there currently a player piloting this drone
 
 	int Seats; // How many seats this drone has
 
