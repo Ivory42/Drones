@@ -13,95 +13,129 @@
 #define MAXWEAPONS 6
 #define MAXSEATS 6
 
-/*
-* Struct used for any misc attachments given to a drone. These are not necessarily functional and can be used primarily for cosmetic reasons.
-*/
-enum struct FComponent
+methodmap AComponent < APersistentObject
 {
-	FObject Reference;
-
-	float Modifier; // Extra damage to deal to the owning drone if this component is hit
-
-	int MaxHealth; // Max health of this component
-
-	bool Valid()
+	public AComponent(FObject entity)
 	{
-		return this.Reference.Valid();
+		APersistentObject component = new APersistentObject(entity);
+		return view_as<AComponent>(component);
 	}
 
-	// Returns the entity index tied to this component
-	int Get()
+	property int MaxHealth
 	{
-		return this.Reference.Get();
+		public set(int health)
+		{
+			this.SetValue("MaxHealth", health);
+		}
+		public get()
+		{
+			return this.GetProp("MaxHealth");
+		}
 	}
 
-	// Sets this component's pointer reference
-	void Set(int entity)
+	property int Health
 	{
-		this.Reference.Set(entity);
+		public set(int health)
+		{
+			this.SetValue("Health", health);
+		}
+		public get()
+		{
+			return this.GetProp("Health");
+		}
 	}
 
-	// Sets the owner of this component
-	void SetOwner(FObject owner)
+	property float Modifier
 	{
-		this.Reference.SetOwner(owner);
+		public set(float value)
+		{
+			this.SetValue("DamageModifier", value);
+		}
+		public get()
+		{
+			return this.GetPropFloat("DamageModifier");
+		}
 	}
 
-	// Returns the owner of this component
-	FObject GetOwner()
+	// Returns the entity object of the drone this weapon is owned by
+	public FObject GetDroneObject()
 	{
-		return this.Reference.GetOwner();
-	}
-
-	// Returns the FObject associated with this component
-	FObject GetObject()
-	{
-		return this.Reference;
+		return this.GetPropEnt("ParentDrone");
 	}
 }
 
 /*
-* Struct containing information on a drone's weapon.
-* Drones can have up to 6 of these weapons.
+
 */
-enum struct FDroneWeapon
+methodmap ADroneWeapon < AComponent
 {
-	FObject Mount; // Optional physical mount to use for the weapon. This will rotate with the player's yaw
-	
-	FObject Receiver; // Optional model to use for this weapon. If a mount exists, this will only rotate with the player's pitch
+	public FObject GetMount() { return this.GetPropEnt("Mount"); }
 
-	FObject Parent; /*
-					 * Usually the drone this weapon is attached to, however it can theoretically be another component as well.
-					 * Cast to either a drone or component to make sure the parent is valid.
-	 				 */
+	public FObject GetReceiver() { return this.GetPropEnt("Receiver"); }
 
-	int Ammo; // Ammo loaded
+	property int Ammo
+	{
+		public set(int ammo) { this.SetValue("CurrentAmmo", ammo); }
+		public get() { return this.GetProp("CurrentAmmo"); }
+	}
 
-	int MaxAmmo; // Max ammo that can be loaded at once
+	property int MaxAmmo
+	{
+		public set(int ammo) { this.SetValue("MaxAmmo", ammo); }
+		public get() { return this.GetProp("MaxAmmo"); }
+	}
 
-	float FireRate; // How fast this weapon fires, measured in rounds per second
+	property float FireRate // How fast this weapon fires, measured in rounds per second
+	{
+		public set(float rate) { this.SetValue("FireRate", rate); }
+		public get() { return this.GetPropFloat("FireRate"); }
+	}
 
-	int MaxHealth; // Max health value for this weapon
+	property FTimer NextAttackTimer // Game time when this weapon is ready to fire again
+	{
+		public set(FTimer time) { this.SetValue("NextAttackTimer", time); }
+		public get() { return view_as<FTimer>(this.GetProp("NextAttackTimer")); }
+	}
 
-	FTimer AttackTimer; // Game time when this weapon is ready to fire again
+	property float Damage // Damage this weapon should deal
+	{
+		public set(float value) { this.SetValue("Damage", value); }
+		public get() { treturn this.GetPropFloat("Damage"); }
+	}
 
-	float Damage; // Damage this weapon should deal
+	property float ProjectileSpeed // How fast the projectile should be fired at, if used
+	{
+		public set(float speed) { this.SetValue("ProjSpeed", speed); }
+		public get() { return this.GetPropFloat("ProjSpeed"); }
+	}
 
-	float ProjSpeed; // How fast the projectile should be fired at, if used
+	property float Inaccuracy // Error in angle for this weapon upon consecutive attacks
+	{
+		public set(float value) { this.SetValue("Inaccuracy", value); }
+		public get() { this.GetPropFloat("Inaccuracy"); }
+	}
 
-	float Inaccuracy; // Error in angle for this weapon upon consecutive attacks
+	property float ReloadTime // How long this weapon reloads for
+	{
+		public set(float time)	{ this.SetValue("ReloadTime", time); }
+		public get() { this.GetPropFloat("ReloadTime"); }
+	}
 
-	float ReloadTime; // How long this weapon reloads for
+	property FTimer ReloadTimer // Game time when this weapon should be reloaded
+	{
+		public set(FTimer timer) { this.SetValue("ReloadTimer", timer); }
+		public get() { return view_as<FTimer>(this.GetProp("ReloadTimer")); }
+	}
 
-	float Modifier; // How much extra damage this drone takes when this weapon is hit
+	public void GetFiresound(char[] buffer, int size) { this.GetString("FireSound", buffer, size); }
 
-	FTimer ReloadTimer; // Game time when this weapon should be reloaded
+	property EWeaponState State // weapon state
+	{
+		public set(EWeaponState state) { this.SetValue("WeaponState", state); }
+		public get() { return view_as<EWeaponState>(this.GetProp("WeaponState")); }
+	}
 
-	char Firesound[PLATFORM_MAX_PATH]; // Sound to use for this weapon firing
-
-	EWeaponState State; // weapon state
-
-	EWeaponType Type; // Weapon type
+	// TODO - convert the rest of this struct to a methodmap
 
 	float TurnRate; // How quickly this weapon rotates
 
@@ -135,42 +169,6 @@ enum struct FDroneWeapon
 	 * Weapon methods
 	 */
 
-	// Returns true if this is a valid weapon
-	bool Valid()
-	{
-		return this.Receiver.Valid();
-	}
-
-	// Returns the entity index of this weapon
-	int Get()
-	{
-		return this.Receiver.Get();
-	}
-
-	// Sets this weapon's pointer reference
-	void Set(int entity)
-	{
-		this.Receiver.Set(entity);
-	}
-
-	// Returns the receiver object for this weapon
-	FObject GetReceiver()
-	{
-		return this.Receiver;
-	}
-
-	// Returns the mount of the receiver of this weapon
-	FObject GetMount()
-	{
-		return this.Mount;
-	}
-
-	// Returns the parent object of this weapon
-	FObject GetParent()
-	{
-		return this.Parent;
-	}
-
 	/*
 	 * Called whenever a weapon is fired from a sub plugin.
 	 * Handles ammo and initiating reloads on drone weapons
@@ -178,7 +176,7 @@ enum struct FDroneWeapon
 	 * @param action     Action to handle ammo management (See OnDroneAttack forward)
 	 * @param decrease   Ammo to decrease by if Plugin_Changed is passed
 	 */
-	void SimulateFire(Action action, int decrease)
+	public void SimulateFire(Action action, int decrease)
 	{
 		this.AttackTimer.Loop();
 

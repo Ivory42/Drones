@@ -5,8 +5,6 @@
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 
-#define Cast view_as // Yes this isn't actually a cast but I just prefer it for methodmaps
-
 const int MaxWeapons = 4;
 
 #include "drones/components.inc"
@@ -16,7 +14,7 @@ const int MaxWeapons = 4;
 
 public bool IsDrone[2049];
 
-static TObjectMap DroneMap;
+static SObjectMap DroneMap;
 
 methodmap ADrone < APersistentObject
 {
@@ -39,7 +37,7 @@ methodmap ADrone < APersistentObject
 			DroneMap.SetMap(drone, properties);
 		}
 
-		return Cast<ADrone>(properties);
+		return view_as<ADrone>(properties);
 	}
 
 	property float CameraHeight
@@ -162,96 +160,138 @@ methodmap ADrone < APersistentObject
 		}
 	}
 
+	property EMoveType MoveType
+	{
+		public set(EMoveType movetype)
+		{
+			this.SetValue("MoveType", movetype);
+		}
+		public get()
+		{
+			return view_as<EMoveType>(this.GetProp("MoveType"));
+		}
+	}
+
 	public ADroneWeapon GetActiveWeapon()
 	{
-		return Cast<ADroneWeapon>(this.GetProp("ActiveWeapon"));
+		return view_as<ADroneWeapon>(this.GetProp("ActiveWeapon"));
 	}
 
 	public void SetActiveWeapon(ADroneWeapon weapon)
 	{
-		TObjectMap weapons = this.GetWeapons();
+		SObjectMap weapons = this.GetWeapons();
 		if (weapons && weapons.Contains(weapon.GetObject()))
 		{
 			this.SetProp("ActiveWeapon", weapon);
 		}
 	}
 
-	public TObjectMap GetWeapons()
+	public AObjectMap GetWeapons()
 	{
-		return Cast<TObjectMap>(this.GetProp("OwnedWeapons"));
+		return view_as<AObjectMap>(this.GetProp("OwnedWeapons"));
+	}
+
+	public void SetCamera(FObject camera)
+	{
+		this.SetArray("Camera", camera, sizeof FObject);
+	}
+
+	public FObject GetCamera()
+	{
+		return this.GetPropEnt("Camera");
+	}
+
+	public void SetPlugin(const char[] plugin)
+	{
+		this.SetString("Plugin", plugin);
+	}
+
+	public bool ThisPlugin()
+	{
+	}
+
+	public FVector GetPosition()
+	{
+		return this.GetObject().GetPosition();
+	}
+
+	public FRotator GetAngles()
+	{
+		return this.GetObject().GetAngles();
+	}
+
+	public void SetAngles(FRotator angles)
+	{
+		this.GetObject().SetAngles(angles);
+	}
+
+	public bool Valid()
+	{
+		this.GetObject().Valid();
 	}
 }
 
-	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
-
-	char Plugin[MAX_DRONE_LENGTH]; // Logic plugin for basic drone functions
-
-	char Config[64]; // Config containing drone's info
-
-	int Seats; // How many seats this drone has
-
-	EMoveType Movetype; // Defines how this drone should move
-
-	// Returns whether or not this drone's index is valid or not
-	bool Valid()
+methodmap SDroneStatics
+{
+	public static ADrone CreateDrone(FClient owner, const char[] config)
 	{
-		return this.Hull.Valid();
+
 	}
 
-	// Returns the entity index this drone is tied to
-	int Get()
+	/*
+	* Create a visual bullet tracer between two positions. The spawned entities are automatically removed
+	*
+	* @param start		Origin of the bullet tracer
+	* @param end		Position where the bullet will travel to
+	*
+	*/
+	public static void CreateTracer(FVector start, FVector end)
 	{
-		return this.Hull.Get();
+		FObject target;
+		target = CreateObjectDeferred("info_target"); //env_gunfire requres an entity to use as a target
+
+		char targetname[64];
+		Format(targetname, sizeof targetname, "target%d", target.Get());
+
+		target.SetKeyValue("targetname", targetname);
+		target.SetModel("models/empty.mdl");
+
+		FinishSpawn(target, ConstructTransform(end, ConstructRotator(), ConstructVector()));
+
+		FObject tracer;
+		tracer = CreateObjectDeferred("env_gunfire"); //create the actual tracer
+
+		tracer.SetKeyValue("target", targetname);
+		
+		tracer.SetKeyValue("minburstsize", "1");
+		tracer.SetKeyValue("maxburstsize", "1");
+
+		tracer.SetKeyValue("minburstdelay", "5.0");
+		tracer.SetKeyValue("maxburstdelay", "10.0");
+
+		tracer.SetKeyValue("rateoffire", "1.0");
+		tracer.SetKeyValue("collisions", "1");
+		tracer.SetKeyValue("spread", "0");
+
+		FinishSpawn(tracer, ConstructTransform(start, ConstructRotator(), ConstructVector()));
+
+		target.KillOnDelay(0.5);
+		tracer.KillOnDelay(0.5);
 	}
 
-	// Returns the move type of this drone
-	EMoveType GetMoveType()
+	public static void InitDroneMap()
 	{
-		return this.Movetype;
+		if (!DroneMap)
+			DroneMap = new TObjectMap();
 	}
 
-	// Returns the FObject reference of this drone
-	FObject GetObject()
+	public static void ClearDroneMap()
 	{
-		return this.Hull;
 	}
 
-	// Get the owner of this drone
-	FObject GetOwner()
+	// Removes a drone and deletes all associated entities
+	public static void RemoveDrone(ADrone drone)
 	{
-		return this.Hull.GetOwner();
-	}
-	
-	// Returns the position of this drone
-	FVector GetPosition()
-	{
-		return this.Hull.GetPosition();
-	}
-
-	// Returns the angles of this drone
-	FRotator GetAngles()
-	{
-		return this.Hull.GetAngles();
-	}
-
-	// Sets this drone's angles
-	void SetAngles(FRotator angles)
-	{
-		this.Hull.SetAngles(angles);
-	}
-
-	// Set the owner of this drone
-	void SetOwner(FObject owner)
-	{
-		this.Hull.SetOwner(owner);
-	}
-
-	// Clears this drone's reference
-	void Clear()
-	{
-		this.Hull.ref = INVALID_ENT_REFERENCE;
-		this.Camera.ref = INVALID_ENT_REFERENCE;
-		this.Owner.Clear();
 	}
 }
 
@@ -615,54 +655,6 @@ stock FVector GetOffsetPos(FVector origin, FRotator angles, FVector offset)
 	result.Add(direction);
 
 	return result;
-}
-
-/*
-* Create a visual bullet tracer between two positions. The spawned entities are automatically removed
-*
-* @param start		Origin of the bullet tracer
-* @param end		Position where the bullet will travel to
-*
-*/
-stock void CreateTracer(FVector start, FVector end)
-{
-	FObject target;
-	target.Create("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
-
-	char targetname[64];
-
-	Format(targetname, sizeof targetname, "target%i", target.Get());
-
-	target.SetKeyValue("targetname", targetname);
-
-	target.SetModel("models/empty.mdl");
-
-	target.Spawn();
-
-	target.Teleport(end, ConstructRotator(), ConstructVector());
-
-	FObject tracer;
-	tracer.Create("env_gunfire"); //create the actual tracer
-
-	tracer.SetKeyValue("target", targetname);
-	
-	tracer.SetKeyValue("minburstsize", "1");
-	tracer.SetKeyValue("maxburstsize", "1");
-
-	tracer.SetKeyValue("minburstdelay", "5.0");
-	tracer.SetKeyValue("maxburstdelay", "10.0");
-
-	tracer.SetKeyValue("rateoffire", "1.0");
-	tracer.SetKeyValue("collisions", "1");
-	tracer.SetKeyValue("spread", "0");
-
-	tracer.Spawn();
-	tracer.Activate();
-
-	tracer.Teleport(start, ConstructRotator(), ConstructVector());
-
-	target.KillOnDelay(0.5);
-	tracer.KillOnDelay(0.5);
 }
 
 // Returns a copy of the current drone being piloted by this player
