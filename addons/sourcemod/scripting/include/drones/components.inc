@@ -29,7 +29,7 @@ methodmap AComponent < APersistentObject
 		}
 		public get()
 		{
-			return this.GetProp("MaxHealth");
+			return this.GetObjectProp("MaxHealth");
 		}
 	}
 
@@ -41,7 +41,7 @@ methodmap AComponent < APersistentObject
 		}
 		public get()
 		{
-			return this.GetProp("Health");
+			return this.GetObjectProp("Health");
 		}
 	}
 
@@ -49,18 +49,18 @@ methodmap AComponent < APersistentObject
 	{
 		public set(float value)
 		{
-			this.SetValue("DamageModifier", value);
+			this.SetObjectPropFloat("DamageModifier", value);
 		}
 		public get()
 		{
-			return this.GetPropFloat("DamageModifier");
+			return this.GetObjectPropFloat("DamageModifier");
 		}
 	}
 
 	// Returns the entity object of the drone this weapon is owned by
 	public FObject GetDroneObject()
 	{
-		return this.GetPropEnt("ParentDrone");
+		return this.GetObjectPropEnt("ParentDrone");
 	}
 }
 
@@ -69,70 +69,70 @@ methodmap AComponent < APersistentObject
 */
 methodmap ADroneWeapon < AComponent
 {
-	public FObject GetMount() { return this.GetPropEnt("Mount"); }
+	public FObject GetMount() { return this.GetObjectPropEnt("Mount"); }
 
-	public FObject GetReceiver() { return this.GetPropEnt("Receiver"); }
+	public FObject GetReceiver() { return this.GetObjectPropEnt("Receiver"); }
 
 	property int Ammo
 	{
 		public set(int ammo) { this.SetValue("CurrentAmmo", ammo); }
-		public get() { return this.GetProp("CurrentAmmo"); }
+		public get() { return this.GetObjectProp("CurrentAmmo"); }
 	}
 
 	property int MaxAmmo
 	{
 		public set(int ammo) { this.SetValue("MaxAmmo", ammo); }
-		public get() { return this.GetProp("MaxAmmo"); }
+		public get() { return this.GetObjectProp("MaxAmmo"); }
 	}
 
 	property float FireRate // How fast this weapon fires, measured in rounds per second
 	{
-		public set(float rate) { this.SetValue("FireRate", rate); }
-		public get() { return this.GetPropFloat("FireRate"); }
+		public set(float rate) { this.SetObjectPropFloat("FireRate", rate); }
+		public get() { return this.GetObjectPropFloat("FireRate"); }
 	}
 
-	property FTimer NextAttackTimer // Game time when this weapon is ready to fire again
+	property STimer NextAttackTimer // Game time when this weapon is ready to fire again
 	{
-		public set(FTimer time) { this.SetValue("NextAttackTimer", time); }
-		public get() { return view_as<FTimer>(this.GetProp("NextAttackTimer")); }
+		public set(STimer time) { this.SetValue("NextAttackTimer", time); }
+		public get() { return view_as<STimer>(this.GetObjectProp("NextAttackTimer")); }
 	}
 
 	property float Damage // Damage this weapon should deal
 	{
-		public set(float value) { this.SetValue("Damage", value); }
-		public get() { treturn this.GetPropFloat("Damage"); }
+		public set(float value) { this.SetObjectPropFloat("Damage", value); }
+		public get() { treturn this.GetObjectPropFloat("Damage"); }
 	}
 
 	property float ProjectileSpeed // How fast the projectile should be fired at, if used
 	{
-		public set(float speed) { this.SetValue("ProjSpeed", speed); }
-		public get() { return this.GetPropFloat("ProjSpeed"); }
+		public set(float speed) { this.SetObjectPropFloat("ProjSpeed", speed); }
+		public get() { return this.GetObjectPropFloat("ProjSpeed"); }
 	}
 
 	property float Inaccuracy // Error in angle for this weapon upon consecutive attacks
 	{
-		public set(float value) { this.SetValue("Inaccuracy", value); }
-		public get() { this.GetPropFloat("Inaccuracy"); }
+		public set(float value) { this.SetObjectPropFloat("Inaccuracy", value); }
+		public get() { this.GetObjectPropFloat("Inaccuracy"); }
 	}
 
 	property float ReloadTime // How long this weapon reloads for
 	{
-		public set(float time)	{ this.SetValue("ReloadTime", time); }
-		public get() { this.GetPropFloat("ReloadTime"); }
+		public set(float time)	{ this.SetObjectPropFloat("ReloadTime", time); }
+		public get() { this.GetObjectPropFloat("ReloadTime"); }
 	}
 
-	property FTimer ReloadTimer // Game time when this weapon should be reloaded
+	property STimer ReloadTimer // Game time when this weapon should be reloaded
 	{
-		public set(FTimer timer) { this.SetValue("ReloadTimer", timer); }
-		public get() { return view_as<FTimer>(this.GetProp("ReloadTimer")); }
+		public set(STimer timer) { this.SetValue("ReloadTimer", timer); }
+		public get() { return view_as<STimer>(this.GetObjectProp("ReloadTimer")); }
 	}
 
-	public void GetFiresound(char[] buffer, int size) { this.GetString("FireSound", buffer, size); }
+	public void GetFiresound(char[] buffer, int size) { this.GetObjectString("FireSound", buffer, size); }
 
 	property EWeaponState State // weapon state
 	{
 		public set(EWeaponState state) { this.SetValue("WeaponState", state); }
-		public get() { return view_as<EWeaponState>(this.GetProp("WeaponState")); }
+		public get() { return view_as<EWeaponState>(this.GetObjectProp("WeaponState")); }
 	}
 
 	// TODO - convert the rest of this struct to a methodmap

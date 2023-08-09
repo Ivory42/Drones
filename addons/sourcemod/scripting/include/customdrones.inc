@@ -231,12 +231,33 @@ methodmap ADrone < APersistentObject
 	}
 }
 
-methodmap SDroneStatics
+static SObjectMap PlayerMap;
+
+methodmap ADronePlayer < AClient
+{
+	public ADronePlayer(FClient client)
+	{
+		AClient props = new AClient(client);
+		return view_as<ADronePlayer>(props);
+	}
+
+	property ADrone Drone
+	{
+		public set(ADrone drone) { this.SetObjectPropEnt("Drone", drone); }
+		public get()	{ view_as<ADrone>(this.GetObjectProp("Drone")); }
+	}
+
+	public bool InDrone() { return view_as<bool>(this.GetObjectProp("IsInDrone")); }
+}
+
+methodmap FDroneStatics
 {
 	public static ADrone CreateDrone(FClient owner, const char[] config)
 	{
 
 	}
+
+	public static ADrone GetDrone(FObject entity) { return view_as<ADrone>(DroneMap.GetObject(entity)); }
 
 	/*
 	* Create a visual bullet tracer between two positions. The spawned entities are automatically removed
@@ -248,13 +269,13 @@ methodmap SDroneStatics
 	public static void CreateTracer(FVector start, FVector end)
 	{
 		FObject target;
-		target = CreateObjectDeferred("info_target"); //env_gunfire requres an entity to use as a target
+		target = CreateObjectDeferred("info_target"); //env_gunfire requires an entity to use as a target
 
 		char targetname[64];
 		Format(targetname, sizeof targetname, "target%d", target.Get());
 
 		target.SetKeyValue("targetname", targetname);
-		target.SetModel("models/empty.mdl");
+		//target.SetModel("models/empty.mdl");
 
 		FinishSpawn(target, ConstructTransform(end, ConstructRotator(), ConstructVector()));
 
@@ -282,7 +303,7 @@ methodmap SDroneStatics
 	public static void InitDroneMap()
 	{
 		if (!DroneMap)
-			DroneMap = new TObjectMap();
+			DroneMap = new SObjectMap();
 	}
 
 	public static void ClearDroneMap()
@@ -293,31 +314,20 @@ methodmap SDroneStatics
 	public static void RemoveDrone(ADrone drone)
 	{
 	}
-}
 
-///
-/// Player struct for organizing owned drones
-///
-
-enum struct FPlayer
-{
-	FDrone Drone; // Drone this player is currently in
-
-	bool InDrone; // Is this player in a drone
-
-	// Checks if this player is in a drone
-	bool ValidDrone()
+	public static ADronePlayer AddPlayer(FClient client)
 	{
-		return this.Drone.Valid();
+		ADronePlayer player = new ADronePlayer(client);
+		if (player)
+		{
+			PlayerMap.SetObject(client, player);
+		}
+
+		return player;
 	}
 
-	// Gets the drone this player is currently in
-	FDrone GetDrone()
-	{
-		return this.Drone;
-	}
+	public static ADronePlayer GetPlayer(FClient client) { return view_as<ADronePlayer>(PlayerMap.GetObject(client)); }
 }
-FPlayer Player[MAXPLAYERS+1];
 
 
 /****************************************************************
