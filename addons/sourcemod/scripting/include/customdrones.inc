@@ -5,150 +5,7 @@
 #define MAX_WEAPON_LENGTH 64
 #define MAX_DRONE_LENGTH 32
 
-#include "drones/components.inc"
-#include <drones/rocket>
-#include <drones/bomb>
-#include <sdkhooks>
-
-public bool IsDrone[2049];
-
-/*
-*   Struct storing information for a drone object
-*/
-enum struct FDrone
-{
-	FObject Hull; // Entity reference of this drone
-
-	FObject Camera; // Entity reference of the camera for this drone
-
-	FClient Owner; // Client currently piloting this drone
-
-	char DestroyedModel[256]; // Optional model to use when drone is destroyed
-
-	char Name[MAX_DRONE_LENGTH]; // Display name of this drone
-
-	float CameraHeight; // Camera height for this drone
-
-	/*
-	* Drone stats
-	*/
-
-	float MaxHealth; // Max health of this drone
-
-	float Health; // Current health of this drone
-
-	float MaxSpeed; // Max speed this drone can move at
-
-	float SpeedOverride; // If non-zero, override our max speed with this value
-
-	float Acceleration; // How quickly this drone reaches its max speed
-
-	float TurnRate; // Rate at which this drone can turn, in degrees per second
-
-	int Weapons; // Number of weapons this drone has
-
-	FTimer RemoveTimer; // Delay after being destroyed when drone gets removed/explodes
-
-	char Plugin[MAX_DRONE_LENGTH]; // Logic plugin for basic drone functions
-
-	char Config[64]; // Config containing drone's info
-
-	bool Alive; // Is this drone alive
-
-	bool Viewlocked; // Whether this drone should rotate towards the camera or not
-
-	bool Occupied; // Is there currently a player piloting this drone
-
-	int Seats; // How many seats this drone has
-
-	EMoveType Movetype; // Defines how this drone should move
-
-	// Returns whether or not this drone's index is valid or not
-	bool Valid()
-	{
-		return this.Hull.Valid();
-	}
-
-	// Returns the entity index this drone is tied to
-	int Get()
-	{
-		return this.Hull.Get();
-	}
-
-	// Returns the move type of this drone
-	EMoveType GetMoveType()
-	{
-		return this.Movetype;
-	}
-
-	// Returns the FObject reference of this drone
-	FObject GetObject()
-	{
-		return this.Hull;
-	}
-
-	// Get the owner of this drone
-	FObject GetOwner()
-	{
-		return this.Hull.GetOwner();
-	}
-	
-	// Returns the position of this drone
-	FVector GetPosition()
-	{
-		return this.Hull.GetPosition();
-	}
-
-	// Returns the angles of this drone
-	FRotator GetAngles()
-	{
-		return this.Hull.GetAngles();
-	}
-
-	// Sets this drone's angles
-	void SetAngles(FRotator angles)
-	{
-		this.Hull.SetAngles(angles);
-	}
-
-	// Set the owner of this drone
-	void SetOwner(FObject owner)
-	{
-		this.Hull.SetOwner(owner);
-	}
-
-	// Clears this drone's reference
-	void Clear()
-	{
-		this.Hull.ref = INVALID_ENT_REFERENCE;
-		this.Camera.ref = INVALID_ENT_REFERENCE;
-		this.Owner.Clear();
-	}
-}
-
-///
-/// Player struct for organizing owned drones
-///
-
-enum struct FPlayer
-{
-	FDrone Drone; // Drone this player is currently in
-
-	bool InDrone; // Is this player in a drone
-
-	// Checks if this player is in a drone
-	bool ValidDrone()
-	{
-		return this.Drone.Valid();
-	}
-
-	// Gets the drone this player is currently in
-	FDrone GetDrone()
-	{
-		return this.Drone;
-	}
-}
-FPlayer Player[MAXPLAYERS+1];
+#include "drones/drone.inc"
 
 
 /****************************************************************
@@ -473,16 +330,16 @@ stock FVector GetOffsetPos(FVector origin, FRotator angles, FVector offset)
 	result = origin;
 
 	direction = angles.GetForwardVector();
-	direction.Scale(offset.x);
+	direction.Scale(offset.X);
 	result.Add(direction);
 
 	direction = angles.GetRightVector();
 	direction.Negate();
-	direction.Scale(offset.y);
+	direction.Scale(offset.Y);
 	result.Add(direction);
 
 	direction = angles.GetUpVector();
-	direction.Scale(offset.z);
+	direction.Scale(offset.Z);
 	result.Add(direction);
 
 	return result;

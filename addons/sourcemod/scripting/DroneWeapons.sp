@@ -79,7 +79,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 	if (parent.Valid())
 	{
 		FObject receiver, mount;
-		receiver = CreateObjectDeferred("prop_physics_multiplayer"); // Create physics component to use
+		receiver = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override"); // Create physics component to use
 
 		// Health value gets shared between mount and receiver if applicable
 		int health = kv.GetNum("health", 0);
@@ -92,7 +92,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 		{
 			// Mounts will act as the part of the weapon that can rotate with the player's camera yaw values
 			// The receiver itself will rotate to match the player's pitch
-			mount = CreateObjectDeferred("prop_dynamic_override");
+			mount = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
 			mount.SetKeyValue("model", mountmodel);
 
 			// Flags this object as a mount so it can properly share health with the weapon itself
@@ -131,7 +131,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 			else
 				LogError("Error: [Attach Mount] Cannot find attachment point '%s' assigned to this weapon! Make sure the attachment point exists on the parent model!", weapon.AttachmentPoint);
 
-			FinishSpawn(mount, spawn);
+			FGameplayStatics.FinishSpawn(mount, spawn);
 			mount.SetParent(parent);
 			// Our new parent for this weapon's receiver
 			parent = mount;
@@ -145,7 +145,7 @@ void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const cha
 			LogError("Error: [Attach Reciever] No attachment point found with name: %s!\nIf you are using a mount, it MUST have an attachment point with the same name that the mount attaches to on the drone!", weapon.AttachmentPoint);
 
 		// Finish up our spawning
-		FinishSpawn(receiver, spawn);
+		FGameplayStatics.FinishSpawn(receiver, spawn);
 
 		receiver.SetParent(parent);
 

@@ -5,46 +5,126 @@
 
 #include "components.inc"
 
-enum struct FRocket
+#if defined _ilib_projectiles_included
+ #endinput
+#endif
+#define _ilib_projectiles_included
+
+/*
+* Map for handling projectiles. This can be used on any projectile already existing in the world
+*/
+methodmap ABaseProjectile < ABaseEntity
 {
-	FComponent Component
-
-	float Speed;
-
-	bool Valid()
+	/*
+	* Used as a cast to check if an object is a projectile. If needing to spawn a specific projectile, use the appropriate methodmap
+	*
+	* @return 			ABaseProjectile wrapping the entity reference.
+	*/
+	public ABaseProjectile(FObject entity)
 	{
-		return this.Component.Valid();
+		if (entity.Cast("tf_projectile_"))
+			return view_as<ABaseProjectile>(entity.Reference);
+
+		return view_as<ABaseProjectile>(0);
 	}
 
-	int Get()
+	// Damage this projectile will deal. Note: not all projectiles handle damage in the same way, this may not work for all
+	property float Damage
 	{
-		return this.Component.Get();
+		public set(float value)
+		{
+			// Most projectiles use m_flDamage
+			if (this.GetObject().HasProp(Prop_Send, "m_flDamage"))
+			{
+				this.GetObject().SetPropFloat(Prop_Send, "m_flDamage", value);
+			}
+			// However, projectiles based on rockets do NOT have a named damage property so we must use an offset
+			else
+			{
+				// This should work for most other projectiles
+				int offset = FindSendPropInfo(this.GetClassname(ClassType_Networked), "m_iDeflected") + 4;
+				SetEntDataFloat(this.Get(), offset, value);
+			}
+		}
+		public get()
+		{
+			// Same as before
+			if (this.GetObject().HasProp(Prop_Send, "m_flDamage"))
+			{
+				return this.GetObject().GetPropFloat(Prop_Send, "m_flDamage");
+			}
+			else
+			{
+				// This should work for most other projectiles
+				int offset = FindSendPropInfo(this.GetClassname(ClassType_Networked), "m_iDeflected") + 4;
+				GetEntDataFloat(this.Get(), offset);
+			}
+		}
 	}
 
-	// Returns the FObject of this rocket
-	FObject GetObject()
+	property int Team
 	{
-		return this.Component.GetObject();
+		public set(int value)
+		{
+			if (this.Valid())
+			{
+				this.GetObject().SetProp(Prop_Send, "m_iTeamNum", value);
+			}
+		}
+		public get()
+		{
+			if (this.Valid())
+			{
+				return this.GetObject().GetProp(Prop_Send, "m_iTeamNum");
+			}
+		}
 	}
 
-	// Returns the component of this rocket
-	FComponent GetComponent()
+	// Used to get the projectile's speed from its velocity. Cannot be set, use ABaseProjectile::FireProjectile() to set velocity
+	property float Speed
 	{
-		return this.Component;
+		public get()
+		{
+			FVector vel;
+			this.GetObject().GetPropVector(Prop_Data, "m_vecVelocity", vel);
+
+			return vel.Length();
+		}
 	}
 
-	// Launch this rocket at the given angle
-	void Fire(FRotator angle)
+	// Whether or not this rocket is critical. Note: Not all projectiles can be critical
+	property bool Critical
 	{
-		FVector vel;
-		vel = angle.GetForwardVector();
+		public set(bool value)
+		{
+			if (this.GetObject().HasProp(Prop_Send, "m_bCritical"))
+				this.GetObject().SetProp(Prop_Send, "m_bCritical", view_as<int>(value));
+		}
+		public get()
+		{
+			if (this.GetObject().HasProp(Prop_Send, "m_bCritical"))
+				return view_as<bool>(this.GetObject().GetProp(Prop_Send, "m_bCritical"));
 
-		vel.Scale(this.Speed);
+			return false;
+		}
+	}
 
-		FObject rocket;
-		rocket = this.GetObject();
+	/*
+	* Fires this projectile in the given direction. This can be used at any time during the projectile's life
+	*
+	* @param direction		Direction this projectile should fire at, as an angle
+	* @param speed			Speed at which this projectile will fire at
+	*/
+	public void FireProjectile(FRotator direction, float speed)
+	{
+		if (this.Valid())
+		{
+			FVector uDir;
+			uDir = direction.GetForwardVector(); // Get the unit direction
+			uDir.Scale(speed);
 
-		rocket.SetVelocityRotation(angle, vel);
+			this.GetObject().SetVelocityRotation(direction, uDir); // Fire the projectile
+		}
 	}
 }
 
@@ -59,9 +139,9 @@ enum struct FRocket
 *
 * @return 			FRocket containing the information of the created rocket
 */
-stock FRocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, float speed, float damage)
+stock ARocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, float speed, float damage)
 {
-	FRocket rocket;
+	ARocket rocket;
 	char classname[64], netname[64];
 
 	switch (type)
@@ -83,8 +163,8 @@ stock FRocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, floa
 		}
 	}
 
-	FComponent component;
-	component = CreateNewComponent(classname);
+	//FComponent component;
+	//component = CreateNewComponent(classname);
 
 	rocket.Speed = speed;
 
@@ -95,7 +175,7 @@ stock FRocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, floa
 	FObject proj;
 	proj = component.GetObject();
 
-	proj.SetOwner(owner.reference);
+	proj.SetOwner(owner.Obj);
 
 	proj.Teleport(pos, ConstructRotator(), ConstructVector());
 

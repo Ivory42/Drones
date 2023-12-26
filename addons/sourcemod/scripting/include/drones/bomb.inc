@@ -5,6 +5,7 @@
 
 #include "components.inc"
 
+/*
 enum struct FDroneBomb
 {
 	FComponent Component;
@@ -19,3 +20,4 @@ enum struct FDroneBomb
 		return this.Component.Get();
 	}
 }
+*/

@@ -6,169 +6,194 @@
 #include <sdktools>
 #include <tf2_stocks>
 #include "dronetypes.inc"
-#include <ilib>
+#include "droneplayer.inc"
+#include <objectmanager>
 
-// Would be nice if const could be used for array sizes...
-#define MAXATTACHMENTS 6
-#define MAXWEAPONS 6
-#define MAXSEATS 6
+const int MaxWeapons = 4;
+const int MaxSeats = 6;
 
-/*
-* Struct used for any misc attachments given to a drone. These are not necessarily functional and can be used primarily for cosmetic reasons.
-*/
-enum struct FComponent
+methodmap AComponent < ABaseEntity
 {
-	FObject Reference;
-
-	float Modifier; // Extra damage to deal to the owning drone if this component is hit
-
-	int MaxHealth; // Max health of this component
-
-	bool Valid()
+	property int Modifier // Extra damage this drone takes when this component is hit
 	{
-		return this.Reference.Valid();
-	}
-
-	// Returns the entity index tied to this component
-	int Get()
-	{
-		return this.Reference.Get();
-	}
-
-	// Sets this component's pointer reference
-	void Set(int entity)
-	{
-		this.Reference.Set(entity);
-	}
-
-	// Sets the owner of this component
-	void SetOwner(FObject owner)
-	{
-		this.Reference.SetOwner(owner);
-	}
-
-	// Returns the owner of this component
-	FObject GetOwner()
-	{
-		return this.Reference.GetOwner();
-	}
-
-	// Returns the FObject associated with this component
-	FObject GetObject()
-	{
-		return this.Reference;
+		public get() { return this.GetObjectProp("Comp_DamageModTaken"); }
+		public set(int mod)	{ this.SetObjectProp("Comp_DamageModTaken", mod); }
 	}
 }
 
-/*
-* Struct containing information on a drone's weapon.
-* Drones can have up to 6 of these weapons.
-*/
-enum struct FDroneWeapon
+methodmap FComponentArray < ArrayList
 {
-	FObject Mount; // Optional physical mount to use for the weapon. This will rotate with the player's yaw
+	public FComponentArray()
+	{
+		ArrayList array = new ArrayList();
+		return view_as<FComponentArray>(array);
+	}
 	
-	FObject Receiver; // Optional model to use for this weapon. If a mount exists, this will only rotate with the player's pitch
+	public void ClearArray()
+	{
+		int length = this.Length;
+		if (length > 0)
+		{
+			for (int i = 0; i < length; i++)
+			{
+				AComponent component = this.Get(i);
+				FEntityStatics.DestroyEntity(component);
+			}
+		}
+	}
+}
 
+enum struct FDroneWeaponExtras
+{
+	FObject Mount; 		// Optional physical mount to use for the weapon. This will rotate with the player's yaw
 	FObject Parent; /*
 					 * Usually the drone this weapon is attached to, however it can theoretically be another component as well.
 					 * Cast to either a drone or component to make sure the parent is valid.
 	 				 */
 
-	int Ammo; // Ammo loaded
-
-	int MaxAmmo; // Max ammo that can be loaded at once
-
-	float FireRate; // How fast this weapon fires, measured in rounds per second
-
-	int MaxHealth; // Max health value for this weapon
-
-	FTimer AttackTimer; // Game time when this weapon is ready to fire again
-
-	float Damage; // Damage this weapon should deal
-
-	float ProjSpeed; // How fast the projectile should be fired at, if used
-
-	float Inaccuracy; // Error in angle for this weapon upon consecutive attacks
-
-	float ReloadTime; // How long this weapon reloads for
-
-	float Modifier; // How much extra damage this drone takes when this weapon is hit
-
-	FTimer ReloadTimer; // Game time when this weapon should be reloaded
-
-	char Firesound[PLATFORM_MAX_PATH]; // Sound to use for this weapon firing
-
-	EWeaponState State; // weapon state
-
-	EWeaponType Type; // Weapon type
-
-	float TurnRate; // How quickly this weapon rotates
-
-	float MaxPitch; // max pitch this weapon can fire at
-
-	float MaxYaw; // max yaw this weapon can fire at
-
-	bool Fixed; // Whether this weapon model is fixed or rotates
-
-	bool ComplexAngles; // Should the angles on this be distributed between the receiver and mount
-
-	char Name[MAX_WEAPON_LENGTH]; // Display name for this weapon
-
-	char Plugin[64]; // Plugin name for this weapon
-
-	char PluginWeapon[64]; // Weapon name within custom plugin
-
-	/*
-	 * Attachment setings
-	 */
-
-	FVector Offset; // Fallback offset to use if this weapon has no attachment point set
-
-	FVector ProjOffset; // Fallback offset to use if this weapon has no muzzle attachment defined
-
-	char AttachmentPoint[256]; // Attachment point on parent to attach this weapon to
-
+	// Attachments
+	FVector Offset; 			// Fallback offset to use if this weapon has no attachment point set
+	FVector ProjOffset; 		// Fallback offset to use if this weapon has no muzzle attachment defined
+	char AttachmentPoint[256]; 	// Attachment point on parent to attach this weapon to
 	char MuzzleAttachment[256]; // Name of muzzle attachment for attack origination
+}
 
-	/*
-	 * Weapon methods
-	 */
-
-	// Returns true if this is a valid weapon
-	bool Valid()
+methodmap ADroneWeapon < AComponent
+{
+	// Returns the physical prop used as the mount of this weapon.
+	public FDroneWeaponExtras GetObjects()
 	{
-		return this.Receiver.Valid();
+		FDroneWeaponExtras objects;
+		this.GetArray("Weapon_ObjProps", objects, sizeof objects);
+
+		return objects;
+	}
+	public void SetObjects(FDroneWeaponExtras objects) { this.SetArray("Weapon_ObjProps", objects, sizeof objects); }
+
+	// Weapon name used in the drone UI
+	public void GetDisplayName(char[] name, int size) { this.GetObjectPropString("Weapon_DisplayName", name, size); }
+	public void SetDisplayName(const char[] name) { this.SetObjectPropString("Weapon_DisplayName", name); }
+
+	// Weapon name used by other plugins
+	public void GetInternalName(char[] name, int size) { this.GetObjectPropString("Weapon_InternalName", name, size); }
+	public void SetInternalName(const char[] name) { this.SetObjectPropString("Weapon_InternalName", name); }
+
+	// Weapon fire sound
+	public void GetFireSound(char[] sound, int size) { this.GetObjectPropString("Weapon_FireSound", sound, size); }
+	public void SetFireSound(const char[] sound) { this.SetObjectPropString("Weapon_FireSound", sound); }
+
+	property int Ammo // Ammo currently loaded
+	{
+		public get() { return this.GetObjectProp("Weapon_CurrentAmmo"); }
+		public set(int ammo) { this.SetObjectProp("Weapon_CurrentAmmo", ammo); }
 	}
 
-	// Returns the entity index of this weapon
-	int Get()
+	property int MaxAmmo // Max ammo loaded at once
 	{
-		return this.Receiver.Get();
+		public get() { return this.GetObjectProp("Weapon_MaxAmmo"); }
+		public set(int ammo) { this.SetObjectProp("Weapon_MaxAmmo", ammo); }
 	}
 
-	// Sets this weapon's pointer reference
-	void Set(int entity)
+	property float FireRate // Weapon's firerate in rounds per second
 	{
-		this.Receiver.Set(entity);
+		public get() { return this.GetObjectPropFloat("Weapon_RateOfFire"); }
+		public set(float rof) { this.SetObjectPropFloat("Weapon_RateOfFire", rof); }
+	}
+
+	property float Damage // Damage dealt by this weapon
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_Damage"); }
+		public set(float damage) { this.SetObjectPropFloat("Weapon_Damage", damage); }
+	}
+
+	property float NextPrimaryAttack // Next gametime value when this weapon can fire again
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_NextPrimaryAttackTime"); }
+		public set(float time) { this.SetObjectPropFloat("Weapon_NextPrimaryAttackTime", time); }
+	}
+
+	property float ProjectileSpeed // How fast a projectile from this weapon should be fired, if used
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_ProjectileSpeed"); }
+		public set(float speed) { this.SetObjectPropFloat("Weapon_ProjectileSpeed", speed); }
+	}
+
+	property float Inaccuracy // Error in angle for this weapon upon consecutive attacks
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_SpreadError"); }
+		public set(float error) { this.SetObjectPropFloat("Weapon_SpreadError", error); }
+	}
+
+	property float ReloadDelay // How long this weapon takes to reload
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_ReloadTime"); }
+		public set(float time) { this.SetObjectPropFloat("Weapon_ReloadTime", time); }
+	}
+
+	property STimer ReloadTimer // Timer used for reloading
+	{
+		public get() { return view_as<STimer>(this.GetObjectProp("Weapon_ReloadTimer")); }
+		public set(STimer timer) { this.SetObjectProp("Weapon_ReloadTimer", timer); }
+	}
+
+	property EWeaponState State // Current state of this weapon
+	{
+		public get() { return view_as<EWeaponState>(this.GetObjectProp("Weapon_State")); }
+		public set(EWeaponState state) { this.SetObjectProp("Weapon_State", state); }
+	}
+
+	property EWeaponType Type // Weapon type. Determines the type of projectile (if applicable) fired by this weapon
+	{
+		public get() { return view_as<EWeaponType>(this.GetObjectProp("Weapon_Type")); }
+		public set(EWeaponType type) { this.SetObjectProp("Weapon_Type"); }
+	}
+
+	property float TurnRate // How quickly this weapon rotates towards the player's view
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_TurnRate"); }
+		public set(float rate) { this.SetObjectPropFloat("Weapon_TurnRate", rate); }
+	}
+
+	property float MaxPitch // Max pitch this weapon can aim at (relative to drone)
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_MaxPitchAngle"); }
+		public set(float pitch) { this.SetObjectPropFloat("Weapon_MaxPitchAngle", pitch); }
+	}
+
+	property float MaxYaw // Max yaw value this weapon can aim at (relative to drone)
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_MaxYawAngle"); }
+		public set(float yaw) { this.SetObjectPropFloat("Weapon_MaxYawAngle", yaw); }
+	}
+
+	property bool Fixed // If true, this weapon will not rotate with the player's view angles
+	{
+		public get() { return this.GetObjectProp("Weapon_FixedAngles"); }
+		public set(bool value) { this.SetObjectProp("Weapon_FixedAngles", value); }
+	}
+
+	property bool ComplexAngles // If true, this weapon's angles will be properly distributed between the mount and the weapon model
+	{
+		public get() { return this.GetObjectProp("Weapon_ComplexAngles"); }
+		public set(bool value) { this.SetObjectProp("Weapon_ComplexAngles", value); }
 	}
 
 	// Returns the receiver object for this weapon
-	FObject GetReceiver()
+	public FObject GetReceiver()
 	{
-		return this.Receiver;
+		return this.GetObject();
 	}
 
 	// Returns the mount of the receiver of this weapon
-	FObject GetMount()
+	public FObject GetMount()
 	{
-		return this.Mount;
+		return this.GetObjects().Mount;
 	}
 
 	// Returns the parent object of this weapon
-	FObject GetParent()
+	public FObject GetParent()
 	{
-		return this.Parent;
+		return this.GetObjects().Parent;
 	}
 
 	/*
@@ -178,9 +203,9 @@ enum struct FDroneWeapon
 	 * @param action     Action to handle ammo management (See OnDroneAttack forward)
 	 * @param decrease   Ammo to decrease by if Plugin_Changed is passed
 	 */
-	void SimulateFire(Action action, int decrease)
+	public void SimulateFire(Action action, int decrease)
 	{
-		this.AttackTimer.Loop();
+		this.NextPrimaryAttack = GetGameTime() + this.FireRate; // Reset firerate
 
 		bool skip = false; // Skip reload check
 
@@ -199,18 +224,21 @@ enum struct FDroneWeapon
 		if (!skip && this.Ammo == 0)
 			this.SimulateReload();
 
-		if (strlen(this.Firesound) > 3)
+		char firesound[64];
+		this.GetFireSound(firesound, sizeof firesound);
+
+		if (strlen(firesound) > 3)
 		{
-			PrecacheSound(this.Firesound);
-			if (this.Valid())
-				EmitSoundToAll(this.Firesound, this.Get()); //emit from weapon if physical entity exists
+			PrecacheSound(firesound);
+			if (this.Valid()) // Need to change this check
+				EmitSoundToAll(firesound, this.Get()); //emit from weapon if physical entity exists
 			else
-				EmitSoundToAll(this.Firesound, this.GetParent().Get()); //otherwise just emit from the drone
+				EmitSoundToAll(firesound, this.GetParent().Get()); //otherwise just emit from the drone
 		}
 	}
 	
 	// Weapon tick event. Only used in core weapons plugin, do not call manually.
-	void Simulate()
+	public void Simulate()
 	{
 		if (this.ReloadTimer.Expired() && this.Ammo == 0 && this.State == WeaponState_Reloading)
 		{
@@ -220,7 +248,7 @@ enum struct FDroneWeapon
 	}
 
 	// Reloads this weapon.
-	void SimulateReload()
+	public void SimulateReload()
 	{
 		if (this.Ammo < this.MaxAmmo)
 		{
@@ -235,19 +263,19 @@ enum struct FDroneWeapon
 	 *
 	 * @param force     If true, force this weapon to fire as long as it's active and has ammo
 	 */
-	bool CanFire(bool force)
+	public bool CanFire(bool force)
 	{
 		if (force) //ignore attack delay
 			return (this.Ammo != 0 && this.State == WeaponState_Ready);
 
-		else if (this.Ammo != 0 && this.AttackTimer.Expired() && this.State == WeaponState_Ready)
+		else if (this.Ammo != 0 && this.NextPrimaryAttack <= GetGameTime() && this.State == WeaponState_Ready)
 			return true;
 
 		return false;
 	}
 
 	// Retrieves the relative position of this weapon
-	FVector GetRelativePosition()
+	public FVector GetRelativePosition()
 	{
 		FVector position;
 
@@ -257,7 +285,7 @@ enum struct FDroneWeapon
 	}
 
 	// Returns the world position of this weapon
-	FVector GetWorldPosition()
+	public FVector GetWorldPosition()
 	{
 		FVector position;
 
@@ -266,7 +294,7 @@ enum struct FDroneWeapon
 		return position;
 	}
 
-	FTransform GetMuzzleTransform()
+	public FTransform GetMuzzleTransform()
 	{
 		FTransform muzzle;
 
@@ -275,7 +303,9 @@ enum struct FDroneWeapon
 
 		return muzzle;
 	}
+
 }
+
 
 /*
 * Struct holding information on a drone seat.
@@ -284,49 +314,119 @@ enum struct FDroneWeapon
 *
 * Drones may have up to 6 seats max.
 */
-enum struct FDroneSeat
+methodmap FDroneSeat < StringMap
 {
-	FClient Occupier; // Client occupying this seat.
-
-	bool Occupied; // Whether or not this seat is occupied
-
-	ESeatType Type; // What type of seat this is, defines what the client occupying this seat can do.
-
-	int WeaponIndex[MAXWEAPONS + 1]; // Index of drone weapons to use for this seat, when changing weapons, this seat will cycle through this array of indices
-
-	int ActiveWeapon; // Current weapon active for this seat
-
-	FTimer WeaponChangeTimer; // Delay between weapon changes
-
-	char Attachment[64]; // Attachment point for this seat
-
-	// Returns the client occupying this seat
-	FClient GetOccupier()
+	public FDroneSeat()
 	{
-		return this.Occupier;
+		StringMap seat = new StringMap();
+		seat.SetValue("IsDroneSeat", true);
+
+		return view_as<FDroneSeat>(seat);
 	}
 
-	// Returns the active weapon index of this drone
-	int GetWeaponIndex()
+	public bool Valid()
 	{
-		return this.ActiveWeapon;
+		bool valid = false;
+		this.GetValue("IsDroneSeat", valid);
+
+		return valid;
 	}
 
-	// Returns the type of seat this is
-	ESeatType GetSeatType()
+	property ADronePlayer Occupier // Client occupying this seat
 	{
-		return this.Type;
+		public get()
+		{
+			ADronePlayer client;
+			this.GetValue("ClientInSeat", client);
+
+			return client;
+		}
+		public set(ADronePlayer client) { this.SetValue("ClientInSeat", client); }
 	}
 
-	// Returns true if this seat has an active weapon index
-	bool HasWeapon()
+	property bool Occupied // Whether or not this seat already has a client occupying it
+	{
+		public get()
+		{
+			bool value = false;
+			this.GetValue("SeatTaken", value);
+
+			return value;
+		}
+		public set(bool value) { this.SetValue("SeatTaken", value); }
+	}
+
+	property ESeatType Type // What type of seat this is, defines what the client occupying this seat can do.
+	{
+		public get()
+		{
+			ESeatType type;
+			this.GetValue("SeatType", type);
+
+			return type;
+		}
+		public set(ESeatType type) { this.SetValue("SeatType", type); }
+	}
+
+	property FComponentArray Weapons // Array of weapons this seat has access to use
+	{
+		public get()
+		{
+			FComponentArray weapons;
+			this.GetValue("ValidWeaponGroup", weapons);
+
+			return weapons;
+		}
+		public set(FComponentArray weapons) { this.SetValue("ValidWeaponGroup", weapons); }
+	}
+
+	property ADroneWeapon ActiveWeapon // Current weapon this seat is using
+	{
+		public get()
+		{
+			ADroneWeapon weapon;
+			this.GetValue("ActiveWeapon", weapon);
+
+			return weapon;
+		}
+		public set(ADroneWeapon weapon) { this.SetValue("ActiveWeapon", weapon); }
+	}
+
+	property int ActiveWeaponIndex // Current index in the array of weapons being used
+	{
+		public get()
+		{
+			int index = -1;
+			this.GetValue("WeaponIndex", index);
+
+			return index;
+		}
+		public set(int index) { this.SetValue("WeaponIndex", index); }
+	}
+
+	property float NextSwitchTime // Time when this seat can change weapons again
+	{
+		public get()
+		{
+			float time = 0.0;
+			this.GetValue("NextSwitchTime", time);
+
+			return time;
+		}
+		public set(float time) { this.SetValue("NextSwitchTime", time); }
+	}
+
+	// Gets the attachment point of this seat on the drone.
+	public void GetAttachment(char[] name, int size) { this.GetString("SeatAttachPoint", name, size); }
+	public void SetAttachment(const char[] name) { this.SetString("SeatAttachPoint", name); }
+
+	// Returns true if this seat has an active weapon
+	public bool HasWeapon()
 	{
 		if (this.Type == Seat_Passenger) // Passenger seats have no weapons
 			return false;
 
-		int index = this.GetWeaponIndex();
-
-		return (index >= 0 && index < MAXSEATS);
+		return (this.ActiveWeapon != null);
 	}
 }
 
@@ -342,7 +442,7 @@ enum struct FDroneSeat
 * @param classname		Classname of the entity this component should be created as
 * 
 * @return				Component struct containing the entity
-*/
+*
 stock FComponent CreateNewComponent(const char[] classname)
 {
 	FComponent component;
@@ -350,7 +450,7 @@ stock FComponent CreateNewComponent(const char[] classname)
 
 	component.Reference.Spawn();
 	return component;
-}
+}*/
 
 /*
 * Creates a new component but does not spawn it. Call FinishComponent() when ready to use.
@@ -358,7 +458,7 @@ stock FComponent CreateNewComponent(const char[] classname)
 * @param classname		Classname of the entity this component should be created as
 * 
 * @return				Component struct containing the entity
-*/
+*
 stock FComponent CreateDeferredComponent(const char[] classname)
 {
 	FComponent component;
@@ -375,18 +475,18 @@ stock void FinishComponent(FComponent component)
 
 	reference.Spawn();
 	reference.Activate();
-}
+}*/
 
 /**
  * Returns an FComponent object reference from the given entity index
  * 
  * @param entityId     Entity index to use as this component's FObject reference
  * @return             FComponent containing a reference to the given entity
- */
+ *
 stock FComponent GetComponentFromEntity(int entityId)
 {
 	FComponent component;
 	component.Reference = ConstructObject(entityId);
 
 	return component;
-}
+}*/

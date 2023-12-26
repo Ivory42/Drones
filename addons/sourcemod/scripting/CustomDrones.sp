@@ -127,11 +127,11 @@ Action OnRoundStart(Event event, const char[] name, bool dBroad)
 // Prevent resupplying from causing issues with players piloting drones
 Action OnPlayerResupply(Event event, const char[] name, bool dBroad)
 {
-	int clientId = GetClientOfUserId(event.GetInt("userid"));
+	ADronePlayer client = view_as<ADronePlayer>(FEntityStatics.GetClient(ConstructClient(event.GetInt("userid"), true)));
 
-	if (Player[clientId].InDrone)
+	if (client && client.InDrone)
 	{
-		CreateTimer(0.5, DroneResupplied, clientId, TIMER_FLAG_NO_MAPCHANGE); // Need a longer delay than RequestFrame
+		CreateTimer(0.5, DroneResupplied, client.Get(), TIMER_FLAG_NO_MAPCHANGE); // Need a longer delay than RequestFrame
 	}
 
 	return Plugin_Continue;
@@ -139,20 +139,20 @@ Action OnPlayerResupply(Event event, const char[] name, bool dBroad)
 
 Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
 {
-	FClient client, attacker;
+	//FClient client, attacker;
 
-	client = ConstructClient(event.GetInt("userid"), true);
-	attacker = ConstructClient(event.GetInt("attacker"), true);
+	AClient client = FEntityStatics.GetClient(ConstructClient(event.GetInt("userid"), true));
+	AClient attacker = FEntityStatics.GetClient(ConstructClient(event.GetInt("attacker"), true));
 
-	if (client.Valid() && PlayerInDrone(client))
+	if (client && PlayerInDrone(client))
 	{
-		FDrone drone;
-		drone = GetClientDrone(client);
+		ADrone drone = client.GetDrone();
 
-		if (drone.Valid())
+		if (drone && drone.Valid())
 		{
-			KillDrone(drone, drone.GetObject(), attacker, 0.0, drone.GetObject());
-			ResetClientView(client);
+			PlayerExitVehicle(drone, GetPlayerSeat(client, drone), client);
+			//KillDrone(drone, drone.GetObject(), attacker, 0.0, drone.GetObject());
+			//ResetClientView(client);
 		}
 	}
 	return Plugin_Continue;
@@ -201,48 +201,41 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 // Reset player variables
 public void OnClientPostAdminCheck(int client)
 {
-	Player[client].InDrone = false;
+	//
 }
 
-public void OnClientDisconnect(int clientId)
+public void EntManager_OnClientRemoved(AClient client)
 {
-	FDrone drone;
-	FClient owner;
+	ADronePlayer player = view_as<ADronePlayer>(client);
 
-	owner.Set(clientId);
-	drone = GetClientDrone(owner);
-
-	if (drone.Valid())
+	if (player && player.InDrone)
 	{
-		int droneId = drone.Get();
-		int seatIndex = GetPlayerSeat(owner, DroneSeats[droneId]);
-
-		PlayerExitVehicle(drone, DroneSeats[droneId][seatIndex], owner);
+		ADrone drone = player.GetDrone();
+		PlayerExitVehicle(drone, GetPlayerSeat(player, drone), player);
 	}
 }
 
-void ResetClientView(FClient client)
+void ResetClientView(AClient client)
 {
 	if (client.Valid())
 	{
 		int clientId = client.Get();
 
 		SetClientViewEntity(clientId, clientId);
-		Player[clientId].InDrone = false;
 		SetEntityMoveType(clientId, MOVETYPE_WALK);
 	}
 }
 
-void RemoveWearables(FClient client)
+void RemoveWearables(AClient client)
 {
 	if (client.Valid())
 	{
-		int entity = MaxClients + 1;
-		while((entity = FindEntityByClassname(entity, "tf_wearable")) != -1)
+		int entity = -1;
+		while ((entity = FindEntityByClassname(entity, "tf_wearable")) != -1)
 		{
 			if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
 			{
-				switch(GetEntProp(entity, Prop_Send, "m_iItemDefinitionIndex"))
+				switch (GetEntProp(entity, Prop_Send, "m_iItemDefinitionIndex"))
 				{
 					default:
 					{
@@ -251,8 +244,9 @@ void RemoveWearables(FClient client)
 				}
 			}
 		}
-		entity = MaxClients + 1;
-		while((entity = FindEntityByClassname(entity, "tf_powerup_bottle")) != -1) //mvm canteens
+
+		entity = -1;
+		while ((entity = FindEntityByClassname(entity, "tf_powerup_bottle")) != -1) //mvm canteens
 		{
 			if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
 			{
@@ -267,13 +261,14 @@ void RemoveWearables(FClient client)
 ****************/
 
 // When a new entity is created, lets make sure it is not initialized as a drone
-public void OnEntityDestroyed(int entityId)
+public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 {
-	FObject entity;
-	entity.Set(entityId);
+	ADrone drone = view_as<ADrone>(entity);
 
-	if (IsValidDrone(entity))
-		Drone[entityId].Clear();
+	if (drone.IsDrone)
+	{
+		drone.Destroy();
+	}
 }
 
 Action CmdDrone(int clientId, int args)
@@ -377,7 +372,7 @@ int DroneMenuCallback(Menu menu, MenuAction action, int client, int param1)
  * @param spawnPos	Spawn position if not spawning for a client
  * @return          Object containing the drone information
  */
-FDrone CreateDroneByName(FClient owner, const char[] name, const FVector spawnPos)
+ADrone CreateDroneByName(FClient owner, const char[] name, const FVector spawnPos)
 {
 	char Directory[PLATFORM_MAX_PATH];
 	char FileName[PLATFORM_MAX_PATH];
@@ -386,27 +381,29 @@ FDrone CreateDroneByName(FClient owner, const char[] name, const FVector spawnPo
 	BuildPath(Path_SM, Directory, sizeof Directory, "configs/drones");
 	Handle dir = OpenDirectory(Directory);
 
-	FDrone drone;
+	ADrone drone = null;
 
 	while (ReadDirEntry(dir, FileName, sizeof FileName, type))
 	{
-		if (type != FileType_File) continue;
+		if (type != FileType_File)
+			continue;
+
 		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
 		if (StrEqual(name, FileName))
 		{
 			//PrintToChatAll("Found drone %s", drone_name);
-			drone = SpawnDrone(owner, name, spawnPos);
+			SpawnDrone(owner, name, spawnPos, drone);
 		}
 		LogMessage("Found Config %s", FileName);
 	}
 
 	//PrintToChatAll("Unable to find drone %s", name);
-	CloseHandle(dir);
+	delete dir;
 	return drone;
 }
 
 // Prepare our drone to be spawned
-FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
+void SpawnDrone(FClient owner, const char[] name, const FVector spawnPos, ADrone& drone)
 {
 	//PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
@@ -421,17 +418,17 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 	kv.ImportFromFile(path);
 
 	FTransform spawn;
-	FObject clientRef;
 
 	if (IsWorld(owner))
 	{
-		spawn.position = spawnPos;
+		spawn.Position = spawnPos;
 	}
+
 	else
 	{
-		spawn.rotation = owner.GetEyeAngles();
-		spawn.rotation.yaw += 180.0;
-		spawn.rotation.pitch = 0.0;
+		spawn.Rotation = owner.GetEyeAngles();
+		spawn.Rotation.Yaw += 180.0;
+		spawn.Rotation.Pitch = 0.0;
 
 		FVector start, end;
 		start = owner.GetEyePosition();
@@ -439,29 +436,24 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 		start.Scale(3000.0);
 		end.Add(start);
 
-		RayTrace trace = new RayTrace(start, end, MASK_PLAYERSOLID, DroneSpawnTrace, owner.Get());
+		FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_PLAYERSOLID, DroneSpawnTrace, owner.Get());
 		if (trace.DidHit())
 		{
 			FVector normal;
 			normal = trace.GetNormalVector();
 
-			spawn.position = normal;
+			spawn.Position = normal;
 			normal.Scale(60.0);
 
-			spawn.position.Add(normal);
+			spawn.Position.Add(normal);
 		}
 		else
-			spawn.position = trace.GetEndPosition();
-
-		clientRef = owner.GetObject();
-		clientRef.GetPropVector(Prop_Data, "m_vecVelocity", spawn.velocity);
+			spawn.Position = trace.GetEndPosition();
 	}
 
-	FDrone drone;
+	SetupDrone(kv, spawn, drone);
 
-	drone = SetupDrone(kv, spawn);
-
-	FormatEx(drone.Config, 64, name);
+	drone.SetConfig(name);
 
 	switch (drone.Movetype)
 	{
@@ -481,44 +473,47 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 
 	//Find total number of weapons and seats for this drone
 	char number[8];
-	drone.Weapons = 0;
+	drone.Weapons = new FComponentArray();
 
 	if (kv.JumpToKey("weapons"))
 	{
-		for (int i = 1; i <= MAXWEAPONS; i++)
+		ADroneWeapon weapon = null;
+		for (int i = 1; i <= MaxWeapons; i++)
 		{
-			FormatEx(number, sizeof number, "weapon%i", i);
+			FormatEx(number, sizeof number, "weapon%d", i);
 			if (kv.JumpToKey(number))
 			{
-				DroneWeapons[droneId][i] = SetupWeapon(kv, drone);
+				weapon = SetupWeapon(kv, drone);
+				drone.Weapons.Push(weapon);
 				kv.GoBack();
 			}
 			else
 			{
-				LogMessage("Found %i weapons for drone: %s", drone.Weapons, name);
+				LogMessage("Found %d weapons for drone: %s", drone.Weapons.Length, name);
 				break;
 			}
-			drone.Weapons++;
 		}
 		kv.Rewind();
 	}
 
 	// Now let's setup our seats
-	drone.Seats = 0;
+	drone.Seats = new ArrayList();
 
 	if (kv.JumpToKey("seats"))
 	{
-		for (int i = 1; i <= MAXSEATS; i++)
+		FDroneSeat seat = null;
+		for (int i = 1; i <= MaxSeats; i++)
 		{
-			FormatEx(number, sizeof number, "seat%i", i);
+			FormatEx(number, sizeof number, "seat%d", i);
 			if (kv.JumpToKey(number))
 			{
-				DroneSeats[droneId][i] = SetupSeat(kv, drone);
+				seat = SetupSeat(kv, drone);
+				drone.Seats.Push(seat);
 				kv.GoBack();
 			}
 			else
 			{
-				LogMessage("Found %i seats for drone: %s", drone.Seats, name);
+				LogMessage("Found %d seats for drone: %s", drone.Seats.Length, name);
 				break;
 			}
 			drone.Seats++;
@@ -528,7 +523,7 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 
 	Call_StartForward(DroneCreated);
 
-	Call_PushArray(drone, sizeof FDrone);
+	Call_PushCell(drone);
 	Call_PushString(drone.Plugin);
 	Call_PushString(name);
 
@@ -539,8 +534,6 @@ FDrone SpawnDrone(FClient owner, const char[] name, const FVector spawnPos)
 	// Check for pilot seat
 	if (!pilotIndex)
 		LogError("ERROR: No pilot seat found for drone: %s! This drone will not be pilotable!", name);
-
-	return drone;
 }
 
 bool DroneSpawnTrace(int entity, int mask, int exclude)
@@ -549,47 +542,64 @@ bool DroneSpawnTrace(int entity, int mask, int exclude)
 }
 
 // Physically spawn our drone in the world
-FDrone SetupDrone(KeyValues config, FTransform spawn)
+void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 {
-	FDrone drone;
-	FObject hull;
+	drone = view_as<ADrone>(FEntityStatics.CreateEntity("prop_physics_multiplayer"));
 
-	hull = CreateObjectDeferred("prop_physics_multiplayer");
-	drone.Hull = hull;
+	char modelname[PLATFORM_MAX_PATH], droneName[MAX_DRONE_LENGTH];
+	FDroneComponents components;
 
-	char modelname[PLATFORM_MAX_PATH];
-
-	config.GetString("name", drone.Name, MAX_DRONE_LENGTH);
+	config.GetString("name", droneName, sizeof droneName);
 	config.GetString("model", modelname, sizeof modelname);
-	config.GetString("destroyed_model", drone.DestroyedModel, PLATFORM_MAX_PATH);
+	config.GetString("destroyed_model", components.DestroyedModel, sizeof FDroneComponents::DestroyedModel);
+
+	drone.SetDisplayName(droneName);
 
 	drone.MaxHealth = config.GetFloat("health", 100.0);
 	drone.MaxSpeed = config.GetFloat("speed", 300.0);
 	drone.Acceleration = config.GetFloat("acceleration", 5.0);
-	drone.SpeedOverride = 0.0;
+	//drone.SpeedOverride = 0.0;
 	drone.TurnRate = config.GetFloat("turn_rate", 80.0);
 
 	char movetype[64];
-	config.GetString("mopvetype", movetype, sizeof movetype);
-	drone.Movetype = GetMoveType(movetype);
+	config.GetString("movetype", movetype, sizeof movetype);
+	drone.MoveType = GetMoveType(movetype);
 
-	config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
+	//config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
 	drone.CameraHeight = config.GetFloat("camera_height", 30.0);
 
-	hull.SetKeyValue("model", modelname);
+	drone.SetKeyValue("model", modelname);
 
-	if (hull.HasProp(Prop_Data, "m_takedamage"))
-		hull.SetProp(Prop_Data, "m_takedamage", 1);
+	if (drone.HasProp(Prop_Data, "m_takedamage"))
+		drone.SetProp(Prop_Data, "m_takedamage", 1);
 
 	drone.Health = drone.MaxHealth;
 	drone.Alive = true;
 
-	FinishSpawn(hull, spawn);
+	FEntityStatics.FinishSpawningEntity(drone, spawn);
+
+	SetEntityRenderFx(drone.Get(), RENDERFX_FADE_FAST);
+
+	CreateDroneModel(drone, modelname, spawn);
 
 	return drone;
 }
 
-FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
+void CreateDroneModel(ADrone drone, char[] modelname, FTransform spawn)
+{
+	FObject model;
+	model = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
+
+	model.SetKeyValue("model", modelname);
+
+	spawn.Rotation = drone.GetAngles();
+
+	FGameplayStatics.FinishSpawn(model, spawn);
+
+	model.SetParent(drone.GetObject());
+}
+
+FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 {
 	FDroneSeat seat;
 	seat.Type = view_as<ESeatType>(kv.GetNum("type")); // 0 = pilot, 1 = gunner, 2 = passenger
@@ -602,19 +612,18 @@ FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 
 		if (StrEqual(weapons, "ALL")) // Provide access to all weapons
 		{
-			for (int i = 1; i <= drone.Weapons; i++)
-				seat.WeaponIndex[i] = i;
+			seat.Weapons = drone.Weapons;
 		}
 		else // Otherwise let's get the weapons allowed for this seat
 		{
-			char indices[MAXWEAPONS+1][8];
-			ExplodeString(weapons, ";", indices, sizeof indices, sizeof indices[]);
+			//char indices[MAXWEAPONS+1][8];
+			//ExplodeString(weapons, ";", indices, sizeof indices, sizeof indices[]);
 
-			for (int i = 1; i <= MAXWEAPONS; i++)
-				seat.WeaponIndex[i] = StringToInt(indices[i]);
+			//for (int i = 1; i <= MaxWeapons; i++)
+			//	seat.WeaponIndex[i] = StringToInt(indices[i]);
 		}
 
-		seat.ActiveWeapon = seat.WeaponIndex[1]; // Set active weapon to first index
+		seat.ActiveWeapon = seat.Weapons.Get(0); // Set active weapon to first index
 	}
 
 	seat.Occupied = false;
@@ -629,17 +638,13 @@ FDroneSeat SetupSeat(KeyValues kv, FDrone drone)
 /**
  * Kills the given drone
  */
-void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, FObject weapon)
+void KillDrone(ADrone drone, FObject hull, FClient attacker, float damage, FObject weapon)
 {
-	FClient owner;
-	owner = CastToClient(drone.GetOwner());
+	AClient pilot = drone.Pilot;
 
-	if (owner.Valid())
+	if (pilot && pilot.Valid())
 	{
-		int droneId = hull.Get();
-		int seatIndex = GetPlayerSeat(owner, DroneSeats[droneId]);
-
-		PlayerExitVehicle(drone, DroneSeats[droneId][seatIndex], owner);
+		PlayerExitVehicle(drone, GetPilotSeatIndex(drone), pilot);
 
 		// Need to loop through all seats and eject any other players
 	}
@@ -651,19 +656,18 @@ void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, FObje
 
 	drone.Health = 0.0;
 	drone.Alive = false;
-	drone.RemoveTimer.Set(3.0);
+	CreateTimer(3.0, DroneExplodeTimer, drone, TIMER_FLAG_NO_MAPCHANGE);
 
-	hull.AttachParticle("burningplayer_flyingbits", ConstructVector());
+	drone.GetObject().AttachParticle("burningplayer_flyingbits", ConstructVector());
 
-	Call_StartForward(DroneDestroyed);
+	//Call_StartForward(DroneDestroyed);
 
-	Call_PushArray(hull, sizeof FObject);
-	Call_PushArray(owner, sizeof FClient);
-	Call_PushArray(attacker, sizeof FClient);
-	Call_PushFloat(damage);
-	Call_PushString(drone.Plugin);
+	//Call_PushCell(drone);
+	//Call_PushArray(attacker, sizeof FClient);
+	//Call_PushFloat(damage);
+	//Call_PushString(drone.Plugin);
 
-	Call_Finish();
+	//Call_Finish();
 }
 
 /******************
@@ -671,19 +675,27 @@ void KillDrone(FDrone drone, FObject hull, FClient attacker, float damage, FObje
 ******************/
 
 // Returns the index of the pilot seat for the given drone
-int GetPilotSeatIndex(FDrone drone)
+int GetPilotSeatIndex(ADrone drone)
 {
-	if (drone.Valid())
+	if (drone && drone.IsDrone)
 	{
-		int droneId = drone.Get();
+		int length = drone.Seats.Length;
 
-		for (int i = 0; i < MAXSEATS; i++)
+		FDroneSeat seat = null;
+		for (int i = 0; i < length; i++)
 		{
-			if (DroneSeats[droneId][i].GetSeatType() == Seat_Pilot)
+			seat = drone.Seats.Get(i);
+			if (seat.Type == Seat_Pilot)
 				return i;
 		}
 	}
 
 	// No pilot seat found
-	return 0;
+	return -1;
+}
+
+Action DroneExplodeTimer(Handle timer, ADrone drone)
+{
+	FEntityStatics.DestroyEntity(drone);
+	return Plugin_Continue;
 }
