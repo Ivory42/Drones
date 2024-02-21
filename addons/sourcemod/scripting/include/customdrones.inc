@@ -18,7 +18,7 @@
  * @param drone		Drone to toggle view lock on
  * @return			new view lock value
  */
-native bool CD_ToggleViewLocked(int drone);
+//native bool CD_ToggleViewLocked(int drone);
 
 /**
  * Fire a hitscan attack from a drone's weapon
@@ -28,7 +28,7 @@ native bool CD_ToggleViewLocked(int drone);
  * @param weapon		Weapon object firing this attack
  * @param dmgType		Drone damage type to use for attack
  */
-native void CD_FireBullet(int owner, int drone, any weapon[sizeof FDroneWeapon], EDamageType dmgType);
+//native void CD_FireBullet(int owner, int drone, any weapon[sizeof FDroneWeapon], EDamageType dmgType);
 
 /**
  * Override max speed of the given drone
@@ -36,7 +36,7 @@ native void CD_FireBullet(int owner, int drone, any weapon[sizeof FDroneWeapon],
  * @param drone		Drone index to override speed of
  * @param speed		Speed override
  */
-native void CD_OverrideMaxSpeed(int drone, float speed);
+//native void CD_OverrideMaxSpeed(int drone, float speed);
 
 /**
  * Fire the current drone's active weapon
@@ -44,7 +44,7 @@ native void CD_OverrideMaxSpeed(int drone, float speed);
  * @param owner		client index owning the drone
  * @param drone		Drone index firing the weapon
  */
-native void CD_FireActiveWeapon(int owner, int drone);
+//native void CD_FireActiveWeapon(int owner, int drone);
 
 /**
  * Deal damage to the given drone
@@ -55,7 +55,7 @@ native void CD_FireActiveWeapon(int owner, int drone);
  * @param damage		Damage value to deal
  * @param crit			Is this damage critical
  */
-native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
+//native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float damage, bool crit);
 
 /**
  * Get a copy of a drone's active weapon
@@ -65,7 +65,7 @@ native void CD_DroneTakeDamage(int drone, int attacker, int inflictor, float dam
  *
  * @return		active slot index
  */
-native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof FDroneWeapon]);
+//native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof FDroneWeapon]);
 
 /**
  * Get a copy of a drone's weapon in a given slot
@@ -75,7 +75,7 @@ native int CD_GetDroneActiveWeapon(int drone, any weapon[sizeof FDroneWeapon]);
  * @param weapon	Struct to store the weapon info in
  *
  */
-native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof FDroneWeapon]);
+//native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof FDroneWeapon]);
 
 /**
  * Set a drone's active weapon slot
@@ -83,7 +83,7 @@ native void CD_GetDroneWeapon(int drone, int slot, any weapon[sizeof FDroneWeapo
  * @param drone		Drone index
  * @param weapon	weapon index to swap to
  */
-native void CD_SetDroneActiveWeapon(int drone, int weapon);
+//native void CD_SetDroneActiveWeapon(int drone, int weapon);
 
 /**
  * Get a drone's current health
@@ -92,7 +92,7 @@ native void CD_SetDroneActiveWeapon(int drone, int weapon);
  *
  * @return		current health of the drone
  */
-native int CD_GetDroneHealth(int drone);
+//native int CD_GetDroneHealth(int drone);
 
 /**
  * Get a drone's max health value
@@ -101,7 +101,7 @@ native int CD_GetDroneHealth(int drone);
  *
  * @return		max health of the drone
  */
-native int CD_GetDroneMaxHealth(int drone);
+//native int CD_GetDroneMaxHealth(int drone);
 
 /**
  * Spawns a drone by config name and forces the given client to pilot it
@@ -110,7 +110,7 @@ native int CD_GetDroneMaxHealth(int drone);
  * @param drone_name	Name of drone to spawn
  *
  */
-native void CD_SpawnDroneByName(int client, const char[] drone_name, const float position[3]);
+//native void CD_SpawnDroneByName(int client, const char[] drone_name, const float position[3]);
 
 /**
  * Sets a drone weapon's reload state based on a fire delay
@@ -120,7 +120,7 @@ native void CD_SpawnDroneByName(int client, const char[] drone_name, const float
  * @param override		Override reload time if non-zero
  *
  */
-native void CD_SetWeaponReloading(int drone, int weapon, float override = 0.0);
+//native void CD_SetWeaponReloading(int drone, int weapon, float override = 0.0);
 
 /**
  * Retrieves a float parameter from the given drone config
@@ -131,7 +131,7 @@ native void CD_SetWeaponReloading(int drone, int weapon, float override = 0.0);
  *
  * @return 				Float value of drone attribute, or value of a weapon attribute if given a slot
  */
-native float CD_GetParamFloat(const char[] config, const char[] key, int weapon = 0);
+//native float CD_GetParamFloat(const char[] config, const char[] key, int weapon = 0);
 
 /**
  * Retrieves an integer parameter from the given drone config
@@ -142,7 +142,7 @@ native float CD_GetParamFloat(const char[] config, const char[] key, int weapon 
  *
  * @return 				Integer value of drone attribute, or value of a weapon attribute if given a slot
  */
-native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
+//native int CD_GetParamInteger(const char[] config, const char[] key, int weapon = 0);
 
 /**
  * Retrieves a string parameter from the given drone config
@@ -155,7 +155,7 @@ native int CD_GetParamInteger(const char[] config, const char[] key, int weapon 
  *
  * @return true on success
  */
-native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
+//native bool CD_GetParamString(const char[] config, const char[] key, int weapon = 0, char[] buffer, int size);
 
 /**
  * Spawns a rocket based projectile for drones to fire
@@ -168,7 +168,7 @@ native bool CD_GetParamString(const char[] config, const char[] key, int weapon 
  * @return				entity index of spawned rocket
  *
  */
-native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile);
+//native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile);
 
 /**
  * Spawns a physics prop to use as a bomb projectile - CURRENTLY NOT WORKING
@@ -184,7 +184,7 @@ native int CD_SpawnRocket(int owner, int drone, any weapon[sizeof FDroneWeapon],
  * @return				true on success
  *
  */
-native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile, const char[] modelname, float fuse = 6.0, any bomb[sizeof FDroneBomb]);
+//native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof FDroneWeapon], EProjType projectile, const char[] modelname, float fuse = 6.0, any bomb[sizeof FDroneBomb]);
 
 
 /**
@@ -194,7 +194,7 @@ native bool CD_SpawnDroneBomb(int owner, int drone, any weapon[sizeof FDroneWeap
  * @param drone		Buffer struct to store the drone into
  *
  */
-native void CD_GetClientDrone(int client, any drone[sizeof FDrone]);
+//native void CD_GetClientDrone(int client, any drone[sizeof FDrone]);
 
 /**
  * Determines whether an entity is a drone
@@ -202,7 +202,7 @@ native void CD_GetClientDrone(int client, any drone[sizeof FDrone]);
  * @param entity	entity to check
  *
  */
-native bool CD_IsValidDrone(int entity);
+//native bool CD_IsValidDrone(int entity);
 
 
 
@@ -217,7 +217,7 @@ native bool CD_IsValidDrone(int entity);
  * @param plugin_name		Name of plugin defined in config
  * @param config			Config for this drone
  */
-forward void CD_OnDroneCreated(FDrone drone, const char[] plugin_name, const char[] config);
+//forward void CD_OnDroneCreated(FDrone drone, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called when a weapon is spawned and attached to a drone
@@ -227,7 +227,7 @@ forward void CD_OnDroneCreated(FDrone drone, const char[] plugin_name, const cha
  * @param plugin_name		Name of plugin defining this weapon's logic
  * @param config			Config for the owning drone
 */
-forward void CD_OnWeaponCreated(FDrone drone, FDroneWeapon weapon, const char[] plugin_name, const char[] config);
+//forward void CD_OnWeaponCreated(FDrone drone, FDroneWeapon weapon, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a player enters a drone
@@ -238,7 +238,7 @@ forward void CD_OnWeaponCreated(FDrone drone, FDroneWeapon weapon, const char[] 
  * @param plugin_name		Name of plugin defined for this drone
  * @param config			Config for this drone
  */
-forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const char[] plugin_name, const char[] config);
+//forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const char[] plugin_name, const char[] config);
 
 /**
  * Forward called after a player exits a drone
@@ -247,7 +247,7 @@ forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const cha
  * @param client	Client index of player
  * @param seat		Seat player was in
  */
-forward void CD_OnPlayerExitDrone(FDrone drone, int client, int seat);
+//forward void CD_OnPlayerExitDrone(FDrone drone, int client, int seat);
 
 /**
  * Forward called after a drone is removed
@@ -255,7 +255,7 @@ forward void CD_OnPlayerExitDrone(FDrone drone, int client, int seat);
  * @param drone				Drone index being removed
  * @param plugin_name		Name of plugin defined in config
  */
-forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
+//forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
 
 /**
  * Forward called after a drone switches weapons
@@ -267,7 +267,7 @@ forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
  * @param weapon_logic		Name of plugin defining weapon logic
  * @param drone_logic		Name of plugin defining drone logic
  */
-forward void CD_OnWeaponChanged(int drone, int pilot, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
+//forward void CD_OnWeaponChanged(int drone, int pilot, FDroneWeapon weapon, int slot, const char[] weapon_logic, const char[] drone_logic);
 
 /**
  * Forward called after a drone is destroyed but not yet removed
@@ -279,7 +279,7 @@ forward void CD_OnWeaponChanged(int drone, int pilot, FDroneWeapon weapon, int s
  * @param plugin_name		Name of plugin defining drone logic
  *
  */
-forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker, float damage, const char[] plugin_name);
+//forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker, float damage, const char[] plugin_name);
 
 /**
  * Forward called after a weapon is fired
@@ -293,7 +293,7 @@ forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker,
  *
  * @return					How to handle ammo consumption: Plugin_Continue expends 1 ammo. Plugin_Changed expends the value ammo was set to. Plugin_Stop/Plugin_Handled will not expend any ammo
  */
-forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, int& ammo, const char[] weapon_logic, const char[] drone_logic);
+//forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, int& ammo, const char[] weapon_logic, const char[] drone_logic);
 
 
 
@@ -314,35 +314,6 @@ stock EMoveType GetMoveType(const char[] movetype)
 		return MoveType_Custom;
 
 	return MoveType_Hover; // Fallback to hover if not a valid entry
-}
-
-/*
-*	Get a position offset from the given origin relative to the given angle
-*
-* @param origin		Starting position to check offset on
-* @param angles		Angle to dictate how the offset is calculated
-* @param offset		Vector to offset the given origin by in respect to the given angle
-*/
-
-stock FVector GetOffsetPos(FVector origin, FRotator angles, FVector offset)
-{
-	FVector direction, result;
-	result = origin;
-
-	direction = angles.GetForwardVector();
-	direction.Scale(offset.X);
-	result.Add(direction);
-
-	direction = angles.GetRightVector();
-	direction.Negate();
-	direction.Scale(offset.Y);
-	result.Add(direction);
-
-	direction = angles.GetUpVector();
-	direction.Scale(offset.Z);
-	result.Add(direction);
-
-	return result;
 }
 
 /*
@@ -393,20 +364,6 @@ stock void CreateTracer(FVector start, FVector end)
 	tracer.KillOnDelay(0.5);
 }
 
-// Returns a copy of the current drone being piloted by this player
-stock FDrone GetClientDrone(FClient client)
-{
-	FDrone drone;
-	if (client.Valid())
-	{
-		int clientId = client.Get();
-
-		drone = Player[clientId].GetDrone();
-	}
-
-	return drone;
-}
-
 /**
  * Checks if the given client is in a drone and returns the seat index
  * 
@@ -414,7 +371,7 @@ stock FDrone GetClientDrone(FClient client)
  * @param seats		 Array of drone seats to check
  * @return           Return seat type occupied by this client.
  */
-stock int GetPlayerSeat(FClient client, FDroneSeat[] seats)
+/*stock int GetPlayerSeat(FClient client, FDroneSeat[] seats)
 {
 	int id = client.Get();
 
@@ -510,3 +467,4 @@ stock void PlayerEnterVehicle(FDrone drone, FDroneSeat seat, FClient client)
 		}
 	}
 }
+*/

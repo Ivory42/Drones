@@ -145,7 +145,7 @@ methodmap ADroneWeapon < AComponent
 	property EWeaponType Type // Weapon type. Determines the type of projectile (if applicable) fired by this weapon
 	{
 		public get() { return view_as<EWeaponType>(this.GetObjectProp("Weapon_Type")); }
-		public set(EWeaponType type) { this.SetObjectProp("Weapon_Type"); }
+		public set(EWeaponType type) { this.SetObjectProp("Weapon_Type", type); }
 	}
 
 	property float TurnRate // How quickly this weapon rotates towards the player's view
@@ -253,7 +253,7 @@ methodmap ADroneWeapon < AComponent
 		if (this.Ammo < this.MaxAmmo)
 		{
 			this.Ammo = 0;
-			this.ReloadTimer.Set(this.ReloadTime, false);
+			this.ReloadTimer = new STimer(this.ReloadDelay);
 			this.State = WeaponState_Reloading;
 		}
 	}
@@ -299,7 +299,7 @@ methodmap ADroneWeapon < AComponent
 		FTransform muzzle;
 
 		// Retrieve the muzzle attachment according to the attachment point
-		GetAttachmentTransform(this.GetReceiver(), this.MuzzleAttachment, muzzle);
+		GetAttachmentTransform(this.GetReceiver(), this.GetObjects().MuzzleAttachment, muzzle);
 
 		return muzzle;
 	}

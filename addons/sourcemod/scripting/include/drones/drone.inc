@@ -4,8 +4,8 @@
 #define _customdrones_drone_included
 
 #include "drones/components.inc"
-#include <drones/rocket>
-#include <drones/bomb>
+//#include <drones/rocket>
+//#include <drones/bomb>
 #include <sdkhooks>
 
 enum struct FDroneComponents
@@ -37,16 +37,18 @@ methodmap ADrone < AComponent
 	public void GetConfig(char[] name, int size) { this.GetObjectPropString("Drone_ConfigurationFile", name, size); }
 	public void SetConfig(const char[] name) { this.SetObjectPropString("Drone_ConfigurationFile", name); }
 
+	public FObject GetCamera() { return this.GetComponents().Camera; }
+
 	property bool IsDrone
 	{
 		public get() { return this.GetObjectProp("Entity_IsDrone"); }
 		public set(bool value) { this.SetObjectProp("Entity_IsDrone", value); }
 	}
 
-	property AClient Pilot // Client currently piloting this drone
+	property ADronePlayer Pilot // Client currently piloting this drone
 	{
-		public get() { return view_as<AClient>(this.GetObjectProp("Drone_Pilot")); }
-		public set(AClient client) { this.SetObjectProp("Drone_Pilot", client); }
+		public get() { return view_as<ADronePlayer>(this.GetObjectProp("Drone_Pilot")); }
+		public set(ADronePlayer client) { this.SetObjectProp("Drone_Pilot", client); }
 	}
 
 	property float CameraHeight // Camera height for this drone. Controls where traces will begin for drone attacks/functions
@@ -99,11 +101,11 @@ methodmap ADrone < AComponent
 		public set(ArrayList seats) { this.SetObjectProp("Drone_Seats", seats); }
 	}
 
-	public bool Occupied()
+	public bool Occupied() // Likely wont be used, will be checked on a per seat basis instead
 	{
 		if (this.Seats.Length > 0)
 		{
-			FDroneSeat seat = this.Seats.Get(GetPilotSeatIndex(this));
+			FDroneSeat seat = GetPilotSeat(this);
 			if (!seat)
 				return true;
 			

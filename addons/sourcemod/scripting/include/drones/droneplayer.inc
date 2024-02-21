@@ -20,5 +20,11 @@ methodmap ADronePlayer < AClient
 		public set(bool value) { this.SetObjectProp("Player_IsInDroneSeat", value); }
 	}
 
+	property int ExitingHealth // Amount of health this player had when exiting a vehicle
+	{
+		public get() { return this.GetObjectProp("Player_ExitingHealth"); }
+		public set(int value) { this.SetObjectProp("Player_ExitingHealth", value); }
+	}
+
 	public ADrone GetDrone() { return this.Drone; }
 }

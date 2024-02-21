@@ -66,12 +66,14 @@ enum EWeaponState
 	WeaponState_Custom // Custom state
 };
 
-// What type of weapon this is - Only used for hitscan attacks to determine what kind of tracer to use
+// What type of weapon this is - For projectile weapons, behavior is determined by EProjType
 enum EWeaponType
 {
 	WeaponType_Gun, // regular bullet tracer
 
 	WeaponType_Laser, // Laser tracer
+
+	WeaponType_Projectile, // Fires projectiles - Defined by associated EProjType
 
 	WeaponType_Custom // Custom - define logic in sub plugin
 };

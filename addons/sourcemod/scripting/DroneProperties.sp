@@ -8,19 +8,6 @@ GlobalForward DroneDestroyed;
 GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 
-bool IsMount[2049];
-FObject LinkedReceiver[2049];
-
-FObject DroneRef[MAXPLAYERS+1]; // Player drone reference
-
-FDrone Drone[2049]; // Drone information for the given entity - This can be for drone entities and the entities used as attachments for a drone
-
-FDroneWeapon DroneWeapons[2049][MAXWEAPONS+1]; // Weapons tied to drones
-
-FDroneSeat DroneSeats[2049][MAXSEATS+1]; // Seats tied to drones
-
-FComponent Attachments[2049][MAXATTACHMENTS+1]; // Attachments tied to drones
-
 float DroneYaw[2049][2]; // Used to determine turn rate each frame on flying drones
 
 float DroneSpeeds[2049][6]; // Used to track a drone's current speed in each direction
