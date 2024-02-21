@@ -37,6 +37,9 @@ methodmap ADrone < AComponent
 	public void GetConfig(char[] name, int size) { this.GetObjectPropString("Drone_ConfigurationFile", name, size); }
 	public void SetConfig(const char[] name) { this.SetObjectPropString("Drone_ConfigurationFile", name); }
 
+	public FVector GetInputVelocity() { return this.GetObjectPropVector("Drone_InputVel"); }
+	public void SetInputVelocity(FVector vel) { this.SetObjectPropVector("Drone_InputVel", vel); }
+
 	public FObject GetCamera() { return this.GetComponents().Camera; }
 
 	property bool IsDrone
@@ -125,6 +128,24 @@ methodmap ADrone < AComponent
 	{
 		public get() { return view_as<EMoveType>(this.GetObjectProp("Drone_MovementMode")); }
 		public set(EMoveType type) { this.SetObjectProp("Drone_MovementMode", type); }
+	}
+
+	property float LastFrameYaw
+	{
+		public get() { return this.GetObjectPropFloat("Drone_LastYaw"); }
+		public set(float val) { this.SetObjectPropFloat("Drone_LastYaw", val); }
+	}
+
+	property float CurrentFrameYaw
+	{
+		public get() { return this.GetObjectPropFloat("Drone_YawValue"); }
+		public set(float val) { this.SetObjectPropFloat("Drone_YawValue", val); }
+	}
+
+	property float RollValue
+	{
+		public get() { return this.GetObjectPropFloat("Drone_RollValue"); }
+		public set(float val) { this.SetObjectPropFloat("Drone_RollValue", val); }
 	}
 
 	// Clears this drone's reference

@@ -3,9 +3,9 @@
 
 int ExplosionSprite;
 
-//#include "DroneProperties.sp"
+#include "DroneProperties.sp"
 
-//#include "DroneController.sp"
+#include "DroneController.sp"
 //#include "DroneWeapons.sp"
 
 public Plugin MyInfo = {
@@ -746,11 +746,12 @@ void ResetPlayerHealth(ADronePlayer player)
 	SetEntityHealth(player.Get(), player.ExitingHealth);
 }
 
+// Returns the seat the player is in. Only returns the pilot seat as of now.
 FDroneSeat GetPlayerSeat(ADronePlayer player, ADrone drone)
 {
 	if (drone.Seats && drone.Seats.Length)
 	{
-		return drone.Seats.Get(0);
+		return drone.Seats.Get(0); // Only looking for pilot seat for now
 	}
 
 	if (player)

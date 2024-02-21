@@ -148,7 +148,7 @@ methodmap ADroneWeapon < AComponent
 		public set(EWeaponType type) { this.SetObjectProp("Weapon_Type", type); }
 	}
 
-	property float TurnRate // How quickly this weapon rotates towards the player's view
+	property float TurnRate // How quickly this weapon rotates towards the player's view if using a model
 	{
 		public get() { return this.GetObjectPropFloat("Weapon_TurnRate"); }
 		public set(float rate) { this.SetObjectPropFloat("Weapon_TurnRate", rate); }
@@ -308,7 +308,7 @@ methodmap ADroneWeapon < AComponent
 
 
 /*
-* Struct holding information on a drone seat.
+* Map holding information on a drone seat
 * Seats do not have models and are not true components, they only hold position information,
 * what the occupier of this seat can do, and whether or not the occupier can be seen.
 *
@@ -330,6 +330,18 @@ methodmap FDroneSeat < StringMap
 		this.GetValue("IsDroneSeat", valid);
 
 		return valid;
+	}
+
+	property bool AIControlled // Is this seat currently controlled by an AI actor
+	{
+		public get()
+		{
+			bool result = false;
+			this.GetValue("SeatControlledByAI", result);
+
+			return result;
+		}
+		public set(bool value) { this.SetValue("SeatControlledByAI", value); }
 	}
 
 	property ADronePlayer Occupier // Client occupying this seat
@@ -416,9 +428,15 @@ methodmap FDroneSeat < StringMap
 		public set(float time) { this.SetValue("NextSwitchTime", time); }
 	}
 
-	// Gets the attachment point of this seat on the drone.
-	public void GetAttachment(char[] name, int size) { this.GetString("SeatAttachPoint", name, size); }
-	public void SetAttachment(const char[] name) { this.SetString("SeatAttachPoint", name); }
+	// Returns the relative position of this seat on the drone
+	public FVector GetSeatPosition()
+	{
+		FVector result;
+		this.GetArray("SeatAttachPoint", result, sizeof FVector);
+
+		return result;
+	}
+	public void SetSeatPosition(FVector position) { this.SetArray("SeatAttachPoint", position, sizeof FVector); }
 
 	// Returns true if this seat has an active weapon
 	public bool HasWeapon()
