@@ -1,12 +1,12 @@
 # Custom Drones for TF2
 
-# This branch is currently NOT stable and is far from complete, the Release branch is currently stable and OKAY to use, but may be harder to follow.
+# This branch is currently a WIP and NOT stable. Functionality exists and there is an exmaple plugin for a HL2 Hunter Chopper which works. However, this branch is still highly experimental and updates will frequently break things.
 
-## Version 2.0 of Custom Drones. At this point the plugin is more like custom vehicles but I'm not going to bother changing the name as they can still be used as drones as well.
+## Version 2.0 of Custom Drones. Some of the information in this readme is outdated, but most of it is up to date.
 
-This rewrite completely changes everything about the codebase to make it easier to follow and more modern looking. Structs are used to create a more object oriented look and make the entire plugin easier to follow.
+This rewrite completely changes everything about the codebase with several QoL changes. Setting up basic drones can now be done without any other plugins; weapons now have native functionality and do not need to be handled in sub-plugins anymore. A new `WeaponType_Custom` specification has been added to have weapons function as they did before.
 
-Spawnable drones that can be piloted by the player that owns it. There is an example drone under `configs/drones/example_drone.txt`. Drone plugins are placed under `plugins/drones/` and a template can be found under `scripting/drones/example_drone.sp`.
+Spawnable drones that can be piloted by players. There is an example drone under `configs/drones/example_drone.txt`. Drone plugins are placed under `plugins/drones/` and a template can be found under `scripting/drones/example_drone.sp`.
 
 ## Commands
 
@@ -17,9 +17,10 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
   - Create your own logic for drones through other plugins (example included)
   - Define a model and destroyed model for each drone
   - Set health, speed, and acceleration for each drone
-  - Set up to 6 weapons with individual parameters
+  - Set up to 4 weapons with individual parameters
   - Choose how the drone operates:
     - Flying
+    - Helo
     - Hover
     - Ground
 
@@ -27,12 +28,17 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
 ### Flying Drones
   - Flying drones move in the direction the camera is facing
   - Cannot fly below specific speeds
-  - More agile than other drones
+  - Use this movement for jet-like drones
+
+### Helo Drones
+  - Hovering drones that can fly and move in any direction
+  - Movement input controls drone movement
+  - Use this movement for helicopters
 
 ### Hover Drones
-  - Hover drones can fly and move in any direction
+  - Hovering drones that stay at ground level
   - Movement input controls drone movement
-  - More combat oriented
+  - USe this movement for hovercraft
 
 ### Ground Drones (WIP)
   - Drones limited to ground movement
@@ -42,31 +48,22 @@ Spawnable drones that can be piloted by the player that owns it. There is an exa
 This plugin comes with several forwards and natives to use with other plugins. Refer to `scripting/include/customdrones.inc` for more detailed explanations.
 
 ### Natives
-  - `CD_ToggleViewLocked` - Unlock/Lock a drone to the player's view angles
-  - `CD_SpawnDroneByName` - Spawns a drone for a client from the given config name
-  - `CD_SetWeaponReloading` - Initiates a reload sequence on the given weapon for a drone
-  - `CD_GetDroneWeapon` - Retrieves the weapon object from the given slot
-  - `CD_GetDroneActiveWeapon` - Retrieves the active weapon object and its slot for the given drone
-  - `CD_IsValidDrone` - Checks a given entity to see if it is a drone or not
-  - `CD_SpawnRocket` - Spawns and prepares a rocket to be used as a base projectile
-  - `CD_SpawnDroneBomb` - Spawns a custom bomb entity to be dropped from drones
-  - `CD_FireBullet` - Fires a hitscan attack from the drone
-  - `CD_GetParamFloat` - Retrieves a float parameter from a drone's config file
-  - `CD_GetParamInteger` - Retrieves an integer parameter from a drone's config file
-  - `CD_GetParamString` - Retrieves a string parameter from a drone's config file
-  - `CD_GetCameraHeight` - Retrieves the vertical offset of a drone's view camera
-  - `CD_DroneTakeDamage` - Damages a drone and sends a damage event to the attacker
-  - `CD_OverrideMaxSpeed` - Overrides the max speed for the given drone
-  - `CD_GetClientDrone` - Retrieves the given client's drone object if currently piloting one
+  - `FDroneStatics` static class for general drone natives
+    ### Weapon Natives
+    - Weapons using `WeaponType_Custom` can utilize these natives to provide custom functionality
+    - `FireBullets` Fires bullets from the given weapon
+    - `FireRockets` Fires rockets from the given weapon
+    - `FireGrenades` Fires grenades from the given weapon
+    - `FireActiveWeapon` Fires the current active weapon controlled by the given seat
 
 ### Forwards
-  - `CD_OnDroneCreated` - Called when a drone initially spawns
-  - `CD_OnDroneDestroyed` - Called when a drone is destroyed
-  - `CD_OnDroneRemoved` - Called when a drone is removed from the world after being destroyed
-  - `CD_OnWeaponChanged` - Called when a player cycles weapons on a drone
-  - `CD_OnDroneAttack` - Called when a drone fires its active weapon
-  - `CD_OnPlayerEnterDrone` - Called when a player enters a drone
-  - `CD_OnPlayerExitDrone` - Called when a player exits a drone
+  - `CD2_OnDroneCreated` - Called when a drone initially spawns
+  - `CD2_OnDroneDestroyed` - Called when a drone is destroyed
+  - `CD2_OnDroneRemoved` - Called when a drone is removed from the world after being destroyed
+  - `CD2_OnWeaponChanged` - Called when a player cycles weapons on a drone
+  - `CD2_OnWeaponFire` - Called when a weapon on a drone is fired
+  - `CD2_OnPlayerEnterDrone` - Called when a player enters a drone
+  - `CD2_OnPlayerExitDrone` - Called when a player exits a drone
 
 
 ## Known Issues
@@ -76,4 +73,4 @@ This plugin comes with several forwards and natives to use with other plugins. R
 
 ## Planned Featurs
   - Native support abilities (healing, ammo regeneration, etc)
-  - Multiple move type modes for ground based drones
+  - Multiple seats on drones for passengers and additional weapons
