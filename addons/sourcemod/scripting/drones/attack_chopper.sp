@@ -1,167 +1,216 @@
 #pragma semicolon 1
-#include <customdrones>
-#include <tf2>
-#include <tf2_stocks>
-#include <sdkhooks>
-#include <sdktools>
 
-#define FAR_FUTURE 9999999999.0
+#include <drones/modules/hunterchopper>
 
 public Plugin MyInfo = {
-	name 			= 	"[Combat Drones] Combine Chopper",
+	name 			= 	"[Custom Drones 2] Combine Hunter Chopper",
 	author 			=	"Ivory",
 	description		= 	"Combine Chopper attack drone",
 	version 		= 	"1.0"
 };
 
-int LastWeaponFired[2049];
-int ClientDrone[MAXPLAYERS+1];
-bool IsInChopper[MAXPLAYERS+1];
-bool Attributed[2049];
-char Config[2049][PLATFORM_MAX_PATH];
-
-//Chaingun variables
-bool CGActive[2049];
-float CGPos[2049][3];
-float CGAttackSpeed[2049];
-float CGAttackDelay[2049];
-float CGMaxAttackSpeed[2049];
-float CGAccel[2049];
-float CGStartRate[2049];
-//float CGIncreaseDelay[2049];
-
-//Missile variables
-float MissileSpeed[2049];
-
-//Bomb variables
-float BombFuseTime[2049];
-char BombModel[2049][PLATFORM_MAX_PATH];
-bool BombProj[2049];
-
-void SetDroneVars(const char[] config, int drone)
+public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, int& ammo, const char[] name)
 {
-	//chaingun
-	CGAccel[drone] = CD_GetParamFloat(config, "attack_acceleration", 1);
-	CGStartRate[drone] = CD_GetParamFloat(config, "attack_start_rate", 1);
-	CGMaxAttackSpeed[drone] = CD_GetParamFloat(config, "attack_time", 1);
-
-	//Missiles
-	MissileSpeed[drone] = CD_GetParamFloat(config, "speed", 2);
-
-	//Bombs
-	CD_GetParamString(config, "model", 3, BombModel[drone], PLATFORM_MAX_PATH);
-	BombFuseTime[drone] = CD_GetParamFloat(config, "fuse", 3);
-}
-
-public Action CD_OnDroneAttack(int drone, int gunner, DroneWeapon weapon, int slot, const char[] plugin)
-{
-	if (Attributed[drone] && IsInChopper[gunner])
+	APulseCannon cannon = view_as<APulseCannon>(weapon);
+	if (cannon.IsPulseCannon)
 	{
-		switch (slot)
+		if (!cannon.Charging && !cannon.Firing)
 		{
-			case 1: //chaingun
-			{
-				if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone])
-				{
-					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
-				}
-				else if (CGAttackDelay[drone] <= GetEngineTime())
-				{
-					CD_FireBullet(gunner, drone, weapon, DmgType_Generic, CDWeapon_Auto);
-					CGAttackSpeed[drone] -= CGAccel[drone];
-					if (CGAttackSpeed[drone] <= CGMaxAttackSpeed[drone]) CGAttackSpeed[drone] = CGMaxAttackSpeed[drone];
-					CGAttackDelay[drone] = GetEngineTime() + CGAttackSpeed[drone];
-				}
-				else return Plugin_Stop;
-			}
-			case 2: //missiles
-			{
-				FireRocket(gunner, drone, weapon, false);
-				FireRocket(gunner, drone, weapon, true);
-			}
-			case 3:
-			{
-				SpawnBomb(gunner, drone, weapon);
-			}
+			char sound[64];
+			cannon.GetChargeSound(sound, sizeof sound);
+			cannon.Charging = true;
+
+			EmitSoundToAll(sound, weapon.Get(), SNDCHAN_AUTO, 120);
+
+			SDroneStruct data = new SDroneStruct();
+			data.Drone = drone;
+			data.Player = gunner;
+			data.Weapon = cannon;
+			CreateTimer(cannon.WindupTime, PulseCannonCharge, data, TIMER_FLAG_NO_MAPCHANGE);
 		}
+		else if (cannon.Firing)
+		{
+			cannon.Firing = false;
+		}
+
+		return Plugin_Stop;
 	}
 	return Plugin_Continue;
 }
 
-void FireRocket(int owner, int drone, DroneWeapon weapon, bool opposite)
+Action PulseCannonCharge(Handle timer, SDroneStruct data)
 {
-	//Get Spawn Position
-	if (opposite)
-		weapon.offset[1] *= -1.0;	//adjust position based on the physical weapon being used on the drone
-
-	float speed = MissileSpeed[drone];
-	CD_SpawnRocket(owner, drone, weapon, DroneProj_Rocket, speed);
-}
-
-void SpawnBomb(int owner, int drone, DroneWeapon weapon)
-{
-	DroneBomb bombEnt;
-	CD_SpawnDroneBomb(owner, drone, weapon, DroneProj_BombDelayed, BombModel[drone], BombFuseTime[drone], bombEnt);
-}
-
-public void OnEntityDestroyed(int entity)
-{
-	if (IsValidEntity(entity) && entity >= MaxClients)
+	if (!data)
 	{
-		BombProj[entity] = false;
+		return Plugin_Stop;
+	}
+
+	APulseCannon cannon = view_as<APulseCannon>(data.Weapon);
+	if (cannon && cannon.IsPulseCannon)
+	{
+		cannon.Charging = false;
+		char sound[64];
+		cannon.GetDischargeSound(sound, sizeof sound);
+		cannon.Firing = true;
+
+		EmitSoundToAll(sound, cannon.Get(), SNDCHAN_AUTO, 120);
+
+		CreateTimer(0.1, PulseCannonFire, data, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+	}
+
+	return Plugin_Stop;
+}
+
+Action PulseCannonFire(Handle timer, SDroneStruct data)
+{
+	if (!data)
+		return Plugin_Stop;
+
+	APulseCannon cannon = view_as<APulseCannon>(data.Weapon);
+	if (cannon && cannon.IsPulseCannon)
+	{
+		if (!cannon.Firing)
+		{
+			EndFire(cannon);
+			delete data;
+			return Plugin_Stop;
+		}
+
+		ADrone drone = data.Drone;
+		ADronePlayer player = data.Player;
+		FDroneStatics.FireBullets(player, drone, cannon);
+
+		cannon.Ammo--;
+		if (cannon.Ammo <= 0)
+		{
+			EndFire(cannon);
+			cannon.SimulateReload();
+			delete data;
+			return Plugin_Stop;
+		}
+
+		return Plugin_Continue;
+	}
+
+	return Plugin_Stop;
+}
+
+void EndFire(APulseCannon cannon)
+{
+	char sound[64];
+	cannon.GetDischargeSound(sound, sizeof sound);
+	StopSound(cannon.Get(), SNDCHAN_AUTO, sound);
+
+	cannon.Firing = false;
+	cannon.Charging = false;
+}
+
+public void CD2_OnDroneCreated(ADrone drone, const char[] name, KeyValues config)
+{
+	if (StrEqual(name, "combinechopper"))
+	{
+		AHunterChopper chopper = view_as<AHunterChopper>(drone);
+		chopper.IsChopper = true;
+
+		char sound[64];
+		config.GetString("engine_sound", sound, sizeof sound, "misc/null.wav");
+		if (strlen(sound) > 3)
+		{
+			PrecacheSound(sound);
+			chopper.SetEngineSound(sound);
+		}
+
+		SetEntityRenderFx(drone.Get(), RENDERFX_FADE_FAST);
+
+		char modelname[256];
+		drone.GetComponents().GetModel(modelname, sizeof modelname);
+
+		FObject model;
+		model = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
+		model.SetKeyValue("model", modelname);
+
+		FTransform spawn;
+		spawn.Position = drone.GetPosition();
+		spawn.Rotation = drone.GetAngles();
+
+		FGameplayStatics.FinishSpawn(model, spawn);
+
+		model.SetParent(drone.GetObject());
+		chopper.SetModelEntity(model);
 	}
 }
 
-public Action OnPlayerRunCmd(int client, int &buttons)
+public void CD2_OnWeaponCreated(ADrone drone, ADroneWeapon weapon, const char[] name, KeyValues config)
 {
-	int drone = ClientDrone[client];
-	if (CD_IsValidDrone(drone) && Attributed[drone] && IsInChopper[client])
+	if (StrEqual(name, "combinechopper_gun"))
 	{
-		bool attacking = (buttons & IN_ATTACK) != 0;
-		if (!attacking && CGAttackSpeed[drone] < CGStartRate[drone])
+		APulseCannon cannon = view_as<APulseCannon>(weapon);
+		cannon.IsPulseCannon = true;
+		cannon.Firing = false;
+		cannon.Charging = false;
+
+		cannon.WindupTime = config.GetFloat("attack_windup_time");
+		cannon.FireDuration = config.GetFloat("attack_duration");
+
+		char sound[64];
+		config.GetString("attack_windup_sound", sound, sizeof sound, "misc/null.wav");
+		if (strlen(sound) > 3)
 		{
-			CGAttackSpeed[drone] += CGAccel[drone] / 33.0;
-			if (CGAttackSpeed[drone] >= CGStartRate[drone])
-				CGAttackSpeed[drone] = CGStartRate[drone];
+			PrecacheSound(sound);
+			cannon.SetChargeSound(sound);
+		}
+
+		config.GetString("attack_discharge_sound", sound, sizeof sound, "misc/null.wav");
+		if (strlen(sound) > 3)
+		{
+			PrecacheSound(sound);
+			cannon.SetDischargeSound(sound);
 		}
 	}
 }
 
-public void CD_OnDroneCreated(DroneProp Drone, const char[] plugin, const char[] config)
+public void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer player, FDroneSeat seat)
 {
-	if (StrEqual(plugin, "attack_chopper"))
+	if (seat == GetPilotSeat(drone))
 	{
-		int drone = Drone.GetDrone();
-		SetEntPropFloat(drone, Prop_Send, "m_flModelScale", 0.35);
-		Format(Config[drone], PLATFORM_MAX_PATH, config);
-		SetDroneVars(config, drone);
-		Attributed[drone] = true;
-	}
-}
-
-public void CD_OnPlayerEnterDrone(DroneProp Drone, int client, int seat, const char[] plugin, const char[] config)
-{
-	int drone = Drone.GetDrone();
-	switch (seat)
-	{
-		case 0: //pilot seat
+		AHunterChopper chopper = view_as<AHunterChopper>(drone);
+		if (chopper.IsChopper)
 		{
-			ClientDrone[client] = drone;
-			IsInChopper[client] = true;
+			FObject model;
+			model = chopper.GetModelEntity();
+
+			if (model.Valid())
+			{
+				SetVariantString("idle");
+				model.Input("SetAnimation");
+			}
+
+			char sound[64];
+			chopper.GetEngineSound(sound, sizeof sound);
+			EmitSoundToAll(sound, drone.Get(), SNDCHAN_AUTO, 80);
 		}
 	}
 }
 
-public void CD_OnPlayerExitDrone(DroneProp Drone, int client, int seat)
+public void CD2_OnPlayerExitDrone(ADrone drone, ADronePlayer player, FDroneSeat seat)
 {
-	ClientDrone[client] = INVALID_ENT_REFERENCE;
-	IsInChopper[client] = false;
-}
-
-public void OnDroneRemoved(int drone, const char[] plugin)
-{
-	if (Attributed[drone])
+	if (seat == GetPilotSeat(drone))
 	{
-		Attributed[drone] = false;
+		AHunterChopper chopper = view_as<AHunterChopper>(drone);
+		if (chopper.IsChopper)
+		{
+			FObject model;
+			model = chopper.GetModelEntity();
+
+			if (model.Valid())
+			{
+				SetVariantString("reference");
+				model.Input("SetAnimation");
+			}
+
+			char sound[64];
+			chopper.GetEngineSound(sound, sizeof sound);
+			StopSound(drone.Get(), SNDCHAN_AUTO, sound);
+		}
 	}
 }

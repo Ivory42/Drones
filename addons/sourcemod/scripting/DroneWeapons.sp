@@ -1,165 +1,251 @@
-GlobalForward DroneCreatedWeapon;
-GlobalForward DroneWeaponDestroyed;
-
-FDroneWeapon SetupWeapon(KeyValues kv, FDrone drone)
+ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 {
-	FDroneWeapon weapon;
-
-	char weaponname[MAX_WEAPON_LENGTH], modelname[PLATFORM_MAX_PATH], firesound[PLATFORM_MAX_PATH];
-
-	// Models and sounds
-	kv.GetString("name", weaponname, sizeof weaponname, "INVALID_WEAPON");
-	kv.GetString("model", modelname, sizeof modelname);
-	kv.GetString("sound", firesound, sizeof firesound);
-
-	// Plugin
-	char plugin[64];
-	kv.GetString("plugin", plugin, sizeof plugin);
-	weapon.Plugin = plugin;
-
-	// Attachment settings
-	char parentname[64];
-	kv.GetString("parent", parentname, sizeof parentname, "Null");
-
-	if (StrEqual(parentname, "Null", false)) // No parent given, parent to the drone
-		weapon.Parent = drone.GetObject();
-
-	char attachname[256];	
-	kv.GetString("attachment", attachname, sizeof attachname, "Null");
-
-	char muzzlename[256]; // Attachment point for projectile/bullet spawns
-	kv.GetString("muzzle", muzzlename, sizeof muzzlename);
-
-	weapon.AttachmentPoint = attachname;
-	weapon.MuzzleAttachment = muzzlename;
-
-	// Set weapon stats
-	weapon.Name = weaponname;
-	weapon.Firesound = firesound;
-	weapon.MaxAmmo = kv.GetNum("ammo_loaded", 1);
-	weapon.Ammo = weapon.MaxAmmo;
-	weapon.Inaccuracy = kv.GetFloat("inaccuracy", 0.0);
-	weapon.ReloadTime = kv.GetFloat("reload_time", 1.0);
-	weapon.FireRate = kv.GetFloat("attack_time");
-	weapon.Fixed = view_as<bool>(kv.GetNum("fixed", 1)); // Will not rotate with camera
-	weapon.Damage = kv.GetFloat("damage", 1.0);
-	weapon.ProjSpeed = kv.GetFloat("speed", 1100.0);
-	weapon.Modifier = kv.GetFloat("dmg_mod", 1.0); // Damage modifier when this weapon takes damage (How much extra damage this drone takes when this weapon is hit)
-	weapon.TurnRate = kv.GetFloat("turn_rate", 100.0); // rotation speed of weapon
-
-	// Fixed or not fixed
-	if (!weapon.Fixed)
+	if (kv && drone)
 	{
-		weapon.MaxPitch = kv.GetFloat("max_angle_y", 180.0);
-		weapon.MaxYaw = kv.GetFloat("max_angle_x", 180.0);
+		bool nomodel = false;
+		char modelname[64], propType[32];
+		kv.GetString("model", modelname, sizeof modelname);
+		if (strlen(modelname) < 3)
+		{
+			FormatEx(propType, sizeof propType, "prop_dynamic_override"); // No model being used, it will be invisible
+			FormatEx(modelname, sizeof modelname, "models/empty.mdl");
+			nomodel = true;
+		}
+		else
+		{
+			FormatEx(propType, sizeof propType, "prop_physics_override");
+		}
+
+		ADroneWeapon weapon = view_as<ADroneWeapon>(FEntityStatics.CreateEntity(propType));
+		weapon.SetKeyValue("model", modelname);
+
+		weapon.Type = GetWeaponType(kv);
+		weapon.UsesParent = nomodel;
+
+		FDroneWeaponExtras components;
+		components.Parent = drone;
+		//SetupMount(kv, weapon, drone, components);
+		SetStringValues(weapon, kv);
+
+		char attachment[64], muzzle[64];
+		kv.GetString("attachment", attachment, sizeof attachment);
+		kv.GetString("muzzle", muzzle, sizeof muzzle);
+		FormatEx(components.MuzzleAttachment, sizeof FDroneWeaponExtras::MuzzleAttachment, muzzle);
+
+		FTransform spawn;
+		//GetAttachmentTransform(drone.GetObject(), "Gun", spawn);
+		spawn.Position = drone.GetPosition();
+		spawn.Rotation = drone.GetAngles();
+		FEntityStatics.FinishSpawningEntity(weapon, spawn);
+
+		weapon.GetObject().SetParent(drone.GetObject());
+		SetVariantString(attachment);
+		weapon.GetObject().Input("SetParentAttachment");
+
+		weapon.Ammo = kv.GetNum("ammo_loaded", -1);
+		weapon.MaxAmmo = weapon.Ammo;
+		weapon.Damage = kv.GetFloat("damage");
+		weapon.FireRate = kv.GetFloat("fire_rate");
+		weapon.Inaccuracy = kv.GetFloat("inaccuracy");
+		weapon.ReloadDelay = kv.GetFloat("reload_time");
+		weapon.ReloadTimer = new STimer(weapon.ReloadDelay, false, false, false, -weapon.ReloadDelay);
+		weapon.State = WeaponState_Ready;
+		weapon.TurnRate = kv.GetFloat("turn_rate");
+		weapon.MaxPitch = kv.GetFloat("max_pitch");
+		weapon.MaxYaw = kv.GetFloat("max_yaw");
+		weapon.Fixed = view_as<bool>(kv.GetNum("fixed"));
+		weapon.ProjPerShot = kv.GetNum("bullets_per_shot", 1);
+
+		if (weapon.Type == WeaponType_Projectile)
+		{
+			ADroneProjectileWeapon projWeapon = view_as<ADroneProjectileWeapon>(weapon);
+			SetupProjectileWeapon(projWeapon, kv);
+		}
+
+		weapon.SetObjects(components);
+
+		char pluginName[64];
+		weapon.GetInternalName(pluginName, sizeof pluginName);
+
+		KeyValues config = new KeyValues("Drone");
+		KvCopySubkeys(kv, config);
+
+		Call_StartForward(DroneCreatedWeapon);
+
+		Call_PushCell(drone);
+		Call_PushCell(weapon);
+		Call_PushString(pluginName);
+		Call_PushCell(config);
+
+		Call_Finish();
+
+		delete config;
+
+		return weapon;
 	}
-
-	// Now let's spawn the weapon only if we have a valid model name
-	if (strlen(modelname) > 3)
-		SpawnWeaponModel(kv, drone, weapon, modelname);
-
-	Call_StartForward(DroneCreatedWeapon);
-
-	Call_PushArray(drone, sizeof FDrone);
-	Call_PushArray(weapon, sizeof FDroneWeapon);
-	Call_PushString(weapon.Plugin);
-	Call_PushString(drone.Config);
-
-	Call_Finish();
-
-	return weapon;
+	return null;
 }
 
-void SpawnWeaponModel(KeyValues kv, FDrone drone, FDroneWeapon weapon, const char[] modelname)
+//void SetupMount(KeyValues kv, ADroneWeapon weapon, ADrone drone)
+//{
+	//
+//}
+
+void SetupProjectileWeapon(ADroneProjectileWeapon weapon, KeyValues kv)
 {
-	FObject parent;
-	parent = weapon.GetParent();
+	weapon.ProjectileSpeed = kv.GetFloat("speed", 1100.0);
+	weapon.ProjType = view_as<EProjType>(kv.GetNum("proj_type"));
+}
 
-	// Make sure our parent exists before doing anything else
-	if (parent.Valid())
+void SetStringValues(ADroneWeapon weapon, KeyValues kv)
+{
+	char bufferString[64];
+
+	kv.GetString("name", bufferString, sizeof bufferString);
+	weapon.SetDisplayName(bufferString);
+
+	kv.GetString("plugin_name", bufferString, sizeof bufferString);
+	weapon.SetInternalName(bufferString);
+
+	kv.GetString("sound", bufferString, sizeof bufferString);
+	weapon.SetFireSound(bufferString);
+}
+
+void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
+{
+	FVector start, end;
+	start = GetCameraOffset(drone);
+	end = GetDroneAimPosition(drone, player);
+
+	// Now fire our bullets
+	int bullets = weapon.ProjPerShot;
+	FTransform muzzle;
+	for (int i = 0; i < bullets; i++)
 	{
-		FObject receiver, mount;
-		receiver = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override"); // Create physics component to use
-
-		// Health value gets shared between mount and receiver if applicable
-		int health = kv.GetNum("health", 0);
-		weapon.MaxHealth = health;
-
-		// Do we have a mount?
-		char mountmodel[64];
-		kv.GetString("mount", mountmodel, sizeof mountmodel);
-		if (strlen(mountmodel) > 3)
+		if (weapon.GetMuzzleTransform(muzzle))
 		{
-			// Mounts will act as the part of the weapon that can rotate with the player's camera yaw values
-			// The receiver itself will rotate to match the player's pitch
-			mount = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
-			mount.SetKeyValue("model", mountmodel);
-
-			// Flags this object as a mount so it can properly share health with the weapon itself
-			int mountId = mount.Get();
-			IsMount[mountId] = true;
-			LinkedReceiver[mountId] = receiver;
-
-			SDKHook(mountId, SDKHook_OnTakeDamage, OnMountDamaged);
-
-			// Player's angles are split between the mount and the receiver to give a proper look to the weapon's angles
-			weapon.ComplexAngles = true;
+			start = muzzle.Position;
 		}
 
-		receiver.SetKeyValue("model", modelname);
+		FVector direction;
+		FRotator angle;
+		Vector_Subtract(end, start, direction);
+		Vector_GetAngles(direction, angle);
 
-		receiver.SetProp(Prop_Data, "m_iHealth", health);
-		if (health)
+		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+
+		direction = angle.GetForwardVector();
+		direction.Scale(8000.0);
+		direction.Add(start);
+
+		FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+		//trace.DebugTrace();
+		if (trace.DidHit())
 		{
-			if (receiver.HasProp(Prop_Data, "m_takedamage"))
-				receiver.SetProp(Prop_Data, "m_takedamage", 1);
+			FObject hitEnt;
+			hitEnt = trace.GetHitEntity();
+			if (hitEnt.Valid())
+			{
+				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), player.Get(), weapon.Damage);
+			}
 		}
+		end = trace.GetEndPosition();
+		delete trace;
 
-		SDKHook(receiver.Get(), SDKHook_OnTakeDamage, OnWeaponDamaged);
-		
-		// Now let's get our spawn transform
-
-		int id;
-		FTransform spawn;
-
-		// if we have a mount, let's attach that first
-		if (mount.Valid())
-		{
-			id = LookupEntityAttachment(parent.Get(), weapon.AttachmentPoint);
-			if (id)
-				Vector_GetEntityAttachment(parent, id, spawn);
-			else
-				LogError("Error: [Attach Mount] Cannot find attachment point '%s' assigned to this weapon! Make sure the attachment point exists on the parent model!", weapon.AttachmentPoint);
-
-			FGameplayStatics.FinishSpawn(mount, spawn);
-			mount.SetParent(parent);
-			// Our new parent for this weapon's receiver
-			parent = mount;
-		}
-		
-		// Now let's attach the receiver
-		id = LookupEntityAttachment(parent.Get(), weapon.AttachmentPoint);
-		if (id)
-			Vector_GetEntityAttachment(parent, id, spawn);
-		else
-			LogError("Error: [Attach Reciever] No attachment point found with name: %s!\nIf you are using a mount, it MUST have an attachment point with the same name that the mount attaches to on the drone!", weapon.AttachmentPoint);
-
-		// Finish up our spawning
-		FGameplayStatics.FinishSpawn(receiver, spawn);
-
-		receiver.SetParent(parent);
-
-		weapon.Mount = mount;
-		weapon.Receiver = receiver;
-
-		// Set this weapon's drone as the attached drone
-		int entityId = receiver.Get();
-		Drone[entityId] = drone;
+		CreateTracer(start, end);
 	}
+}
+
+void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer player)
+{
+	FVector start, end;
+	start = GetCameraOffset(drone);
+	end = GetDroneAimPosition(drone, player);
+
+	// Now fire our bullets
+	int bullets = weapon.ProjPerShot;
+	FTransform muzzle;
+	for (int i = 0; i < bullets; i++)
+	{
+		if (weapon.GetMuzzleTransform(muzzle))
+		{
+			start = muzzle.Position;
+		}
+
+		FVector direction;
+		FRotator angle;
+		Vector_Subtract(end, start, direction);
+		Vector_GetAngles(direction, angle);
+
+		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+
+		URocket rocket = URocket();
+		rocket.Damage = weapon.Damage;
+		rocket.Team = player.GetClient().GetTeam();
+		FGameplayStatics.FinishSpawn(rocket.GetObject(), muzzle);
+
+		rocket.SetOwner(player.GetObject());
+
+		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
+	}
+}
+
+FVector GetDroneAimPosition(ADrone drone, ADronePlayer player)
+{
+	FVector start, direction, end;
+	start = GetCameraOffset(drone);
+
+	direction = player.GetEyeAngles().GetForwardVector();
+	direction.Scale(8000.0);
+	direction.Add(start);
+
+	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+	end = trace.GetEndPosition(); // Surface we are aiming at
+	delete trace;
+
+	return end;
+}
+
+FVector GetCameraOffset(ADrone drone)
+{
+	float cameraHeight = drone.CameraHeight;
+
+	FVector start;
+	start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), ConstructVector(0.0, 0.0, cameraHeight));
+
+	return start;
+}
+
+bool DroneWeaponTrace(int entity, int mask, ADrone drone)
+{
+	if (entity == drone.Get())
+		return false;
+
+	if (drone.Pilot && entity == drone.Pilot.Get())
+		return false;
+	
+	// Loop through our seats to make sure we don't hit any passengers
+	/*int seats = drone.Seats.Length;
+	for (int i = 0; i < seats; i++)
+	{
+		FDroneSeat seat = drone.Seats.Get(i);
+		if (seat && seat.Valid())
+		{
+			ADronePlayer player = seat.Occupier;
+			if (player && entity == player.Get())
+			{
+				return false;
+			}
+		}
+	}
+	*/
+	return true;
 }
 
 // Whenever the mount takes damage, send that damage over to the weapon itself
-Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
+/*Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
 {
 	FObject mount;
 	mount = ConstructObject(mountId);
@@ -245,34 +331,4 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 
 	Call_Finish();
 }
-
-/**
- * Finds the drone weapon associated with the given entity object
- * 
- * @param entity     Entity object tied to the weapon
- * @param drone      Drone that owns the weapon being looked for
- * @param buffer	 Buffer to store weapon struct in, by reference
- */
-void FindDroneWeapon(FObject entity, FObject drone, FDroneWeapon buffer)
-{
-	if (entity.Valid() && drone.Valid())
-	{
-		int entityId = entity.Get();
-		int droneId = drone.Get();
-
-		int checkId;
-		for (int i = 1; i <= MAXWEAPONS; i++)
-		{
-			if (DroneWeapons[droneId][i].Valid())
-			{
-				checkId = DroneWeapons[droneId][i].Get();
-
-				if (checkId == entityId) // Weapon has been found!
-				{
-					buffer = DroneWeapons[droneId][i];
-					break;
-				}
-			}
-		}
-	}
-}
+*/

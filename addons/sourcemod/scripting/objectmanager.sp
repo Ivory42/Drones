@@ -486,7 +486,9 @@ ABaseEntity CreateBaseEntity(FObject base, FObject owner = {})
 	char template[16];
 	FormatEx(template, sizeof template, EmptyTemplateName);
 	ABaseEntity entity = new ABaseEntity(base, template);
-	entity.SetOwner(owner);
+
+	if (owner.Valid())
+		entity.SetOwner(owner);
 
 	return entity;
 }

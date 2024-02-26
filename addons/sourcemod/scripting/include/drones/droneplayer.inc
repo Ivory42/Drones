@@ -26,5 +26,11 @@ methodmap ADronePlayer < AClient
 		public set(int value) { this.SetObjectProp("Player_ExitingHealth", value); }
 	}
 
+	property int Inputs // Player's buttons value
+	{
+		public get() { return this.GetObjectProp("Player_Inputs"); }
+		public set(int value) { this.SetObjectProp("Player_Inputs", value); }
+	}
+
 	public ADrone GetDrone() { return this.Drone; }
 }

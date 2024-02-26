@@ -7,11 +7,75 @@
 
 #include "drones/drone.inc"
 
+// StringMap wrapped to support drone objects. This can be used like a struct except it can be passed through timers.
+methodmap SDroneStruct < StringMap
+{
+	public SDroneStruct()
+	{
+		StringMap data = new StringMap();
+		return view_as<SDroneStruct>(data);
+	}
+
+	property ADrone Drone
+	{
+		public set(ADrone drone) { this.SetValue("PackedDrone", drone); }
+		public get()
+		{
+			ADrone drone = null;
+			this.GetValue("PackedDrone", drone);
+
+			return drone;
+		}
+	}
+
+	property ADronePlayer Player
+	{
+		public set(ADronePlayer player) { this.SetValue("PackedPlayer", player); }
+		public get()
+		{
+			ADronePlayer player = null;
+			this.GetValue("PackedPlayer", player);
+
+			return player;
+		}
+	}
+
+	property ADroneWeapon Weapon
+	{
+		public set(ADroneWeapon weapon) { this.SetValue("PackedWeapon", weapon); }
+		public get()
+		{
+			ADroneWeapon weapon = null;
+			this.GetValue("PackedWeapon", weapon);
+
+			return weapon;
+		}
+	}
+}
+
 
 /****************************************************************
 	NATIVES
 ****************************************************************/
 
+methodmap FDroneStatics
+{
+	/**
+	* Fire a hitscan attack from a drone's weapon
+	*
+	* @param gunner		Client firing this weapon
+	* @param drone		Drone that the weapon is attached to
+	* @param weapon		Weapon firing this attack
+	*/
+	public static native void FireBullets(ADronePlayer gunner, ADrone drone, ADroneWeapon weapon);
+
+	/**
+ 	* Fire the current drone's active weapon
+ 	*
+	* @param seat	Seat to fire the active weapon for
+	*/
+	public static native void FireActiveWeapon(FDroneSeat seat);
+}
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
  *
@@ -21,30 +85,12 @@
 //native bool CD_ToggleViewLocked(int drone);
 
 /**
- * Fire a hitscan attack from a drone's weapon
- *
- * @param owner			Client index who owns the drone
- * @param drone			Drone index firing the attack
- * @param weapon		Weapon object firing this attack
- * @param dmgType		Drone damage type to use for attack
- */
-//native void CD_FireBullet(int owner, int drone, any weapon[sizeof FDroneWeapon], EDamageType dmgType);
-
-/**
  * Override max speed of the given drone
  *
  * @param drone		Drone index to override speed of
  * @param speed		Speed override
  */
 //native void CD_OverrideMaxSpeed(int drone, float speed);
-
-/**
- * Fire the current drone's active weapon
- *
- * @param owner		client index owning the drone
- * @param drone		Drone index firing the weapon
- */
-//native void CD_FireActiveWeapon(int owner, int drone);
 
 /**
  * Deal damage to the given drone
@@ -213,41 +259,41 @@
 /**
  * Forward called after a drone spawns
  *
- * @param drone				Drone object being spawned - by reference
- * @param plugin_name		Name of plugin defined in config
- * @param config			Config for this drone
+ * @param drone				Drone that was created
+ * @param name				Internal name of the drone
+ * @param config			KeyValues associated with the drone
+ * @note		The KeyValues are deleted upon the drone finishing creation. If any values are needed, cache them here.
  */
-//forward void CD_OnDroneCreated(FDrone drone, const char[] plugin_name, const char[] config);
+forward void CD2_OnDroneCreated(ADrone drone, const char[] name, KeyValues config);
 
 /**
  * Forward called when a weapon is spawned and attached to a drone
  *
- * @param drone				Drone owning the weapon - by reference
- * @param weapon			Weapon object that was spawned - by reference
- * @param plugin_name		Name of plugin defining this weapon's logic
- * @param config			Config for the owning drone
+ * @param drone				Drone owning the weapon
+ * @param weapon			Weapon that was created
+ * @param name				Internal weapon name for plugins
+ * @param config			KeyValues associated with the weapon
+ * @note		The KeyValues are deleted upon the drone finishing creation. If any values are needed, cache them here.
 */
-//forward void CD_OnWeaponCreated(FDrone drone, FDroneWeapon weapon, const char[] plugin_name, const char[] config);
+forward void CD2_OnWeaponCreated(ADrone drone, ADroneWeapon weapon, const char[] name, KeyValues config);
 
 /**
  * Forward called after a player enters a drone
  *
- * @param drone				Drone object being entered - by reference
- * @param client			Client index of the player
- * @param seat				Seat player is entering
- * @param plugin_name		Name of plugin defined for this drone
- * @param config			Config for this drone
+ * @param drone				Drone being entered
+ * @param client			Player entering the drone
+ * @param seat				Seat being entered
  */
-//forward void CD_OnPlayerEnterDrone(FDrone drone, int client, int seat, const char[] plugin_name, const char[] config);
+forward void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
 /**
  * Forward called after a player exits a drone
  *
- * @param drone		Drone object being exited - by reference
- * @param client	Client index of player
+ * @param drone		Drone being exited
+ * @param client	Player exiting the drone
  * @param seat		Seat player was in
  */
-//forward void CD_OnPlayerExitDrone(FDrone drone, int client, int seat);
+forward void CD2_OnPlayerExitDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
 /**
  * Forward called after a drone is removed
@@ -284,16 +330,15 @@
 /**
  * Forward called after a weapon is fired
  *
- * @param drone				Drone hull component that weapon is attached to
+ * @param drone				Drone owning this weapon
  * @param gunner			Client that fired this weapon
- * @param weapon			Weapon object that is being fired
- * @param slot				Weapon slot being used
- * @param weapon_logic		Name of plugin defining weapon logic
- * @param drone_logic		Name of plugin defining drone logic
+ * @param weapon			Weapon being fired
+ * @param ammo				Ammo being consumed upon weapon fire
+ * @param name				Internal name for the weapon being fired
  *
  * @return					How to handle ammo consumption: Plugin_Continue expends 1 ammo. Plugin_Changed expends the value ammo was set to. Plugin_Stop/Plugin_Handled will not expend any ammo
  */
-//forward Action CD_OnDroneAttack(FObject drone, FClient gunner, FDroneWeapon weapon, int slot, int& ammo, const char[] weapon_logic, const char[] drone_logic);
+forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, int& ammo, const char[] name);
 
 
 
@@ -304,7 +349,7 @@
 //converts a string into a CDMoveType
 stock EMoveType GetMoveType(const char[] movetype)
 {
-	if (StrEqual(movetype, "drone_hover"))
+	if (StrEqual(movetype, "drone_helo"))
 		return MoveType_Helo;
 	else if (StrEqual(movetype, "drone_fly"))
 		return MoveType_Fly;
@@ -314,6 +359,23 @@ stock EMoveType GetMoveType(const char[] movetype)
 		return MoveType_Custom;
 
 	return MoveType_Hover; // Fallback to hover if not a valid entry
+}
+
+stock EWeaponType GetWeaponType(KeyValues kv)
+{
+	char type[16];
+	kv.GetString("weapon_type", type, sizeof type);
+
+	if (StrEqual(type, "gun"))
+		return WeaponType_Gun;
+	else if (StrEqual(type, "laser"))
+		return WeaponType_Laser;
+	else if (StrEqual(type, "projectile"))
+		return WeaponType_Projectile;
+	else if (StrEqual(type, "custom"))
+		return WeaponType_Custom;
+
+	return WeaponType_Gun; // Defaults to gun if type is invalid
 }
 
 /*
@@ -362,6 +424,26 @@ stock void CreateTracer(FVector start, FVector end)
 
 	target.KillOnDelay(0.5);
 	tracer.KillOnDelay(0.5);
+}
+
+// Returns the index of the pilot seat for the given drone
+stock FDroneSeat GetPilotSeat(ADrone drone)
+{
+	if (drone && drone.IsDrone)
+	{
+		int length = drone.Seats.Length;
+
+		FDroneSeat seat = null;
+		for (int i = 0; i < length; i++)
+		{
+			seat = drone.Seats.Get(i);
+			if (seat.Type == Seat_Pilot)
+				return seat;
+		}
+	}
+
+	// No pilot seat found
+	return null;
 }
 
 /**

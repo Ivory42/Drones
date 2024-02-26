@@ -1,14 +1,6 @@
 #include <customdrones>
 
 /*
-GlobalForward DroneCreated;
-GlobalForward DroneEntered;
-GlobalForward DroneExited;
-GlobalForward DroneRemoved;
-GlobalForward DroneDestroyed;
-GlobalForward DroneChangeWeapon;
-GlobalForward DroneAttack;
-
 public any Native_ViewLock(Handle plugin, int args)
 {
 	FComponent drone;
@@ -830,39 +822,50 @@ bool FilterDrone(int entity, int mask, int exclude)
 
 public Action OnPlayerRunCmd(int clientId, int& buttons)
 {
-	ADronePlayer client = view_as<ADronePlayer>(FEntityStatics.GetClient(clientId));
-
-	if (client.InDrone)
+	ADronePlayer client = view_as<ADronePlayer>(FEntityStatics.GetClient(ConstructClient(clientId)));
+	if (client.Valid())
 	{
-		ADrone drone = client.Drone;
+		client.Inputs = buttons;
+	}
+	return Plugin_Continue;
+}
 
-		if (!drone || !drone.IsDrone || !drone.Alive)
-			return Plugin_Continue;
+void SimulateSeat(FDroneSeat seat, ADrone drone)
+{
+	if (seat.AIControlled)
+	{
+		return;
+	}
 
-		//int droneId = drone.Get();
+	ADronePlayer client = seat.Occupier;
 
-		// Movement stats
-		float maxSpeed = drone.MaxSpeed;
-
+	if (client)
+	{
 		// Prepare displays for drone pilot
-		int droneHp = RoundFloat(drone.Health);
-
-		FDroneSeat seat = GetPilotSeat(drone);
+		int droneHp = drone.Health;
 		ADroneWeapon activeWeapon = seat.ActiveWeapon;
+
+		int buttons = client.Inputs;
+
 		char ammo[32], hudString[256];
-		FormatAmmoString(activeWeapon, ammo, sizeof ammo);
+		char weapName[64];
+		if (activeWeapon)
+		{
+			FormatAmmoString(activeWeapon, ammo, sizeof ammo);
+			activeWeapon.GetDisplayName(weapName, sizeof weapName);
+
+			activeWeapon.Simulate();
+		}
 
 		SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
-		char weapName[64];
-		weapon.GetDisplayName(weapName, sizeof weapName);
 		FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
-		ShowHudText(clientId, -1, hudString); // Need to change to a synchronizer
+		ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
 
 		// Setup player position to given seat
 		FVector position;
 		position = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), seat.GetSeatPosition());
 
-		TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, NULL_VECTOR);
+		TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, {0.0, 0.0, 0.0});
 
 		switch (seat.Type)
 		{
@@ -875,7 +878,7 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 				}
 				if (buttons & IN_ATTACK2)
 				{
-					CycleNextWeapon(client, seat, drone);
+					CycleNextWeapon(seat);
 					buttons &= ~IN_ATTACK2;
 				}
 
@@ -890,13 +893,12 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 				}
 				if (buttons & IN_ATTACK2)
 				{
-					CycleNextWeapon(client, seat, drone);
+					CycleNextWeapon(seat);
 					buttons &= ~IN_ATTACK2;
 				}
 
-				OnDroneAimChanged(client, seat, drone);
-
 				// Drone movement
+				float maxSpeed = drone.MaxSpeed;
 
 				float inputVal = 0.0;
 				FVector velocity, speeds;
@@ -914,17 +916,21 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 				OnDroneMoveForward(drone, inputVal, speeds, velocity, maxSpeed, zeroForward);
 
+				inputVal = 0.0;
+
 				bool zeroRight = false;
 
 				// Left and right
-				if (buttons & IN_RIGHT)
+				if (buttons & IN_MOVERIGHT)
 					inputVal = 1.0;
-				else if (buttons & IN_LEFT) // Right takes priority
+				else if (buttons & IN_MOVELEFT) // Right takes priority
 					inputVal = -1.0;
 				else
 					zeroRight = true;
 
 				OnDroneMoveRight(drone, inputVal, speeds, velocity, maxSpeed, zeroRight);
+
+				inputVal = 0.0;
 
 				bool zeroUp = false;
 				// Up and down
@@ -937,12 +943,14 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 				OnDroneMoveUp(drone, inputVal, speeds, velocity, maxSpeed, zeroUp);
 
+				drone.SetInputVelocity(speeds);
+				//PrintCenterTextAll("Drone Vel: %.1f, %.1f, %.1f", velocity.X, velocity.Y, velocity.Z);
+
+				OnDroneAimChanged(client, seat, drone);
 				SimulateDrone(drone, velocity, maxSpeed);
 			}
 		}
 	}
-
-	return Plugin_Continue;
 }
 
 // Setup our ammo text for the Drone UI
@@ -951,10 +959,10 @@ void FormatAmmoString(ADroneWeapon weapon, char[] buffer, int size)
 	switch (weapon.State)
 	{
 		case WeaponState_Reloading: FormatEx(buffer, size, "Reloading...");
-		case WeaponState_Ready, WeaponSate_Custom:
+		case WeaponState_Ready, WeaponState_Custom:
 		{
 			if (weapon.Ammo == -1)
-				buffer = ""; // No text if weapon has bottomless ammo
+				FormatEx(buffer, size, ""); // No text if weapon has bottomless ammo
 			
 			FormatEx(buffer, size, "Ammo: %d", weapon.Ammo);
 		}
@@ -967,18 +975,18 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed)
 	// Drones will passively counteract gravity
 	FVector grav;
 
-	grav.Z = 12.0;
+	grav.Z = 12.5;
 
 	velocity.Add(grav);
 
-	FVector absVelocity;
-	absVeclocity = drone.GetObject().GetVelocity();
-	velocity.Add(AbsVelocity);
+	//FVector absVelocity;
+	//absVelocity = drone.GetObject().GetVelocity();
+	//velocity.Add(absVelocity);
 
 	//Temp solution - clamp drone overall speed.
-	FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
-	FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
-	FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
+	velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
+	velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
+	velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
 
 	TeleportEntity(drone.Get(), NULL_VECTOR, NULL_VECTOR, velocity.ToFloat());
 }

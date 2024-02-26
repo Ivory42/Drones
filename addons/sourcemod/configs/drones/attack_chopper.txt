@@ -1,84 +1,70 @@
 "Drone"
 {
 	"name"	"Hunter Chopper"
-	"model"	"models/combine_helicopter.mdl"
-	"camera_height"	"50"
-	"turn_rate"	"15"
+	"model"	"models/drones/hunterchopper/chopper.mdl"//"models/combine_helicopter.mdl"
+	"camera_height"	"60"
+	"turn_rate"	"60"
 	"health"	"1500"
-	"speed"		"350"
-	"acceleration"	"5"
+	"speed"		"450"
+	"acceleration"	"8"
 	"movetype"	"drone_helo"
-	"plugin"	"attack_chopper"
+	"plugin"	"combinechopper"
 	
-	//optional attachments to use for custom plugins - WIP
-	"attachments"
-	{
-		"rotor_base"
-		{
-			"proptype"	"func_rotator"
-			"custom_props"
-			{
-				"rotation_speed"	"80.0"
-			}
-			"attachment_point"	"rotor_placement" //attachment on model to use
-		}
-		"rotor_blades"
-		{
-			"proptype"	"prop_physics_override"
-			"model"		"models/empty.mdl"
-			"parent"	"rotor_base"	//parent attachment to use, leave as null to use the drone itself
-			"attachment_point"	"null"	//this will attach to the origin on the parent
-		}
-	}
+	// Custom properties
+	"engine_sound"			"npc/attack_helicopter/aheli_rotor_loop1.wav"
+	
 	"weapons"
 	{
 		"weapon1"
 		{
-			"name"		"Chaingun"
+			"name"		"Pulse Cannon"
+			"plugin_name"	"combinechopper_gun"
+			
+			"weapon_type"	"custom"
+
+			//"mount"	"" // Optional model to use for this weapon's mount
+			//"mount_attach"	"" // if using a mount, where does this mount attach to on the drone
 			
 			//default properties
-			//"model"		""								//optional model for weapon to use
-			//"offset"		"40 0 -30"						//Vector to offset this weapon's position by
-			"proj_offset"	""								//Offset from weapon offset to fire projectiles from
-			//"health"		"300"							//if using a model, optional health value to make this weapon destructible
-			"max_angle_y"	"40.0"							//Max angle on the vertical axis that this weapon can aim at, 0 for unlimited
-			"max_angle_x"	"0.0"							//Max angle on the horizontal axis that this weapon can aim at, 0 for unlimited
-			"fixed"			"0"								//If true, this model will be in a fixed position and cannot rotate
-			"sound"		"weapons/ar2/npc_ar2_altfire.wav"	//optional sound for firing
-			"ammo_loaded"	"-1"
-			"damage"	"15.0"
-			"attack_time"	"0.08"
-			"inaccuracy"	"1.5"
-			"plugin_name"	"chaingun"
+			"model"		"models/drones/hunterchopper/chopper_gun.mdl"	//optional model for weapon to use
+			"attachment"	"Gun"							// Attachment point to use on parent model
+			"muzzle"		"muzzle"						// Attachment point on this weapon model to act as the muzzle, if no model used, parent model is checked
+			"proj_offset"	"0 0 0"							// Offset from weapon offset to fire projectiles from, if no attachments found
+			"health"		"300"							// if using a model, optional health value to make this weapon destructible
+			"max_pitch"	"40.0"								// Max angle on the vertical axis that this weapon can aim at, 0 for unlimited
+			"max_yaw"	"0.0"								// Max angle on the horizontal axis that this weapon can aim at, 0 for unlimited
+			"fixed"			"0"								// If true, this model will be in a fixed position and cannot rotate
+			"ammo_loaded"	"25"							
+			"bullets_per_shot"	"5"
+			"reload_time"	"5.0"
+			"damage"		"15.0"
+			"fire_rate"		"1" 							// rounds per second
+			"inaccuracy"	"2.5"
 			
 			//Custom properties
-			"attack_acceleration"	"0.2" 					//rate at which attack speed increases while attacking
-			"attack_start_rate"	"0.5"  						//beginning attack speed
+			"attack_windup_time"	"1.5"		// Seconds it takes for this weapon to wind up before firing
+			"attack_duration"		"1.5"		// How long the weapon fires for after charging
+			"attack_windup_sound"	"npc/attack_helicopter/aheli_charge_up.wav"
+			"attack_discharge_sound"	"npc/attack_helicopter/aheli_weapon_fire_loop3.wav"
 		}
 		"weapon2"
 		{
 			"name"		"Missiles"
 			
-			"max_angle_y"	"40.0"
-			"max_angle_x"	"35.0"
-			"sound"		"weapons/stinger_fire1.wav"
-			"damage"	"60.0"
-			"attack_time"	"0.4"
+			"weapon_type"	"projectile"
+			"proj_type"		"0"
+			
+			"muzzle"		"RocketL;RocketR" // Will alternate between attachments
+			"max_pitch"		"40.0"
+			"max_yaw"		"35.0"
+			"sound"			"weapons/stinger_fire1.wav"
+			"damage"		"90.0"
+			"fire_rate"		"2"
 			"ammo_loaded"	"12"
+			"bullets_per_shot"	"2"
 			"reload_time"	"8.0"
 			"speed"			"1200.0"
 			"inaccuracy"	"2.0"
-		}
-		"weapon3"
-		{
-			"name"		"Bombs"
-			
-			"ammo_loaded"	"6"
-			"attack_time"	"0.8"
-			"damage"	"120.0"
-			"reload_time"	"6.0"
-			"fuse"		"1.25"
-			"proj_model"		"models/combine_helicopter/helicopter_bomb01.mdl" //projectile model to use
 		}
 	}
 	"seats"

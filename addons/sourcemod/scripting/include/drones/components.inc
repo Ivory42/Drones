@@ -46,16 +46,15 @@ methodmap FComponentArray < ArrayList
 enum struct FDroneWeaponExtras
 {
 	FObject Mount; 		// Optional physical mount to use for the weapon. This will rotate with the player's yaw
-	FObject Parent; /*
-					 * Usually the drone this weapon is attached to, however it can theoretically be another component as well.
-					 * Cast to either a drone or component to make sure the parent is valid.
-	 				 */
+	AComponent Parent; 	/*
+					 	* Usually the drone this weapon is attached to, however it can theoretically be another component as well.
+						* Cast to either a drone or component to make sure the parent is valid.
+	 					*/
 
 	// Attachments
-	FVector Offset; 			// Fallback offset to use if this weapon has no attachment point set
 	FVector ProjOffset; 		// Fallback offset to use if this weapon has no muzzle attachment defined
 	char AttachmentPoint[256]; 	// Attachment point on parent to attach this weapon to
-	char MuzzleAttachment[256]; // Name of muzzle attachment for attack origination
+	char MuzzleAttachment[64]; // Name of muzzle attachment for attack origination
 }
 
 methodmap ADroneWeapon < AComponent
@@ -94,6 +93,12 @@ methodmap ADroneWeapon < AComponent
 		public set(int ammo) { this.SetObjectProp("Weapon_MaxAmmo", ammo); }
 	}
 
+	property bool BottomlessAmmo // If true, this weapon never needs to reload
+	{
+		public get() { return this.GetObjectProp("Weapon_NoReload"); }
+		public set(bool value) { this.SetObjectProp("Weapon_NoReload", value); }
+	}
+
 	property float FireRate // Weapon's firerate in rounds per second
 	{
 		public get() { return this.GetObjectPropFloat("Weapon_RateOfFire"); }
@@ -110,12 +115,6 @@ methodmap ADroneWeapon < AComponent
 	{
 		public get() { return this.GetObjectPropFloat("Weapon_NextPrimaryAttackTime"); }
 		public set(float time) { this.SetObjectPropFloat("Weapon_NextPrimaryAttackTime", time); }
-	}
-
-	property float ProjectileSpeed // How fast a projectile from this weapon should be fired, if used
-	{
-		public get() { return this.GetObjectPropFloat("Weapon_ProjectileSpeed"); }
-		public set(float speed) { this.SetObjectPropFloat("Weapon_ProjectileSpeed", speed); }
 	}
 
 	property float Inaccuracy // Error in angle for this weapon upon consecutive attacks
@@ -154,6 +153,12 @@ methodmap ADroneWeapon < AComponent
 		public set(float rate) { this.SetObjectPropFloat("Weapon_TurnRate", rate); }
 	}
 
+	property int MuzzleIndex // Current muzzle index to use for next attack
+	{
+		public get() { return this.GetObjectProp("Weapon_MuzzleID"); }
+		public set(int value) { this.SetObjectProp("Weapon_MuzzleID", value); }
+	}
+
 	property float MaxPitch // Max pitch this weapon can aim at (relative to drone)
 	{
 		public get() { return this.GetObjectPropFloat("Weapon_MaxPitchAngle"); }
@@ -172,10 +177,22 @@ methodmap ADroneWeapon < AComponent
 		public set(bool value) { this.SetObjectProp("Weapon_FixedAngles", value); }
 	}
 
+	property bool UsesParent // Whether or not this weapon looks for attachments on the parent
+	{
+		public get() { return this.GetObjectProp("Weapon_HasNoModel"); }
+		public set(bool value) { this.SetObjectProp("Weapon_HasNoModel", value); }
+	}
+
 	property bool ComplexAngles // If true, this weapon's angles will be properly distributed between the mount and the weapon model
 	{
 		public get() { return this.GetObjectProp("Weapon_ComplexAngles"); }
 		public set(bool value) { this.SetObjectProp("Weapon_ComplexAngles", value); }
+	}
+
+	property int ProjPerShot // How many projectiles (or bullets) this weapon fires per attack
+	{
+		public get() { return this.GetObjectProp("Weapon_PerShot"); }
+		public set(int value) { this.SetObjectProp("Weapon_PerShot", value); }
 	}
 
 	// Returns the receiver object for this weapon
@@ -191,7 +208,7 @@ methodmap ADroneWeapon < AComponent
 	}
 
 	// Returns the parent object of this weapon
-	public FObject GetParent()
+	public AComponent GetParent()
 	{
 		return this.GetObjects().Parent;
 	}
@@ -253,7 +270,7 @@ methodmap ADroneWeapon < AComponent
 		if (this.Ammo < this.MaxAmmo)
 		{
 			this.Ammo = 0;
-			this.ReloadTimer = new STimer(this.ReloadDelay);
+			this.ReloadTimer.Loop();
 			this.State = WeaponState_Reloading;
 		}
 	}
@@ -263,7 +280,7 @@ methodmap ADroneWeapon < AComponent
 	 *
 	 * @param force     If true, force this weapon to fire as long as it's active and has ammo
 	 */
-	public bool CanFire(bool force)
+	public bool CanFire(bool force = false)
 	{
 		if (force) //ignore attack delay
 			return (this.Ammo != 0 && this.State == WeaponState_Ready);
@@ -294,16 +311,48 @@ methodmap ADroneWeapon < AComponent
 		return position;
 	}
 
-	public FTransform GetMuzzleTransform()
+	public bool GetMuzzleTransform(FTransform muzzle)
 	{
-		FTransform muzzle;
+		// Retrieve the muzzle attachment according to the attachment point. If we have multiple attachments, alternate between all of them
+		char muzzles[16][64], attachment[64];
+		int muzzleCount = ExplodeString(this.GetObjects().MuzzleAttachment, ";", muzzles, sizeof muzzles, sizeof muzzles[]);
 
-		// Retrieve the muzzle attachment according to the attachment point
-		GetAttachmentTransform(this.GetReceiver(), this.GetObjects().MuzzleAttachment, muzzle);
+		if (muzzleCount > 1)
+		{
+			int index = this.MuzzleIndex;
+			attachment = muzzles[index];
+			this.MuzzleIndex++;
+			if (this.MuzzleIndex >= muzzleCount)
+				this.MuzzleIndex = 0;
+		}
+		else
+		{
+			// Only one attachment
+			FormatEx(attachment, sizeof attachment, this.GetObjects().MuzzleAttachment);
+		}
 
-		return muzzle;
+		if (this.UsesParent)
+		{
+			return GetAttachmentTransform(this.GetParent().GetObject(), attachment, muzzle);
+		}
+
+		return GetAttachmentTransform(this.GetReceiver(), attachment, muzzle);
 	}
 
+}
+
+methodmap ADroneProjectileWeapon < ADroneWeapon
+{
+	property float ProjectileSpeed // How fast a projectile from this weapon should be fired, if used
+	{
+		public get() { return this.GetObjectPropFloat("Weapon_ProjectileSpeed"); }
+		public set(float speed) { this.SetObjectPropFloat("Weapon_ProjectileSpeed", speed); }
+	}
+	property EProjType ProjType // What type of projectile this weapon fires
+	{
+		public get() { return view_as<EProjType>(this.GetObjectPropFloat("Weapon_ProjectileType")); }
+		public set(EProjType type) { this.SetObjectProp("Weapon_ProjectileType", type); }
+	}
 }
 
 

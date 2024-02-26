@@ -10,25 +10,21 @@
 // Projectile types to use for drone weapons. Using a type on the wrong native will use the default settings for that native
 enum EProjType
 {	
+	// Rockets/Grenades
 	DroneProj_Rocket, // Default rocket
 
 	DroneProj_Energy, // Cow mangler rocket
 
 	DroneProj_Sentry, // Sentry rocket salvo
 
-	DroneProj_Impact, // Rocket which deals impact damage with no explosion
+	DroneProj_Grenade, // Pipebomb grenade
 
-
-
+	// Bombs
 	DroneProj_Bomb, // Default bomb projectile - detonates on a fuse timer that is activated upon being spawned
 
 	DroneProj_BombDelayed, // Fuse timer starts after touching a surface
 
 	DroneProj_BombImpact, // Bomb detonates upon impact rather than a fuse timer
-
-	
-	
-	DroneProj_Custom // Projectile type with no logic tied to it - use with custom sub plugins to define logic instead
 };
 
 // Drone move types

@@ -13,7 +13,13 @@ enum struct FDroneComponents
 	FObject Camera; // Entity reference of the camera for this drone
 	FObject Model; // Visual model to use for this drone. Spawns as a dynamic prop attached to the drone's collision.
 
+	char ModelName[256];
 	char DestroyedModel[256]; 		// Optional model to use when drone is destroyed
+
+	void GetModel(char[] model, int size)
+	{
+		FormatEx(model, size, this.ModelName);
+	}
 }
 
 methodmap ADrone < AComponent
@@ -30,6 +36,7 @@ methodmap ADrone < AComponent
 	public void GetDisplayName(char[] name, int size) { this.GetObjectPropString("Drone_DisplayName", name, size); }
 	public void SetDisplayName(const char[] name) { this.SetObjectPropString("Drone_DisplayName", name); }
 
+	// Name used for plugins to identify this drone
 	public void GetInternalName(char[] name, int size) { this.GetObjectPropString("Drone_InternalName", name, size); }
 	public void SetInternalName(const char[] name)	{ this.SetObjectPropString("Drone_InternalName", name); }
 
@@ -40,6 +47,9 @@ methodmap ADrone < AComponent
 	public FVector GetInputVelocity() { return this.GetObjectPropVector("Drone_InputVel"); }
 	public void SetInputVelocity(FVector vel) { this.SetObjectPropVector("Drone_InputVel", vel); }
 
+	public FRotator GetInputRotation() { return this.GetObjectPropRotator("Drone_InputRot"); }
+	public void SetInputRotation(FRotator rot) { this.SetObjectPropRotator("Drone_InputRot", rot); }
+	
 	public FObject GetCamera() { return this.GetComponents().Camera; }
 
 	property bool IsDrone
