@@ -72,6 +72,9 @@ Action PulseCannonFire(Handle timer, SDroneStruct data)
 		if (!cannon.Firing)
 		{
 			EndFire(cannon);
+			data.Weapon = null;
+			data.Player = null;
+			data.Drone = null;
 			delete data;
 			return Plugin_Stop;
 		}
@@ -85,6 +88,9 @@ Action PulseCannonFire(Handle timer, SDroneStruct data)
 		{
 			EndFire(cannon);
 			cannon.SimulateReload();
+			data.Weapon = null;
+			data.Player = null;
+			data.Drone = null;
 			delete data;
 			return Plugin_Stop;
 		}

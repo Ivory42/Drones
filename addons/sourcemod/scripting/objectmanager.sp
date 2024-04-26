@@ -182,24 +182,45 @@ Action CmdDumpEnts(int client, int args)
 
 public void OnEntityDestroyed(int entity)
 {
-	if (IsValidEdict(entity))
+	if (IsValidEntity(entity) && entity > 0 && entity <= 2048)
 	{
+		// Band-aid fix for now... entities are being called on this function without being deleted and not sure why, doing this until a proper fix can be found
 		ABaseEntity actor = GetEntity(ConstructObject(entity));
 		if (actor)
 		{
-			if (actor.CanTick)
-			{
-				DisableEntityTick(actor);
-			}
+			PrintToChatAll("(OM OnEntityDestroyed) Entity %d requesting delete", entity);
 
-			Call_StartForward(OnObjectDestroyed);
-			Call_PushCell(actor);
-			Call_Finish();
+			DataPack pack = new DataPack();
+			pack.WriteCell(entity);
+			pack.WriteCell(actor);
 
-			RemoveEntityFromList(actor);
-
-			delete actor;
+			RequestFrame(ValidDestroy, pack);
 		}
+	}
+}
+
+void ValidDestroy(DataPack pack)
+{
+	pack.Reset();
+	int entity = pack.ReadCell();
+	ABaseEntity actor = view_as<ABaseEntity>(pack.ReadCell());
+
+	// Now only continue if the entity is no longer valid (it was deleted!)
+	if (!IsValidEntity(entity) && actor)
+	{
+		if (actor.CanTick)
+		{
+			DisableEntityTick(actor);
+		}
+
+		Call_StartForward(OnObjectDestroyed);
+		Call_PushCell(actor);
+		Call_Finish();
+
+		RemoveEntityFromList(actor);
+
+		delete actor;
+		PrintToChatAll("(OM OnEntityDestroyed) Successfully deleted entity\nHandle = %x", actor);
 	}
 }
 
@@ -305,6 +326,9 @@ any EntNative_Destroy(Handle plugin, int args)
 	ABaseEntity actor = GetNativeCell(1);
 	if (actor)
 	{
+		char name[64];
+		GetPluginFilename(plugin, name, sizeof name);
+		PrintToChatAll("Plugin %s Called for `destroy entity` on entity %d", name, actor.Get());
 		actor.GetObject().Kill();
 	}
 
@@ -463,6 +487,7 @@ ABaseEntity RegisterEntity(ABaseEntity entity)
 	}
 
 	// Entity is already registered, remove this extra handle
+	PrintToChatAll("(OM Register Entity) Entity %d deleted", entity.Get());
 	delete entity;
 	return null;
 }

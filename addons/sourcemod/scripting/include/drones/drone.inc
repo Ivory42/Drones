@@ -178,7 +178,7 @@ methodmap ADrone < AComponent
 
 		if (this.Weapons)
 		{
-			this.Weapons.ClearArray();
+			this.Weapons.ClearComponents();
 			delete this.Weapons;
 		}
 	}

@@ -388,7 +388,7 @@ stock EWeaponType GetWeaponType(KeyValues kv)
 stock void CreateTracer(FVector start, FVector end)
 {
 	FObject target;
-	target.Create("prop_dynamic_override"); //env_gunfire requres an entity to use as a target
+	target = FGameplayStatics.CreateObjectDeferred("info_target"); //env_gunfire requres an entity to use as a target
 
 	char targetname[64];
 
@@ -396,14 +396,12 @@ stock void CreateTracer(FVector start, FVector end)
 
 	target.SetKeyValue("targetname", targetname);
 
-	target.SetModel("models/empty.mdl");
+	//target.SetModel("models/empty.mdl");
 
-	target.Spawn();
-
-	target.Teleport(end, ConstructRotator(), ConstructVector());
+	FGameplayStatics.FinishSpawn(target, ConstructTransform(end, ConstructRotator()));
 
 	FObject tracer;
-	tracer.Create("env_gunfire"); //create the actual tracer
+	tracer = FGameplayStatics.CreateObjectDeferred("env_gunfire"); //create the actual tracer
 
 	tracer.SetKeyValue("target", targetname);
 	
@@ -417,13 +415,27 @@ stock void CreateTracer(FVector start, FVector end)
 	tracer.SetKeyValue("collisions", "1");
 	tracer.SetKeyValue("spread", "0");
 
-	tracer.Spawn();
-	tracer.Activate();
+	FGameplayStatics.FinishSpawn(tracer, ConstructTransform(start, ConstructRotator()));
 
-	tracer.Teleport(start, ConstructRotator(), ConstructVector());
+	CreateTimer(0.5, KillBullet, target.GetReference(), TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(0.5, KillBullet, tracer.GetReference(), TIMER_FLAG_NO_MAPCHANGE);
+}
 
-	target.KillOnDelay(0.5);
-	tracer.KillOnDelay(0.5);
+Action KillBullet(Handle timer, int reference)
+{
+	FObject entity;
+	entity.SetReference(reference);
+
+	if (entity.Valid())
+	{
+		if (entity.Cast("prop_physics") || entity.Cast("prop_physics_multiplayer") || entity.Cast("prop_dynamic"))
+		{
+			PrintToChatAll("Bullet entity mismatched to %d", entity.Get());
+		}
+		entity.Kill();
+	}
+
+	return Plugin_Stop;
 }
 
 // Returns the index of the pilot seat for the given drone

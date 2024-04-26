@@ -851,6 +851,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 		char weapName[64];
 		if (activeWeapon)
 		{
+			PrintCenterTextAll("Weapon Handle: %x\nWeapon Entity: %d", activeWeapon, activeWeapon.Get());
 			FormatAmmoString(activeWeapon, ammo, sizeof ammo);
 			activeWeapon.GetDisplayName(weapName, sizeof weapName);
 

@@ -29,7 +29,7 @@ methodmap FComponentArray < ArrayList
 		return view_as<FComponentArray>(array);
 	}
 	
-	public void ClearArray()
+	public void ClearComponents()
 	{
 		int length = this.Length;
 		if (length > 0)
@@ -37,6 +37,7 @@ methodmap FComponentArray < ArrayList
 			for (int i = 0; i < length; i++)
 			{
 				AComponent component = this.Get(i);
+				PrintToChatAll("Destroy entity: %d", component.Get());
 				FEntityStatics.DestroyEntity(component);
 			}
 		}
@@ -80,6 +81,12 @@ methodmap ADroneWeapon < AComponent
 	// Weapon fire sound
 	public void GetFireSound(char[] sound, int size) { this.GetObjectPropString("Weapon_FireSound", sound, size); }
 	public void SetFireSound(const char[] sound) { this.SetObjectPropString("Weapon_FireSound", sound); }
+
+	property bool IsDroneWeapon
+	{
+		public get() { return this.GetObjectProp("Entity_IsDroneWeapon"); }
+		public set(bool value) { this.SetObjectProp("Entity_IsDroneWeapon", value); }
+	}
 
 	property int Ammo // Ammo currently loaded
 	{
@@ -311,25 +318,37 @@ methodmap ADroneWeapon < AComponent
 		return position;
 	}
 
-	public bool GetMuzzleTransform(FTransform muzzle)
+	public bool GetMuzzleAttachment(char[] attachment, int size)
 	{
-		// Retrieve the muzzle attachment according to the attachment point. If we have multiple attachments, alternate between all of them
-		char muzzles[16][64], attachment[64];
+		char muzzles[16][64]
 		int muzzleCount = ExplodeString(this.GetObjects().MuzzleAttachment, ";", muzzles, sizeof muzzles, sizeof muzzles[]);
 
 		if (muzzleCount > 1)
 		{
 			int index = this.MuzzleIndex;
-			attachment = muzzles[index];
+			FormatEx(attachment, size, muzzles[index])
 			this.MuzzleIndex++;
 			if (this.MuzzleIndex >= muzzleCount)
 				this.MuzzleIndex = 0;
+
+			return true;
 		}
-		else
+		else if (strlen(this.GetObjects().MuzzleAttachment) > 1)
 		{
 			// Only one attachment
-			FormatEx(attachment, sizeof attachment, this.GetObjects().MuzzleAttachment);
+			FormatEx(attachment, size, this.GetObjects().MuzzleAttachment);
+
+			return true;
 		}
+		
+		return false;
+	}
+
+	public bool GetMuzzleTransform(FTransform muzzle)
+	{
+		// Retrieve the muzzle attachment according to the attachment point. If we have multiple attachments, alternate between all of them
+		char attachment[64];
+		this.GetMuzzleAttachment(attachment, sizeof attachment);
 
 		if (this.UsesParent)
 		{
@@ -339,6 +358,23 @@ methodmap ADroneWeapon < AComponent
 		return GetAttachmentTransform(this.GetReceiver(), attachment, muzzle);
 	}
 
+	public void Destroy()
+	{
+		ADrone parent = view_as<ADrone>(this.GetParent())
+		if (parent.IsDrone)
+		{
+			FDroneSeat seat = GetPilotSeat(parent);
+			if (seat && seat.Valid())
+			{
+				int weapons = seat.Weapons.Length;
+				for (int i = 0; i < weapons; i++)
+				{
+					if (seat.Weapons.Get(i) == this)
+						seat.Weapons.Erase(i);
+				}
+			}
+		}
+	}
 }
 
 methodmap ADroneProjectileWeapon < ADroneWeapon

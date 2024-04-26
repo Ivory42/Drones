@@ -239,10 +239,18 @@ void RemoveWearables(AClient client)
 // When a new entity is created, lets make sure it is not initialized as a drone
 public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 {
-	ADrone drone = view_as<ADrone>(entity);
+	ADroneWeapon weapon = view_as<ADroneWeapon>(entity);
+	if (weapon.IsDroneWeapon)
+	{
+		weapon.Destroy();
+	}
 
+	ADrone drone = view_as<ADrone>(entity);
 	if (drone.IsDrone)
 	{
+		ADronePlayer player = drone.Pilot;
+		if (player)
+			PlayerExitVehicle(player, GetPilotSeat(drone), drone);
 		drone.Destroy();
 	}
 }
@@ -331,10 +339,6 @@ int DroneMenuCallback(Menu menu, MenuAction action, int client, int param1)
 			menu.GetItem(param1, info, sizeof(info));
 			
 			CreateDroneByName(ConstructClient(client), info, ConstructVector());
-		}
-		case MenuAction_End:
-		{
-			delete menu;
 		}
 	}
 	return 0;

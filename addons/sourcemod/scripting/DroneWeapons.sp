@@ -21,6 +21,7 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 
 		weapon.Type = GetWeaponType(kv);
 		weapon.UsesParent = nomodel;
+		weapon.IsDroneWeapon = true;
 
 		FDroneWeaponExtras components;
 		components.Parent = drone;
@@ -124,6 +125,11 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 	{
 		if (weapon.GetMuzzleTransform(muzzle))
 		{
+			FVector velocity;
+			velocity = drone.GetVelocity();
+			velocity.Scale(0.1);
+			muzzle.Position.Add(velocity);
+
 			start = muzzle.Position;
 		}
 
@@ -163,13 +169,19 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 	start = GetCameraOffset(drone);
 	end = GetDroneAimPosition(drone, player);
 
-	// Now fire our bullets
-	int bullets = weapon.ProjPerShot;
+	// Now fire our rockets
+	int rockets = weapon.ProjPerShot;
 	FTransform muzzle;
-	for (int i = 0; i < bullets; i++)
+	for (int i = 0; i < rockets; i++)
 	{
 		if (weapon.GetMuzzleTransform(muzzle))
 		{
+			/*
+			FVector velocity;
+			velocity = drone.GetVelocity();
+			velocity.Scale(0.075);
+			muzzle.Position.Add(velocity);
+			*/
 			start = muzzle.Position;
 		}
 
