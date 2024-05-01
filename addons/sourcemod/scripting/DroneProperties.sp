@@ -820,6 +820,74 @@ bool FilterDrone(int entity, int mask, int exclude)
 }
 */
 
+/*
+ Drone damage handling
+*/
+
+Action OnDroneDamaged(int entity, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
+{
+	Action result = Plugin_Continue;
+	ADrone drone = view_as<ADrone>(FEntityStatics.GetEntity(ConstructObject(entity)));
+	if (drone && drone.IsDrone)
+	{
+		result = DroneTakeDamage(drone, ConstructObject(attacker), ConstructObject(inflictor), damage, ConstructWeapon(weapon));
+	}
+
+	return result;
+}
+
+Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float& damage, FWeapon weapon)
+{
+	bool sendEvent = true;
+
+	if (!drone.Alive)
+	{
+		return Plugin_Stop;
+	}
+
+	if (attacker.Get() == drone.GetOwner().Get()) //significantly reduce damage if the drone damages itself
+	{
+		damage *= 0.25; //Should probably be a convar
+		sendEvent = false;
+	}
+
+	if (sendEvent)
+	{
+		SendDamageEvent(drone, attacker, damage);
+	}
+
+	drone.Health -= RoundFloat(damage);
+	if (drone.Health <= 0)
+	{
+		KillDrone(drone, attacker, inflictor, damage, weapon);
+	}
+
+	return Plugin_Continue;
+}
+
+void SendDamageEvent(ADrone drone, FObject attacker, float damage)
+{
+	// Only send if the attacker is a client
+	if (CastToClient(attacker).Valid() && drone.Valid())
+	{
+		int damageamount = RoundFloat(damage);
+		int health = drone.Health;
+		Event PropHurt = CreateEvent("npc_hurt", true);
+
+		//setup components for event
+		PropHurt.SetInt("entindex", drone.Get());
+		PropHurt.SetInt("attacker_player", GetClientUserId(attacker.Get()));
+		PropHurt.SetInt("damageamount", damageamount);
+		PropHurt.SetInt("health", health - damageamount);
+
+		PropHurt.Fire(false);
+	}
+}
+
+/*
+ Drone function handling
+*/
+
 public Action OnPlayerRunCmd(int clientId, int& buttons)
 {
 	ADronePlayer client = view_as<ADronePlayer>(FEntityStatics.GetClient(ConstructClient(clientId)));
@@ -851,7 +919,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 		char weapName[64];
 		if (activeWeapon)
 		{
-			PrintCenterTextAll("Weapon Handle: %x\nWeapon Entity: %d", activeWeapon, activeWeapon.Get());
+			//PrintCenterTextAll("Weapon Handle: %x\nWeapon Entity: %d", activeWeapon, activeWeapon.Get());
 			FormatAmmoString(activeWeapon, ammo, sizeof ammo);
 			activeWeapon.GetDisplayName(weapName, sizeof weapName);
 

@@ -182,13 +182,13 @@ Action CmdDumpEnts(int client, int args)
 
 public void OnEntityDestroyed(int entity)
 {
-	if (IsValidEntity(entity) && entity > 0 && entity <= 2048)
+	if (IsValidEntity(entity) && entity > MaxClients && entity <= 2048)
 	{
 		// Band-aid fix for now... entities are being called on this function without being deleted and not sure why, doing this until a proper fix can be found
 		ABaseEntity actor = GetEntity(ConstructObject(entity));
 		if (actor)
 		{
-			PrintToChatAll("(OM OnEntityDestroyed) Entity %d requesting delete", entity);
+			//PrintToChatAll("(OM OnEntityDestroyed) Entity %d requesting delete", entity);
 
 			DataPack pack = new DataPack();
 			pack.WriteCell(entity);
@@ -196,6 +196,10 @@ public void OnEntityDestroyed(int entity)
 
 			RequestFrame(ValidDestroy, pack);
 		}
+	}
+	else if (0 <= entity < MaxClients)
+	{
+		LogMessage("Deleting entity that is either a player or the world. Was this a mistake? Entity requesting delete = %d", entity);
 	}
 }
 
@@ -220,7 +224,7 @@ void ValidDestroy(DataPack pack)
 		RemoveEntityFromList(actor);
 
 		delete actor;
-		PrintToChatAll("(OM OnEntityDestroyed) Successfully deleted entity\nHandle = %x", actor);
+		//PrintToChatAll("(OM OnEntityDestroyed) Successfully deleted entity\nHandle = %x", actor);
 	}
 }
 
@@ -290,6 +294,13 @@ any EntNative_RegisterEntity(Handle plugin, int args)
 	FObject entity;
 	GetNativeArray(1, entity, sizeof FObject);
 
+	if (!entity.Valid())
+	{
+		char name[64];
+		GetPluginFilename(plugin, name, sizeof name);
+		LogMessage("Plugin %s attempted to register an invalid entity (%d). Aborting.", name, entity.Get());
+	}
+
 	ABaseEntity actor = CreateBaseEntity(entity, ConstructObject(0));
 
 	return RegisterEntity(actor);
@@ -328,7 +339,11 @@ any EntNative_Destroy(Handle plugin, int args)
 	{
 		char name[64];
 		GetPluginFilename(plugin, name, sizeof name);
-		PrintToChatAll("Plugin %s Called for `destroy entity` on entity %d", name, actor.Get());
+		if (0 <= actor.Get() < MaxClients)
+		{
+			LogMessage("Plugin %s attempted to kill a client or the world (%d). This is probably a mistake. Aborting.", name, actor.Get());
+			return 0;
+		}
 		actor.GetObject().Kill();
 	}
 
@@ -487,7 +502,7 @@ ABaseEntity RegisterEntity(ABaseEntity entity)
 	}
 
 	// Entity is already registered, remove this extra handle
-	PrintToChatAll("(OM Register Entity) Entity %d deleted", entity.Get());
+	//PrintToChatAll("(OM Register Entity) Entity %d deleted", entity.Get());
 	delete entity;
 	return null;
 }
@@ -546,6 +561,12 @@ public void OnGameFrame()
 				continue;
 
 			entity = view_as<ABaseEntity>(TickingEntities.Get(i));
+			if (!entity.Valid())
+			{
+				// Somehow an entity was deleted without this plugin doing anything. Remove from list here.
+				DisableEntityTick(entity);
+				continue;
+			}
 			if (entity.NextTickTime <= GetGameTime() && IsEntInList(entity))
 			{
 				entity.NextTickTime = GetGameTime() + entity.TickRate;

@@ -16,6 +16,9 @@ enum struct FDroneComponents
 	char ModelName[256];
 	char DestroyedModel[256]; 		// Optional model to use when drone is destroyed
 
+	char ExplodeSound[256];
+	char ExplodeParticle[256];
+
 	void GetModel(char[] model, int size)
 	{
 		FormatEx(model, size, this.ModelName);
@@ -183,4 +186,21 @@ methodmap ADrone < AComponent
 		}
 	}
 
+}
+
+stock void CreateExplosion(float damage, float radius, FObject owner, const char[] particle, const char[] sound, FTransform spawn, int soundlevel = 95)
+{
+	FObject explode;
+	explode = FGameplayStatics.CreateObjectDeferred("tf_generic_bomb");
+
+	explode.SetKeyValueFloat("damage", damage);
+	explode.SetKeyValueFloat("radius", radius);
+	explode.SetKeyValue("health", "1");
+	explode.SetOwner(owner);
+	explode.SetKeyValue("explode_particle", particle);
+
+	FGameplayStatics.FinishSpawn(explode, spawn);
+	SDKHooks_TakeDamage(explode.Get(), owner.Get(), owner.Get(), 2.0);
+
+	EmitAmbientSound(sound, spawn.Position.ToFloat(), GetWorld().Get(), soundlevel);
 }

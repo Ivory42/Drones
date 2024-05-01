@@ -65,6 +65,8 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 
 		weapon.SetObjects(components);
 
+		SetupAttachments(weapon);
+
 		char pluginName[64];
 		weapon.GetInternalName(pluginName, sizeof pluginName);
 
@@ -85,6 +87,61 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		return weapon;
 	}
 	return null;
+}
+
+void SetupAttachments(ADroneWeapon weapon)
+{
+	weapon.MuzzlePositions = new ArrayList();
+
+	FObject muzzle;
+	int length = weapon.GetMuzzleCount();
+
+	//char name[64];
+	//weapon.GetDisplayName(name, sizeof name);
+	//PrintToChatAll("Muzzle count on weapon %s found: %d", name, length);
+
+	FTransform attach;
+	if (length > 1)
+	{
+		for (int i = 0; i < length; i++)
+		{
+			if (weapon.GetMuzzleTransform(attach))
+			{
+				//PrintToChatAll("Found muzzle %d", i);
+				muzzle = FGameplayStatics.CreateObject("info_target");
+				muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
+				if (weapon.UsesParent)
+				{
+					muzzle.SetParent(weapon.GetParent().GetObject());
+				}
+				else
+				{
+					muzzle.SetParent(weapon.GetReceiver());
+				}
+
+				weapon.MuzzlePositions.Push(muzzle.Reference);
+			}
+		}
+	}
+	else
+	{
+		if (weapon.GetMuzzleTransform(attach))
+		{
+			//PrintToChatAll("Found only one muzzle");
+			muzzle = FGameplayStatics.CreateObject("info_target");
+			muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
+			if (weapon.UsesParent)
+			{
+				muzzle.SetParent(weapon.GetParent().GetObject());
+			}
+			else
+			{
+				muzzle.SetParent(weapon.GetReceiver());
+			}
+
+			weapon.MuzzlePositions.Push(muzzle.Reference);
+		}
+	}
 }
 
 //void SetupMount(KeyValues kv, ADroneWeapon weapon, ADrone drone)
@@ -123,7 +180,7 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 	FTransform muzzle;
 	for (int i = 0; i < bullets; i++)
 	{
-		if (weapon.GetMuzzleTransform(muzzle))
+		if (weapon.GetNextMuzzleTransform(muzzle))
 		{
 			FVector velocity;
 			velocity = drone.GetVelocity();
@@ -174,7 +231,7 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 	FTransform muzzle;
 	for (int i = 0; i < rockets; i++)
 	{
-		if (weapon.GetMuzzleTransform(muzzle))
+		if (weapon.GetNextMuzzleTransform(muzzle))
 		{
 			/*
 			FVector velocity;

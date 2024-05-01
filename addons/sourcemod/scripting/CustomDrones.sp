@@ -1,13 +1,11 @@
 #pragma semicolon 1
 #include <customdrones>
 
-int ExplosionSprite;
-
 GlobalForward DroneCreated;
 GlobalForward DroneEntered;
 GlobalForward DroneExited;
 //GlobalForward DroneRemoved;
-//GlobalForward DroneDestroyed;
+GlobalForward DroneDestroyed;
 //GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 GlobalForward DroneCreatedWeapon;
@@ -41,13 +39,13 @@ public void OnPluginStart()
 	DroneExited = CreateGlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any, Param_String, Param_Any); //drone struct, client, seat, plugin, config
 	//DroneRemoved = CreateGlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	//DroneChangeWeapon = CreateGlobalForward("CD2_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
-	//DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_String); //drone, owner, attacker, damage, plugin
+	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float); //drone, attacker, float
 	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
 }
 
 public void OnMapStart()
 {
-	ExplosionSprite = PrecacheModel("sprites/sprite_fire01.vmt");
+	//
 }
 
 public void OnConfigsExecuted()
@@ -214,6 +212,15 @@ void RemoveWearables(AClient client)
 	{
 		int entity = -1;
 		while ((entity = FindEntityByClassname(entity, "tf_wearable")) != -1)
+		{
+			if (GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
+			{
+				TF2_RemoveWearable(client.Get(), entity);
+			}
+		}
+
+		entity = -1;
+		while ((entity = FindEntityByClassname(entity, "tf_wearable_campaign_item")) != -1) //contracker
 		{
 			if (GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == client.Get())
 			{
@@ -563,6 +570,9 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	config.GetString("destroyed_model", components.DestroyedModel, sizeof FDroneComponents::DestroyedModel);
 	config.GetString("plugin", pluginName, sizeof pluginName);
 
+	config.GetString("explode_particle", components.ExplodeParticle, sizeof FDroneComponents::ExplodeParticle, "ExplosionCore_MidAir");
+	config.GetString("explode_sound", components.ExplodeSound, sizeof FDroneComponents::ExplodeSound, "weapons/explode1.wav");
+
 	drone.SetKeyValue("model", components.ModelName);
 	FEntityStatics.FinishSpawningEntity(drone, spawn);
 
@@ -588,7 +598,10 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	CreateDroneCamera(drone, drone.CameraHeight, components);
 
 	if (drone.GetObject().HasProp(Prop_Data, "m_takedamage"))
+	{
 		drone.SetProp(Prop_Data, "m_takedamage", 1);
+		SDKHook(drone.Get(), SDKHook_OnTakeDamage, OnDroneDamaged);
+	}
 
 	drone.Health = drone.MaxHealth;
 	drone.Alive = true;
@@ -656,7 +669,7 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 /**
  * Kills the given drone
  */
-void KillDrone(ADrone drone, FObject hull, FClient attacker, float damage, FObject weapon)
+void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, FWeapon weapon)
 {
 	ADronePlayer pilot = drone.Pilot;
 
@@ -667,7 +680,7 @@ void KillDrone(ADrone drone, FObject hull, FClient attacker, float damage, FObje
 		// Need to loop through all seats and eject any other players
 	}
 
-	if (weapon.Valid())
+	if (weapon.Valid() && attacker.Valid() && inflictor.Valid())
 	{
 		// Want to try sending a kill event for the killfeed, just not sure how to handle it yet
 	}
@@ -678,14 +691,17 @@ void KillDrone(ADrone drone, FObject hull, FClient attacker, float damage, FObje
 
 	drone.GetObject().AttachParticle("burningplayer_flyingbits", ConstructVector());
 
-	//Call_StartForward(DroneDestroyed);
+	FTransform spawn;
+	spawn.Position = drone.GetPosition();
+	CreateExplosion(50.0, 146.0, GetWorld().GetObject(), drone.GetComponents().ExplodeParticle, drone.GetComponents().ExplodeSound, spawn);
 
-	//Call_PushCell(drone);
-	//Call_PushArray(attacker, sizeof FClient);
-	//Call_PushFloat(damage);
-	//Call_PushString(drone.Plugin);
+	Call_StartForward(DroneDestroyed);
 
-	//Call_Finish();
+	Call_PushCell(drone);
+	Call_PushArray(attacker, sizeof FObject);
+	Call_PushFloat(damage);
+	
+	Call_Finish();
 }
 
 /******************

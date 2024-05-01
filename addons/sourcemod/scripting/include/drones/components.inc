@@ -82,6 +82,12 @@ methodmap ADroneWeapon < AComponent
 	public void GetFireSound(char[] sound, int size) { this.GetObjectPropString("Weapon_FireSound", sound, size); }
 	public void SetFireSound(const char[] sound) { this.SetObjectPropString("Weapon_FireSound", sound); }
 
+	property ArrayList MuzzlePositions
+	{
+		public get() { return this.GetObjectProp("Weapon_MuzzlePositions"); }
+		public set(ArrayList list) { this.SetObjectProp("Weapon_MuzzlePositions", list); }
+	}
+
 	property bool IsDroneWeapon
 	{
 		public get() { return this.GetObjectProp("Entity_IsDroneWeapon"); }
@@ -318,11 +324,26 @@ methodmap ADroneWeapon < AComponent
 		return position;
 	}
 
-	public bool GetMuzzleAttachment(char[] attachment, int size)
+	public int GetMuzzleCount()
 	{
-		char muzzles[16][64]
+		char muzzles[16][64];
 		int muzzleCount = ExplodeString(this.GetObjects().MuzzleAttachment, ";", muzzles, sizeof muzzles, sizeof muzzles[]);
 
+		return muzzleCount;
+	}
+
+	public int GetMuzzleCountEx(char[][] muzzles, int size, int length)
+	{
+		int muzzleCount = ExplodeString(this.GetObjects().MuzzleAttachment, ";", muzzles, size, length);
+
+		return muzzleCount;
+	}
+
+	// returns the physical attachment point from the weapon/drone model
+	public bool GetMuzzleAttachment(char[] attachment, int size)
+	{
+		char muzzles[16][64];
+		int muzzleCount = this.GetMuzzleCountEx(muzzles, sizeof muzzles, sizeof muzzles[]);
 		if (muzzleCount > 1)
 		{
 			int index = this.MuzzleIndex;
@@ -344,6 +365,7 @@ methodmap ADroneWeapon < AComponent
 		return false;
 	}
 
+	// Gets the physical location of the next muzzle in sequence
 	public bool GetMuzzleTransform(FTransform muzzle)
 	{
 		// Retrieve the muzzle attachment according to the attachment point. If we have multiple attachments, alternate between all of them
@@ -358,8 +380,57 @@ methodmap ADroneWeapon < AComponent
 		return GetAttachmentTransform(this.GetReceiver(), attachment, muzzle);
 	}
 
+	// Returns the spawn location for the next muzzle in sequence
+	public bool GetNextMuzzleTransform(FTransform spawn)
+	{
+		if (this.MuzzlePositions)
+		{
+			FObject muzzle;
+			int length = this.MuzzlePositions.Length;
+			if (length > 0)
+			{
+				if (this.MuzzleIndex >= length)
+					this.MuzzleIndex = 0;
+
+				int index = this.MuzzleIndex;
+				muzzle.Reference = this.MuzzlePositions.Get(index);
+				spawn.Position = muzzle.GetPosition();
+
+				this.MuzzleIndex++;
+
+				return true;
+			}
+			else
+			{
+				char name[64];
+				this.GetDisplayName(name, sizeof name);
+				LogMessage("No muzzle positions found for weapon %s!", name);
+			}
+		}
+
+		return false;
+	}
+
 	public void Destroy()
 	{
+		// Clear our muzzle attachments
+		if (this.MuzzlePositions)
+		{
+			int length = this.MuzzlePositions.Length;
+			for (int i = 0; i < length; i++)
+			{
+				FObject muzzle;
+				muzzle.Reference = this.MuzzlePositions.Get(i);
+
+				if (muzzle.Valid())
+				{
+					muzzle.Kill();
+				}
+			}
+			delete this.MuzzlePositions;
+		}
+
+		// Remove this weapon from the given seat
 		ADrone parent = view_as<ADrone>(this.GetParent())
 		if (parent.IsDrone)
 		{
