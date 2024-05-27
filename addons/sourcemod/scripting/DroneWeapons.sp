@@ -173,7 +173,7 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, player);
+	end = GetDroneAimPosition(drone, player.GetEyeAngles());
 
 	// Now fire our bullets
 	int bullets = weapon.ProjPerShot;
@@ -192,8 +192,8 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 
 		FVector direction;
 		FRotator angle;
-		Vector_Subtract(end, start, direction);
-		Vector_GetAngles(direction, angle);
+		direction = Vector_Subtract(end, start);
+		angle = Vector_GetAngles(direction);
 
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
@@ -224,7 +224,7 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, player);
+	end = GetDroneAimPosition(drone, player.GetEyeAngles());
 
 	// Now fire our rockets
 	int rockets = weapon.ProjPerShot;
@@ -244,8 +244,8 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 
 		FVector direction;
 		FRotator angle;
-		Vector_Subtract(end, start, direction);
-		Vector_GetAngles(direction, angle);
+		direction = Vector_Subtract(end, start);
+		angle = Vector_GetAngles(direction);
 
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
@@ -261,12 +261,12 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 	}
 }
 
-FVector GetDroneAimPosition(ADrone drone, ADronePlayer player)
+FVector GetDroneAimPosition(ADrone drone, FRotator rotation)
 {
 	FVector start, direction, end;
 	start = GetCameraOffset(drone);
 
-	direction = player.GetEyeAngles().GetForwardVector();
+	direction = rotation.GetForwardVector();
 	direction.Scale(8000.0);
 	direction.Add(start);
 
@@ -401,3 +401,112 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 	Call_Finish();
 }
 */
+
+
+// AI Controller Functions
+void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
+{
+	FVector start, end;
+	start = GetCameraOffset(drone);
+	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+
+	// Now fire our bullets
+	int bullets = weapon.ProjPerShot;
+	FTransform muzzle;
+	for (int i = 0; i < bullets; i++)
+	{
+		if (weapon.GetNextMuzzleTransform(muzzle))
+		{
+			FVector velocity;
+			velocity = drone.GetVelocity();
+			velocity.Scale(0.1);
+			muzzle.Position.Add(velocity);
+
+			start = muzzle.Position;
+		}
+
+		FVector direction;
+		FRotator angle;
+		direction = Vector_Subtract(end, start);
+		angle = Vector_GetAngles(direction);
+
+		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+
+		direction = angle.GetForwardVector();
+		direction.Scale(8000.0);
+		direction.Add(start);
+
+		FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+		//trace.DebugTrace();
+		if (trace.DidHit())
+		{
+			FObject hitEnt;
+			hitEnt = trace.GetHitEntity();
+			if (hitEnt.Valid())
+			{
+				int attacker = drone.Get();
+				// Check for an owner
+				AClient owner = ai.Owner;
+				if (owner)
+					attacker = owner.Get();
+				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), attacker, weapon.Damage);
+			}
+		}
+		end = trace.GetEndPosition();
+		delete trace;
+
+		CreateTracer(start, end);
+	}
+}
+
+void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
+{
+	FVector start, end;
+	start = GetCameraOffset(drone);
+	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+
+	// Now fire our rockets
+	int rockets = weapon.ProjPerShot;
+	FTransform muzzle;
+	for (int i = 0; i < rockets; i++)
+	{
+		if (weapon.GetNextMuzzleTransform(muzzle))
+		{
+			/*
+			FVector velocity;
+			velocity = drone.GetVelocity();
+			velocity.Scale(0.075);
+			muzzle.Position.Add(velocity);
+			*/
+			start = muzzle.Position;
+		}
+
+		FVector direction;
+		FRotator angle;
+		direction = Vector_Subtract(end, start);
+		angle = Vector_GetAngles(direction);
+
+		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
+
+		URocket rocket = URocket();
+		rocket.Damage = weapon.Damage;
+		rocket.Team = view_as<int>(drone.Team);
+		FGameplayStatics.FinishSpawn(rocket.GetObject(), muzzle);
+
+		FObject owner;
+		if (ai.Owner)
+		{
+			owner = ai.Owner.GetObject();
+		}
+		else
+		{
+			owner = drone.GetObject();
+		}
+		rocket.SetOwner(owner);
+
+		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
+	}
+}
+

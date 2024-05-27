@@ -900,124 +900,140 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 void SimulateSeat(FDroneSeat seat, ADrone drone)
 {
-	if (seat.AIControlled)
+	if (!seat.AIControlled)
 	{
-		return;
+		ADronePlayer client = seat.Occupier;
+
+		if (client)
+		{
+			// Prepare displays for drone pilot
+			int droneHp = drone.Health;
+			ADroneWeapon activeWeapon = seat.ActiveWeapon;
+
+			int buttons = client.Inputs;
+
+			char ammo[32], hudString[256];
+			char weapName[64];
+			if (activeWeapon)
+			{
+				//PrintCenterTextAll("Weapon Handle: %x\nWeapon Entity: %d", activeWeapon, activeWeapon.Get());
+				FormatAmmoString(activeWeapon, ammo, sizeof ammo);
+				activeWeapon.GetDisplayName(weapName, sizeof weapName);
+
+				activeWeapon.Simulate();
+			}
+
+			SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
+			FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
+			ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
+
+			// Setup player position to given seat
+			FVector position;
+			position = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), seat.GetSeatPosition());
+
+			TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, {0.0, 0.0, 0.0});
+
+			switch (seat.Type)
+			{
+				case Seat_Gunner: // handling weapons for this seat
+				{
+					if (buttons & IN_ATTACK)
+					{
+						OnDroneAttack(client, activeWeapon, drone, seat);
+						buttons &= ~IN_ATTACK; // Prevent player attacking
+					}
+					if (buttons & IN_ATTACK2)
+					{
+						CycleNextWeapon(seat);
+						buttons &= ~IN_ATTACK2;
+					}
+
+					FRotator viewAngles;
+					viewAngles = client.GetEyeAngles();
+
+					OnDroneAimChanged(viewAngles, seat, drone);
+				}
+				case Seat_Pilot: // Mostly movement, can also control specific weapons
+				{
+					if (buttons & IN_ATTACK)
+					{
+						OnDroneAttack(client, activeWeapon, drone, seat);
+						buttons &= ~IN_ATTACK; // Prevent player attacking
+					}
+					if (buttons & IN_ATTACK2)
+					{
+						CycleNextWeapon(seat);
+						buttons &= ~IN_ATTACK2;
+					}
+
+					// Drone movement
+					float maxSpeed = drone.MaxSpeed;
+
+					float inputVal = 0.0;
+					FVector velocity, speeds;
+					speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
+
+					bool zeroForward = false;
+
+					// Forward and backward
+					if (buttons & IN_FORWARD)
+						inputVal = 1.0;
+					else if (buttons & IN_BACK) // Forward takes priority
+						inputVal = -1.0;
+					else
+						zeroForward = true;
+
+					OnDroneMoveForward(drone, inputVal, speeds, velocity, maxSpeed, zeroForward);
+
+					inputVal = 0.0;
+
+					bool zeroRight = false;
+
+					// Left and right
+					if (buttons & IN_MOVERIGHT)
+						inputVal = 1.0;
+					else if (buttons & IN_MOVELEFT) // Right takes priority
+						inputVal = -1.0;
+					else
+						zeroRight = true;
+
+					OnDroneMoveRight(drone, inputVal, speeds, velocity, maxSpeed, zeroRight);
+
+					inputVal = 0.0;
+
+					bool zeroUp = false;
+					// Up and down
+					if (buttons & IN_JUMP)
+						inputVal = 1.0;
+					else if (buttons & IN_DUCK)
+						inputVal = -1.0;
+					else
+						zeroUp = true;
+
+					OnDroneMoveUp(drone, inputVal, speeds, velocity, maxSpeed, zeroUp);
+
+					drone.SetInputVelocity(speeds);
+					//PrintCenterTextAll("Drone Vel: %.1f, %.1f, %.1f", velocity.X, velocity.Y, velocity.Z);
+
+					FRotator viewAngles;
+					viewAngles = client.GetEyeAngles();
+
+					OnDroneAimChanged(viewAngles, seat, drone);
+					SimulateDrone(drone, velocity, maxSpeed);
+				}
+			}
+
+			return;
+		}
 	}
 
-	ADronePlayer client = seat.Occupier;
-
-	if (client)
+	// If no client, check for an AI Controller
+	if (seat.AIControlled)
 	{
-		// Prepare displays for drone pilot
-		int droneHp = drone.Health;
-		ADroneWeapon activeWeapon = seat.ActiveWeapon;
-
-		int buttons = client.Inputs;
-
-		char ammo[32], hudString[256];
-		char weapName[64];
-		if (activeWeapon)
+		FDroneAI ai = GetSeatController(seat);
+		if (ai)
 		{
-			//PrintCenterTextAll("Weapon Handle: %x\nWeapon Entity: %d", activeWeapon, activeWeapon.Get());
-			FormatAmmoString(activeWeapon, ammo, sizeof ammo);
-			activeWeapon.GetDisplayName(weapName, sizeof weapName);
-
-			activeWeapon.Simulate();
-		}
-
-		SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
-		FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
-		ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
-
-		// Setup player position to given seat
-		FVector position;
-		position = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), seat.GetSeatPosition());
-
-		TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, {0.0, 0.0, 0.0});
-
-		switch (seat.Type)
-		{
-			case Seat_Gunner: // handling weapons for this seat
-			{
-				if (buttons & IN_ATTACK)
-				{
-					OnDroneAttack(client, activeWeapon, drone);
-					buttons &= ~IN_ATTACK; // Prevent player attacking
-				}
-				if (buttons & IN_ATTACK2)
-				{
-					CycleNextWeapon(seat);
-					buttons &= ~IN_ATTACK2;
-				}
-
-				OnDroneAimChanged(client, seat, drone);
-			}
-			case Seat_Pilot: // Mostly movement, can also control specific weapons
-			{
-				if (buttons & IN_ATTACK)
-				{
-					OnDroneAttack(client, activeWeapon, drone);
-					buttons &= ~IN_ATTACK; // Prevent player attacking
-				}
-				if (buttons & IN_ATTACK2)
-				{
-					CycleNextWeapon(seat);
-					buttons &= ~IN_ATTACK2;
-				}
-
-				// Drone movement
-				float maxSpeed = drone.MaxSpeed;
-
-				float inputVal = 0.0;
-				FVector velocity, speeds;
-				speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
-
-				bool zeroForward = false;
-
-				// Forward and backward
-				if (buttons & IN_FORWARD)
-					inputVal = 1.0;
-				else if (buttons & IN_BACK) // Forward takes priority
-					inputVal = -1.0;
-				else
-					zeroForward = true;
-
-				OnDroneMoveForward(drone, inputVal, speeds, velocity, maxSpeed, zeroForward);
-
-				inputVal = 0.0;
-
-				bool zeroRight = false;
-
-				// Left and right
-				if (buttons & IN_MOVERIGHT)
-					inputVal = 1.0;
-				else if (buttons & IN_MOVELEFT) // Right takes priority
-					inputVal = -1.0;
-				else
-					zeroRight = true;
-
-				OnDroneMoveRight(drone, inputVal, speeds, velocity, maxSpeed, zeroRight);
-
-				inputVal = 0.0;
-
-				bool zeroUp = false;
-				// Up and down
-				if (buttons & IN_JUMP)
-					inputVal = 1.0;
-				else if (buttons & IN_DUCK)
-					inputVal = -1.0;
-				else
-					zeroUp = true;
-
-				OnDroneMoveUp(drone, inputVal, speeds, velocity, maxSpeed, zeroUp);
-
-				drone.SetInputVelocity(speeds);
-				//PrintCenterTextAll("Drone Vel: %.1f, %.1f, %.1f", velocity.X, velocity.Y, velocity.Z);
-
-				OnDroneAimChanged(client, seat, drone);
-				SimulateDrone(drone, velocity, maxSpeed);
-			}
+			SimulateController(ai, seat, drone);
 		}
 	}
 }

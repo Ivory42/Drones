@@ -30,11 +30,11 @@ methodmap ADrone < AComponent
 	public FDroneComponents GetComponents()
 	{
 		FDroneComponents components;
-		this.GetArray("Drone_Components", components, sizeof components);
+		this.GetArray("Drone_Components", components, sizeof FDroneComponents);
 
 		return components;
 	}
-	public void SetComponents(FDroneComponents components) { this.SetArray("Drone_Components", components, sizeof components); }
+	public void SetComponents(FDroneComponents components) { this.SetArray("Drone_Components", components, sizeof FDroneComponents); }
 
 	public void GetDisplayName(char[] name, int size) { this.GetObjectPropString("Drone_DisplayName", name, size); }
 	public void SetDisplayName(const char[] name) { this.SetObjectPropString("Drone_DisplayName", name); }
@@ -137,6 +137,12 @@ methodmap ADrone < AComponent
 		public set(bool lock) { this.SetObjectProp("Drone_LockAngles", lock); }
 	}
 
+	property TFTeam Team
+	{
+		public get() { return view_as<TFTeam>(this.GetObjectProp("Drone_Team")); }
+		public set(TFTeam value) { this.SetObjectProp("Drone_Team", value); }
+	}
+
 	property EMoveType MoveType // Movement type of this drone. Determines how the drone will behave when piloted.
 	{
 		public get() { return view_as<EMoveType>(this.GetObjectProp("Drone_MovementMode")); }
@@ -175,7 +181,7 @@ methodmap ADrone < AComponent
 
 		if (this.Seats)
 		{
-			//ClearSeats(this.Seats);
+			ClearSeats(this.Seats);
 			delete this.Seats;
 		}
 
@@ -186,6 +192,24 @@ methodmap ADrone < AComponent
 		}
 	}
 
+}
+
+stock void ClearSeats(ArrayList seats)
+{
+	if (seats.Length > 0)
+	{
+		for (int i = 0; i < seats.Length; i++)
+		{
+			FDroneSeat seat = view_as<FDroneSeat>(seats.Get(i));
+			if (seat)
+			{
+				seat.ClearComponents();
+				delete seat;
+			}
+		}
+	}
+
+	delete seats;
 }
 
 stock void CreateExplosion(float damage, float radius, FObject owner, const char[] particle, const char[] sound, FTransform spawn, int soundlevel = 95)

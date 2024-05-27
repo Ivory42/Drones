@@ -299,6 +299,7 @@ any EntNative_RegisterEntity(Handle plugin, int args)
 		char name[64];
 		GetPluginFilename(plugin, name, sizeof name);
 		LogMessage("Plugin %s attempted to register an invalid entity (%d). Aborting.", name, entity.Get());
+		return 0;
 	}
 
 	ABaseEntity actor = CreateBaseEntity(entity, ConstructObject(0));

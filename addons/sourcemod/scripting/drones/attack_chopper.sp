@@ -9,7 +9,7 @@ public Plugin MyInfo = {
 	version 		= 	"1.0"
 };
 
-public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, int& ammo, const char[] name)
+public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, FDroneSeat seat, int& ammo, const char[] name)
 {
 	APulseCannon cannon = view_as<APulseCannon>(weapon);
 	if (cannon.IsPulseCannon)
@@ -20,12 +20,13 @@ public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon w
 			cannon.GetChargeSound(sound, sizeof sound);
 			cannon.Charging = true;
 
-			EmitSoundToAll(sound, weapon.Get(), SNDCHAN_AUTO, 120);
+			EmitSoundToAll(sound, weapon.Get(), SNDCHAN_AUTO, 90);
 
 			SDroneStruct data = new SDroneStruct();
 			data.Drone = drone;
 			data.Player = gunner;
 			data.Weapon = cannon;
+			data.Seat = seat;
 			CreateTimer(cannon.WindupTime, PulseCannonCharge, data, TIMER_FLAG_NO_MAPCHANGE);
 		}
 		else if (cannon.Firing)
@@ -75,13 +76,14 @@ Action PulseCannonFire(Handle timer, SDroneStruct data)
 			data.Weapon = null;
 			data.Player = null;
 			data.Drone = null;
+			data.Seat = null;
 			delete data;
 			return Plugin_Stop;
 		}
 
 		ADrone drone = data.Drone;
 		ADronePlayer player = data.Player;
-		FDroneStatics.FireBullets(player, drone, cannon);
+		FDroneStatics.FireBullets(player, drone, cannon, data.Seat);
 
 		cannon.Ammo--;
 		if (cannon.Ammo <= 0)
@@ -91,6 +93,7 @@ Action PulseCannonFire(Handle timer, SDroneStruct data)
 			data.Weapon = null;
 			data.Player = null;
 			data.Drone = null;
+			data.Seat = null;
 			delete data;
 			return Plugin_Stop;
 		}
@@ -195,6 +198,49 @@ public void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer player, FDroneSeat
 			chopper.GetEngineSound(sound, sizeof sound);
 			EmitSoundToAll(sound, drone.Get(), SNDCHAN_AUTO, 80);
 		}
+	}
+}
+
+public void CD2_OnAIControlDrone(ADrone drone, FDroneAI ai, FDroneSeat seat)
+{
+	if (seat == GetPilotSeat(drone))
+	{
+		AHunterChopper chopper = view_as<AHunterChopper>(drone);
+		if (chopper.IsChopper)
+		{
+			FObject model;
+			model = chopper.GetModelEntity();
+
+			if (model.Valid())
+			{
+				SetVariantString("idle");
+				model.Input("SetAnimation");
+			}
+
+			char sound[64];
+			chopper.GetEngineSound(sound, sizeof sound);
+			EmitSoundToAll(sound, drone.Get(), SNDCHAN_AUTO, 80);
+		}
+	}
+}
+
+public void CD2_OnDroneRemoved(ADrone drone, const char[] name)
+{
+	AHunterChopper chopper = view_as<AHunterChopper>(drone);
+	if (chopper.IsChopper)
+	{
+		char sound[64];
+		chopper.GetEngineSound(sound, sizeof sound);
+		StopSound(drone.Get(), SNDCHAN_AUTO, sound);
+	}
+}
+
+public void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name)
+{
+	APulseCannon cannon = view_as<APulseCannon>(weapon);
+	if (cannon.IsPulseCannon)
+	{
+		EndFire(cannon);
 	}
 }
 

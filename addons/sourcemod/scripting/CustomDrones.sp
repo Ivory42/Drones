@@ -4,18 +4,20 @@
 GlobalForward DroneCreated;
 GlobalForward DroneEntered;
 GlobalForward DroneExited;
-//GlobalForward DroneRemoved;
+GlobalForward DroneRemoved;
 GlobalForward DroneDestroyed;
 //GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 GlobalForward DroneCreatedWeapon;
-//GlobalForward DroneWeaponDestroyed;
+GlobalForward DroneWeaponRemoved;
 
 #include "DroneProperties.sp"
 #include "DroneNatives.sp"
 
 #include "DroneController.sp"
 #include "DroneWeapons.sp"
+
+#include "DroneAI.sp"
 
 public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones 2",
@@ -34,13 +36,14 @@ public void OnPluginStart()
 	//Forwards
 	DroneCreated = CreateGlobalForward("CD2_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_Any); //drone, plugin, config
 	DroneCreatedWeapon = CreateGlobalForward("CD2_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_Any); //drone, weapon, weapon plugin, config
-	//DroneWeaponDestroyed = CreateGlobalForward("CD2_OnWeaponDestroyed", ET_Ignore, Param_Any, Param_Any, Param_String, Param_String); //drone, weapon, weapon plugin, config
-	DroneEntered = CreateGlobalForward("CD2_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Any, Param_Any, Param_String, Param_Any); //drone, client, seat, plugin, config
-	DroneExited = CreateGlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any, Param_String, Param_Any); //drone struct, client, seat, plugin, config
-	//DroneRemoved = CreateGlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
+	DroneWeaponRemoved = CreateGlobalForward("CD2_OnWeaponRemoved", ET_Ignore, Param_Any, Param_String); //weapon, weaponname
+	DroneEntered = CreateGlobalForward("CD2_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone, client, seat, plugin, config
+	DroneExited = CreateGlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone struct, client, seat, plugin, config
+	DroneRemoved = CreateGlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	//DroneChangeWeapon = CreateGlobalForward("CD2_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
 	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float); //drone, attacker, float
-	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
+	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
+	DroneAIEnter = CreateGlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
 }
 
 public void OnMapStart()
@@ -249,6 +252,14 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 	ADroneWeapon weapon = view_as<ADroneWeapon>(entity);
 	if (weapon.IsDroneWeapon)
 	{
+		char name[64];
+		weapon.GetInternalName(name, sizeof name);
+		Call_StartForward(DroneWeaponRemoved);
+
+		Call_PushCell(weapon);
+		Call_PushString(name);
+
+		Call_Finish();
 		weapon.Destroy();
 	}
 
@@ -258,6 +269,16 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 		ADronePlayer player = drone.Pilot;
 		if (player)
 			PlayerExitVehicle(player, GetPilotSeat(drone), drone);
+
+		char name[64];
+		drone.GetInternalName(name, sizeof name);
+
+		Call_StartForward(DroneRemoved);
+
+		Call_PushCell(drone);
+		Call_PushString(name);
+
+		Call_Finish();
 		drone.Destroy();
 	}
 }
@@ -345,7 +366,8 @@ int DroneMenuCallback(Menu menu, MenuAction action, int client, int param1)
 			char info[32];
 			menu.GetItem(param1, info, sizeof(info));
 			
-			CreateDroneByName(ConstructClient(client), info, ConstructVector());
+			FTransform spawn;
+			CreateDroneByName(ConstructClient(client), info, spawn);
 		}
 	}
 	return 0;
@@ -359,7 +381,7 @@ int DroneMenuCallback(Menu menu, MenuAction action, int client, int param1)
  * @param spawnPos	Spawn position if not spawning for a client
  * @return          Object containing the drone information
  */
-ADrone CreateDroneByName(FClient owner, const char[] name, const FVector spawnPos)
+ADrone CreateDroneByName(FClient owner, const char[] name, const FTransform spawnPos)
 {
 	char Directory[PLATFORM_MAX_PATH];
 	char FileName[PLATFORM_MAX_PATH];
@@ -390,7 +412,7 @@ ADrone CreateDroneByName(FClient owner, const char[] name, const FVector spawnPo
 }
 
 // Prepare our drone to be spawned
-void SpawnDrone(FClient owner, const char[] name, const FVector spawnPos, ADrone &drone)
+void SpawnDrone(FClient owner, const char[] name, const FTransform spawnPos, ADrone &drone)
 {
 	//PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
@@ -408,7 +430,7 @@ void SpawnDrone(FClient owner, const char[] name, const FVector spawnPos, ADrone
 
 	if (IsWorld(owner))
 	{
-		spawn.Position = spawnPos;
+		spawn = spawnPos;
 	}
 	else
 	{

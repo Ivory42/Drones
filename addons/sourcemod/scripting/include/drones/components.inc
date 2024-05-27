@@ -500,6 +500,18 @@ methodmap FDroneSeat < StringMap
 		public set(bool value) { this.SetValue("SeatControlledByAI", value); }
 	}
 
+	property FDroneAI AIOccupier
+	{
+		public get()
+		{
+			FDroneAI ai;
+			this.GetValue("AIControllerObject", ai);
+
+			return ai;
+		}
+		public set(FDroneAI ai) { this.SetValue("AIControllerObject", ai); }
+	}
+
 	property ADronePlayer Occupier // Client occupying this seat
 	{
 		public get()
@@ -601,6 +613,14 @@ methodmap FDroneSeat < StringMap
 			return false;
 
 		return (this.ActiveWeapon != null);
+	}
+
+	public void ClearComponents()
+	{
+		if (this.AIControlled && this.AIOccupier)
+		{
+			delete this.AIOccupier;
+		}
 	}
 }
 

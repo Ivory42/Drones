@@ -6,6 +6,7 @@
 #define MAX_DRONE_LENGTH 32
 
 #include "drones/drone.inc"
+#include "drones/ai.inc"
 
 // StringMap wrapped to support drone objects. This can be used like a struct except it can be passed through timers.
 methodmap SDroneStruct < StringMap
@@ -51,6 +52,18 @@ methodmap SDroneStruct < StringMap
 			return weapon;
 		}
 	}
+
+	property FDroneSeat Seat
+	{
+		public set(FDroneSeat seat) { this.SetValue("PackedSeat", seat); }
+		public get()
+		{
+			FDroneSeat seat = null;
+			this.GetValue("PackedSeat", seat);
+
+			return seat;
+		}
+	}
 }
 
 
@@ -66,8 +79,9 @@ methodmap FDroneStatics
 	* @param gunner		Client firing this weapon
 	* @param drone		Drone that the weapon is attached to
 	* @param weapon		Weapon firing this attack
+	* @param seat		Seat firing this weapon
 	*/
-	public static native void FireBullets(ADronePlayer gunner, ADrone drone, ADroneWeapon weapon);
+	public static native void FireBullets(ADronePlayer gunner, ADrone drone, ADroneWeapon weapon, FDroneSeat seat);
 
 	/**
  	* Fire the current drone's active weapon
@@ -75,6 +89,23 @@ methodmap FDroneStatics
 	* @param seat	Seat to fire the active weapon for
 	*/
 	public static native void FireActiveWeapon(FDroneSeat seat);
+
+	/**
+	 * Spawns a drone with the given config name
+	 * 
+	 * @param config		Drone config to spawn
+	 * @param spawn			Spawn transform for this drone
+	 */
+	public static native ADrone SpawnDroneByConfig(char[] config, any spawn[sizeof FTransform]);
+
+	/**
+	 * Occupies a drone seat with an AI controller
+	 * 
+	 * @param drone			Drone being entered
+	 * @param seat			Drone seat to occupy
+	 * @param ai			AI controller to occupy the seat with
+	 */
+	public static native ADrone AIControlDroneSeat(ADrone drone, FDroneSeat seat, FDroneAI ai);
 }
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
@@ -287,6 +318,15 @@ forward void CD2_OnWeaponCreated(ADrone drone, ADroneWeapon weapon, const char[]
 forward void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
 /**
+ * Forward called after an AI takes control of a drone seat
+ *
+ * @param drone				Drone being entered
+ * @param ai				AI controller assuming control
+ * @param seat				Seat being entered
+ */
+forward void CD2_OnAIControlDrone(ADrone drone, FDroneAI ai, FDroneSeat seat);
+
+/**
  * Forward called after a player exits a drone
  *
  * @param drone		Drone being exited
@@ -296,12 +336,20 @@ forward void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSea
 forward void CD2_OnPlayerExitDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
 /**
- * Forward called after a drone is removed
+ * Forward called right before a drone is removed
  *
- * @param drone				Drone index being removed
- * @param plugin_name		Name of plugin defined in config
+ * @param drone				Drone being removed
+ * @param name				Internal name of the drone
  */
-//forward void CD_OnDroneRemoved(int drone, const char[] plugin_name);
+forward void CD2_OnDroneRemoved(ADrone drone, const char[] name);
+
+/**
+ * Forward called right before a weapon is removed
+ *
+ * @param weapon			Weapon being removed
+ * @param name				Internal name of the weapon
+ */
+forward void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name);
 
 /**
  * Forward called after a drone switches weapons
@@ -333,12 +381,13 @@ forward void CD2_OnPlayerExitDrone(ADrone drone, ADronePlayer client, FDroneSeat
  * @param drone				Drone owning this weapon
  * @param gunner			Client that fired this weapon
  * @param weapon			Weapon being fired
+ * @param seat				Seat firing this weapon
  * @param ammo				Ammo being consumed upon weapon fire
  * @param name				Internal name for the weapon being fired
  *
  * @return					How to handle ammo consumption: Plugin_Continue expends 1 ammo. Plugin_Changed expends the value ammo was set to. Plugin_Stop/Plugin_Handled will not expend any ammo
  */
-forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, int& ammo, const char[] name);
+forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, FDroneSeat seat, int& ammo, const char[] name);
 
 
 

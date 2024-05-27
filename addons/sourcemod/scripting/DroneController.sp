@@ -1,6 +1,6 @@
 #pragma semicolon 1
 
-void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone)
+void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDroneSeat seat)
 {
 	if (weapon.CanFire())
 	{
@@ -25,6 +25,63 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone)
 				Call_PushCell(drone);
 				Call_PushCell(client);
 				Call_PushCell(weapon);
+				Call_PushCell(seat);
+				Call_PushCellRef(newAmmo);
+				Call_PushString(weaponName);
+
+				Call_Finish(action);
+
+				if (action == Plugin_Changed)
+				{
+					ammoReduce = newAmmo;
+				}
+				else if (action == Plugin_Handled || action == Plugin_Stop)
+					return;
+			}
+		}
+		char fireSound[64];
+		weapon.GetFireSound(fireSound, sizeof fireSound);
+		if (strlen(fireSound) > 3)
+		{
+			PrecacheSound(fireSound);
+			EmitSoundToAll(fireSound, weapon.Get(), SNDCHAN_AUTO, 90);
+		}
+
+		if (weapon.BottomlessAmmo)
+			return;
+
+		weapon.Ammo -= ammoReduce;
+		if (weapon.Ammo <= 0)
+			weapon.SimulateReload();
+	}
+}
+
+void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat seat)
+{
+	if (weapon.CanFire())
+	{
+		if (weapon.FireRate > 0.0)
+			weapon.NextPrimaryAttack = GetGameTime() + (1.0 / weapon.FireRate);
+
+		int ammoReduce = 1;
+
+		switch (weapon.Type)
+		{
+			case WeaponType_Gun: DroneAIFireGun(drone, weapon, ai);
+			case WeaponType_Projectile: DroneAIFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), ai);
+			case WeaponType_Custom:
+			{
+				int newAmmo = 1;
+				Action action = Plugin_Continue;
+
+				char weaponName[64];
+				weapon.GetInternalName(weaponName, sizeof weaponName);
+				Call_StartForward(DroneAttack);
+
+				Call_PushCell(drone);
+				Call_PushCell(GetWorldSpawn());
+				Call_PushCell(weapon);
+				Call_PushCell(seat);
 				Call_PushCellRef(newAmmo);
 				Call_PushString(weaponName);
 
@@ -285,14 +342,13 @@ FRotator InterpRotation(FRotator current, FRotator target, float deltaTime, floa
 	return result.GetNormalized();
 }
 
-void OnDroneAimChanged(ADronePlayer client, FDroneSeat seat, ADrone drone)
+void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 {
 	if (!drone || !drone.Valid() || !drone.IsDrone)
 		return;
 
-	FRotator currentAngle, desiredAngle, playerAngles;
+	FRotator currentAngle, playerAngles;
 	currentAngle = drone.GetAngles();
-	desiredAngle = client.GetEyeAngles();
 
 	playerAngles = desiredAngle;
 
@@ -300,7 +356,7 @@ void OnDroneAimChanged(ADronePlayer client, FDroneSeat seat, ADrone drone)
 
 	switch (seat.Type)
 	{
-		case Seat_Pilot: // Look direction will control the drone's angles if the angles are locked to the client view angles
+		case Seat_Pilot: // Look direction will control the drone's angles if the angles are locked to the pilot view angles
 		{
 			if (drone.UsePlayerAngles)
 			{
