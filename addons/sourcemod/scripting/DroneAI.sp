@@ -309,7 +309,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	// This will be a hull trace eventually
 	FRayTraceSingle trace = new FRayTraceSingle(drone.GetPosition(), result, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
 	result = trace.GetEndPosition();
-	trace.DebugTrace();
+	//trace.DebugTrace();
 	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
 	{
 		FVector normal;
@@ -326,7 +326,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	end = result;
 	end.Z -= minHeight - 5.0;
 	trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
-	trace.DebugTrace();
+	//trace.DebugTrace();
 	if (trace.DidHit())
 	{
 		result = trace.GetEndPosition();
@@ -342,7 +342,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 		delete trace;
 		end.Z -= maxHeight;
 		trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone);
-		trace.DebugTrace();
+		//trace.DebugTrace();
 		if (!trace.DidHit())
 		{
 			end = GetGroundPosition(drone, end);
