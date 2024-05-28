@@ -292,6 +292,15 @@ bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 	if (entity == drone.Get())
 		return false;
 
+	char classname[64];
+	//Let's ignore drone props as well
+	ConstructObject(entity).GetClassname(classname, sizeof classname);
+
+	if (StrContains(classname, "prop_physics") != -1)
+	{
+		return false;
+	}
+
 	if (drone.Pilot && entity == drone.Pilot.Get())
 		return false;
 	

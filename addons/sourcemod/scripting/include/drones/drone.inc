@@ -19,6 +19,9 @@ enum struct FDroneComponents
 	char ExplodeSound[256];
 	char ExplodeParticle[256];
 
+	FVector MinBounds;
+	FVector MaxBounds;
+
 	void GetModel(char[] model, int size)
 	{
 		FormatEx(model, size, this.ModelName);
@@ -89,10 +92,16 @@ methodmap ADrone < AComponent
 		public set(float speed) { this.SetObjectPropFloat("Drone_MaxMoveSpeed", speed); }
 	}
 
-	property float Acceleration // Rate at which this drone can accelerate when moving. This also affects deceleration
+	property float Acceleration // Rate at which this drone can accelerate when moving from a stand still.
 	{
 		public get() { return this.GetObjectPropFloat("Drone_Acceleration"); }
 		public set(float accel) { this.SetObjectPropFloat("Drone_Acceleration", accel); }
+	}
+
+	property float Deceleration // Rate at which this drone changes directions or comes to a stop.
+	{
+		public get() { return this.GetObjectPropFloat("Drone_Deceleration"); }
+		public set(float accel) { this.SetObjectPropFloat("Drone_Deceleration", accel); }
 	}
 
 	property float TurnRate // How fast this drone rotates towards the player's view angles
@@ -203,6 +212,11 @@ stock void ClearSeats(ArrayList seats)
 			FDroneSeat seat = view_as<FDroneSeat>(seats.Get(i));
 			if (seat)
 			{
+				if (seat.AIControlled)
+				{
+					seat.AIOccupier.ClearAIParams();
+					delete seat.AIOccupier;
+				}
 				seat.ClearComponents();
 				delete seat;
 			}

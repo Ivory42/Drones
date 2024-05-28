@@ -32,7 +32,7 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 			if (ai.CurrentState != Controller_Attacking)
 				ai.SetTargetAngle(Vector_GetAngles(moveDir));
 					
-			CalcMovementVector(drone, velocity, moveDir);
+			CalcMovementVector(ai, drone, velocity, moveDir);
 
 			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < 200.0)
 			{
@@ -103,7 +103,7 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						{
 							// Get a random position around the drone to move to
 							FVector movePos;
-							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 300.0, 450.0, 700.0);
+							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 800.0, 250.0, 600.0);
 							ai.SetMovePosition(movePos);
 							ai.Moving = true;
 						}
@@ -114,8 +114,16 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						if (GetRandomInt(1, 10) > 3)
 						{
 							FVector movePos;
-							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 300.0, 450.0, 700.0);
-							ai.SetMovePosition(movePos);
+							movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), 800.0, 400.0, 250.0, 250.0);
+							FRotator velocityRot, direction;
+							velocityRot = Vector_GetAngles(drone.GetVelocity());
+							direction = Vector_GetAngles(movePos);
+
+							float angle = FMath.GetAngle(velocityRot, direction);
+							if (angle < 90.0) // Do not completely change direction while already moving
+							{
+								ai.SetMovePosition(movePos);
+							}
 						}
 					}
 				}
@@ -144,7 +152,7 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 							FVector targetPos;
 							targetPos = target.GetPosition();
 							targetPos.Z += 150.0;
-							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 700.0);
+							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 500.0);
 
 							ai.SetMovePosition(movePosition);
 							ai.NextMovementTime = GetGameTime() + ai.IdleTime * 2.0; // double our next move time
@@ -156,11 +164,6 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 		case Controller_Attacking:
 		{
 			bool moveTick = false;
-			if (ai.NextMovementTime <= GetGameTime())
-			{
-				ai.NextMovementTime = GetGameTime() + ai.IdleTime;
-				moveTick = true;
-			}
 
 			if (seat.HasWeapon() && weapon)
 			{
@@ -183,13 +186,18 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 							target = FindClosestTarget(drone);
 						}
 
+						if (ai.NextMovementTime <= GetGameTime())
+						{
+							moveTick = true;
+						}
+
 						if (moveTick && !ai.Moving)
 						{
 							FVector movePosition;
 							FVector targetPos;
 							targetPos = target.GetPosition();
 							targetPos.Z += 150.0;
-							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 700.0);
+							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 250.0, 500.0);
 
 							ai.SetMovePosition(movePosition);
 							ai.Moving = true;
@@ -216,6 +224,11 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						ai.CurrentTarget = null;
 						ai.CurrentState = Controller_Idle; // return to idle for now
 					}
+				}
+
+				if (moveTick)
+				{
+					ai.NextMovementTime = GetGameTime() + ai.IdleTime;
 				}
 
 				if (ai.InAttack)
@@ -254,13 +267,28 @@ void ClampVector(FVector vector, float magnitude)
 	}
 }
 
-void CalcMovementVector(ADrone drone, FVector velocity, FVector direction)
+void CalcMovementVector(FDroneAI ai, ADrone drone, FVector velocity, FVector direction)
 {
-	//float maxSpeed = drone.MaxSpeed;
+	float scale = drone.Acceleration;
+
+	// Check if we should be decelerating first
+	if (ai.Moving)
+	{
+		FRotator velRotation, inputRotation;
+		velRotation = Vector_GetAngles(drone.GetVelocity());
+		inputRotation = Vector_GetAngles(direction);
+
+		float angle = FMath.GetAngle(velRotation, inputRotation);
+		if (angle > 45.0)
+		{
+			scale = drone.Deceleration;
+		}
+	}
+
 	FVector currentVel, inputVel;
 	currentVel = direction;
 	currentVel.Normalize();
-	currentVel.Scale(1.25);
+	currentVel.Scale(scale);
 
 	inputVel = drone.GetInputVelocity();
 	inputVel.Add(currentVel);
@@ -306,8 +334,16 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 		result.Z += GetRandomFloat(-radius, radius);
 	}
 
-	// This will be a hull trace eventually
-	FRayTraceSingle trace = new FRayTraceSingle(drone.GetPosition(), result, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
+	if (maxHeight && maxHeight < radius) // Limit our height if applicable. we dont care about having a minimum distance for this
+	{
+		result.Z = location.Z;
+		result.Z += GetRandomFloat(-radius, maxHeight); // We can still travel down normally
+	}
+
+	FVector mins, maxs;
+	mins = drone.GetComponents().MinBounds;
+	maxs = drone.GetComponents().MaxBounds;
+	FHullTrace trace = new FHullTrace(drone.GetPosition(), result, mins, maxs, MASK_SHOT, DroneWeaponTrace, drone);
 	result = trace.GetEndPosition();
 	//trace.DebugTrace();
 	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
@@ -325,7 +361,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	FVector end;
 	end = result;
 	end.Z -= minHeight - 5.0;
-	trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
+	trace = new FHullTrace(result, end, mins, maxs, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
 	//trace.DebugTrace();
 	if (trace.DidHit())
 	{
@@ -337,21 +373,6 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 
 		result.Add(normal);
 	}
-	else // Now make sure we're not above our max height ceiling
-	{
-		delete trace;
-		end.Z -= maxHeight;
-		trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone);
-		//trace.DebugTrace();
-		if (!trace.DidHit())
-		{
-			end = GetGroundPosition(drone, end);
-			end.Z += maxHeight;
-
-			result = end;
-		}
-	}
-
 	delete trace;
 
 	return result;
@@ -377,6 +398,7 @@ FVector RandomUnitVector()
 	return result; 
 }
 
+/*
 FVector GetGroundPosition(ADrone drone, FVector position)
 {
 	FVector buffer;
@@ -389,6 +411,7 @@ FVector GetGroundPosition(ADrone drone, FVector position)
 
 	return buffer;
 }
+*/
 
 APersistentObject FindClosestTarget(ADrone drone, bool enemy = true)
 {

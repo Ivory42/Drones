@@ -367,13 +367,12 @@ forward void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name);
  * Forward called after a drone is destroyed but not yet removed
  *
  * @param drone				Drone object
- * @param pilot				Client object piloting the drone, can be null
- * @param attacker			Client object that killed the drone, can be null
- * @param damage			Damage dealt to drone
- * @param plugin_name		Name of plugin defining drone logic
+ * @param attacker			Entity that killed the drone, may be empty
+ * @param damage			Damage amount that killed the drone
+ * @param name				Internal name of the drone
  *
  */
-//forward void CD_OnDroneDestroyed(FObject drone, FClient pilot, FClient attacker, float damage, const char[] plugin_name);
+forward void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name);
 
 /**
  * Forward called after a weapon is fired

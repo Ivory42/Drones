@@ -213,6 +213,12 @@ methodmap FDroneAI < StringMap
 		public get() { return this.GetBool("DroneAI_Attacking"); }
 	}
 
+	property ArrayList QueryPositions
+	{
+		public set(ArrayList value) { this.SetValue("DroneAI_PositionsInMemory", value); }
+		public get() { return view_as<ArrayList>(this.GetObject("DroneAI_PositionsInMemory")); }
+	}
+
 	public FRotator GetViewAngle()
 	{
 		FRotator angle;
@@ -239,6 +245,15 @@ methodmap FDroneAI < StringMap
 		return pos;
 	}
 	public void SetMovePosition(FVector pos) { this.SetArray("DroneAI_NextMoveLocation", pos, sizeof FVector); }
+
+	public void ClearAIParams()
+	{
+		if(this.QueryPositions)
+		{
+			delete this.QueryPositions;
+		}
+	}
+
 }
 
 stock FDroneAI CreateDroneAIController(FDroneAIParams params)

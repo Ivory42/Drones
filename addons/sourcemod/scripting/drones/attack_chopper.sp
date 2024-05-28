@@ -229,10 +229,46 @@ public void CD2_OnDroneRemoved(ADrone drone, const char[] name)
 	AHunterChopper chopper = view_as<AHunterChopper>(drone);
 	if (chopper.IsChopper)
 	{
-		char sound[64];
-		chopper.GetEngineSound(sound, sizeof sound);
-		StopSound(drone.Get(), SNDCHAN_AUTO, sound);
+		KillEngine(chopper);
 	}
+}
+
+public void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name)
+{
+	AHunterChopper chopper = view_as<AHunterChopper>(drone);
+	if (chopper.IsChopper)
+	{
+		KillEngine(chopper);
+		// Loop through weapons and stop the pulse cannon
+
+		if (chopper.Weapons && chopper.Weapons.Length > 0)
+		{
+			for (int i = 0; i < chopper.Weapons.Length; i++)
+			{
+				APulseCannon cannon = view_as<APulseCannon>(chopper.Weapons.Get(i));
+				if (cannon && cannon.IsPulseCannon)
+				{
+					EndFire(cannon);
+				}
+			}
+		}
+	}
+}
+
+void KillEngine(AHunterChopper chopper)
+{
+	FObject model;
+	model = chopper.GetModelEntity();
+
+	if (model.Valid())
+	{
+		SetVariantString("reference");
+		model.Input("SetAnimation");
+	}
+
+	char sound[64];
+	chopper.GetEngineSound(sound, sizeof sound);
+	StopSound(chopper.Get(), SNDCHAN_AUTO, sound);
 }
 
 public void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name)
@@ -251,18 +287,7 @@ public void CD2_OnPlayerExitDrone(ADrone drone, ADronePlayer player, FDroneSeat 
 		AHunterChopper chopper = view_as<AHunterChopper>(drone);
 		if (chopper.IsChopper)
 		{
-			FObject model;
-			model = chopper.GetModelEntity();
-
-			if (model.Valid())
-			{
-				SetVariantString("reference");
-				model.Input("SetAnimation");
-			}
-
-			char sound[64];
-			chopper.GetEngineSound(sound, sizeof sound);
-			StopSound(drone.Get(), SNDCHAN_AUTO, sound);
+			KillEngine(chopper);
 		}
 	}
 }

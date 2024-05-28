@@ -820,6 +820,41 @@ bool FilterDrone(int entity, int mask, int exclude)
 }
 */
 
+Action OnDroneOverlap(int droneId, int otherId)
+{
+	// Push players away to prevent them from getting stuck
+	FObject drone;
+	FClient client;
+
+	drone = ConstructObject(droneId);
+	client = ConstructClient(otherId);
+
+	if (client.Valid())
+	{
+		FVector clientPos, dronePos, pushDir;
+		clientPos = client.GetPosition();
+		clientPos.Z += 40.0;
+
+		dronePos = drone.GetPosition();
+
+		pushDir = Vector_MakeFromPoints(dronePos, clientPos);
+		pushDir.Scale(200.0);
+
+		pushDir.Normalize();
+		pushDir.Scale(50.0);
+		clientPos = client.GetPosition();
+
+		clientPos.Add(pushDir);
+
+		FVector clientVel;
+		clientVel = client.GetVelocity();
+		clientVel.Add(pushDir);
+
+		TeleportEntity(otherId, clientPos.ToFloat(), NULL_VECTOR, clientVel.ToFloat());
+	}
+	return Plugin_Continue;
+}
+
 /*
  Drone damage handling
 */

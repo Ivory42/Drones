@@ -41,7 +41,7 @@ public void OnPluginStart()
 	DroneExited = CreateGlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone struct, client, seat, plugin, config
 	DroneRemoved = CreateGlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	//DroneChangeWeapon = CreateGlobalForward("CD2_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
-	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float); //drone, attacker, float
+	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float, Param_String); //drone, attacker, damage, name
 	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
 	DroneAIEnter = CreateGlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
 }
@@ -587,6 +587,9 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	char droneName[MAX_DRONE_LENGTH], pluginName[64];
 	FDroneComponents components;
 
+	components.MinBounds = Vector_GetFromKV(config, "min_hull");
+	components.MaxBounds = Vector_GetFromKV(config, "max_hull");
+
 	config.GetString("name", droneName, sizeof droneName);
 	config.GetString("model", components.ModelName, sizeof FDroneComponents::ModelName);
 	config.GetString("destroyed_model", components.DestroyedModel, sizeof FDroneComponents::DestroyedModel);
@@ -605,7 +608,8 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 
 	drone.MaxHealth = config.GetNum("health", 100);
 	drone.MaxSpeed = config.GetFloat("speed", 300.0);
-	drone.Acceleration = config.GetFloat("acceleration", 5.0);
+	drone.Acceleration = config.GetFloat("acceleration", 1.25);
+	drone.Deceleration = config.GetFloat("deceleration", 8.0);
 	//drone.SpeedOverride = 0.0;
 	drone.TurnRate = config.GetFloat("turn_rate", 80.0);
 
@@ -623,6 +627,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	{
 		drone.SetProp(Prop_Data, "m_takedamage", 1);
 		SDKHook(drone.Get(), SDKHook_OnTakeDamage, OnDroneDamaged);
+		SDKHook(drone.Get(), SDKHook_Touch, OnDroneOverlap);
 	}
 
 	drone.Health = drone.MaxHealth;
@@ -717,11 +722,14 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 	spawn.Position = drone.GetPosition();
 	CreateExplosion(50.0, 146.0, GetWorld().GetObject(), drone.GetComponents().ExplodeParticle, drone.GetComponents().ExplodeSound, spawn);
 
+	char name[64];
+	drone.GetInternalName(name, sizeof name);
 	Call_StartForward(DroneDestroyed);
 
 	Call_PushCell(drone);
 	Call_PushArray(attacker, sizeof FObject);
 	Call_PushFloat(damage);
+	Call_PushString(name);
 	
 	Call_Finish();
 }
