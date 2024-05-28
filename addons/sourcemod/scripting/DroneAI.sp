@@ -9,66 +9,163 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 		ai.NextThinkTime = GetGameTime() + ai.ThinkRate;
 		thinkTick = true;
 	}
+	switch (drone.MoveType)
+	{
+		case MoveType_Helo:
+		{
+			SimulateHeloAI(ai, seat, drone, thinkTick);
+		}
+		case MoveType_Fly:
+		{
 
-	// Check if this seat is a pilot, if it is we can control the movement of this drone
-	if (ai.IsPilot && seat.Type == Seat_Pilot)
+		}
+	}
+
+	if (seat.Type == Seat_Pilot)
 	{
 		FVector velocity;
-		if (thinkTick)
+		if (ai.Moving)
 		{
-			switch (ai.CurrentState)
-			{
-				case Controller_Idle:
-				{
-					// TODO - add different cases depending on the drone move type
-					//PrintCenterTextAll("NextMoveTime in %.1f", ai.NextMovementTime - GetGameTime());
-					if (ai.NextMovementTime <= GetGameTime())
-					{
-						ai.NextMovementTime = GetGameTime() + ai.IdleTime;
+			FVector moveDir;
+			moveDir = Vector_MakeFromPoints(drone.GetPosition(), ai.GetMovePosition());
 
-						ai.SetTargetAngle(FindNewLookAngle());
-					}
-				}
-				case Controller_Attacking:
-				{
-					//
-				}
+			if (ai.CurrentState != Controller_Attacking)
+				ai.SetTargetAngle(Vector_GetAngles(moveDir));
+					
+			CalcMovementVector(drone, velocity, moveDir);
+
+			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < 200.0)
+			{
+				ai.Moving = false;
+				//ai.NextMovementTime = GetGameTime() + ai.IdleTime;
 			}
 		}
+		else
+		{
+			FVector inputVel;
+			inputVel = drone.GetInputVelocity();
+			inputVel.Scale(0.92);
 
+			drone.SetInputVelocity(inputVel);
+
+			velocity.Add(inputVel);
+		}
+
+		CalcMovementTilt(drone);
 		SimulateDrone(drone, velocity, drone.MaxSpeed);
 	}
 
-	// If this seat has a weapon, and this controller is flagged as a gunner
-	if (ai.IsGunner && seat.HasWeapon())
+	// Now handle our view angles
+	if (seat)
 	{
-		FDroneAIParams params;
-		params = ai.GetControllerParams();
+		FRotator desiredAngle;
+		desiredAngle = currentAngle;
+		OnDroneAimChanged(desiredAngle, seat, drone);
 
-		APersistentObject target = ai.CurrentTarget;
-			
-		switch (ai.CurrentState)
+		currentAngle = FMath.InterpRotatorTo(currentAngle, ai.GetTargetAngle(), GetGameFrameTime(), 80.0);
+		ai.SetViewAngle(currentAngle);
+	}
+}
+
+void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
+{
+	FDroneAIParams params;
+	params = ai.GetControllerParams();
+
+	ADroneWeapon weapon = null;
+
+	if (seat.HasWeapon())
+	{
+		weapon = seat.ActiveWeapon;
+		weapon.Simulate();
+	}
+
+	switch (ai.CurrentState)
+	{
+		case Controller_Idle:
 		{
-			case Controller_Idle:
+			if (seat.Type == Seat_Pilot) // Pilot seat controls the drone's movement
 			{
+				bool moveTick = false;
+				if (ai.NextMovementTime <= GetGameTime())
+				{
+					ai.NextMovementTime = GetGameTime() + ai.IdleTime;
+					moveTick = true;
+				}
+				if (moveTick)
+				{
+					if (!ai.Moving)
+					{
+						// Either look around or move to a new position
+						if (GetRandomInt(1, 10) > 4)
+							ai.SetTargetAngle(FindNewLookAngle());
+						else
+						{
+							// Get a random position around the drone to move to
+							FVector movePos;
+							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 300.0, 450.0, 700.0);
+							ai.SetMovePosition(movePos);
+							ai.Moving = true;
+						}
+					}
+					else
+					{
+						// We can still change direction if we choose to
+						if (GetRandomInt(1, 10) > 3)
+						{
+							FVector movePos;
+							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 300.0, 450.0, 700.0);
+							ai.SetMovePosition(movePos);
+						}
+					}
+				}
+			}
+			// If this seat has a weapon, perform weapon checks
+			if (seat.HasWeapon())
+			{
+				APersistentObject target = ai.CurrentTarget;
+
 				if (thinkTick)
 				{
-					// Let's search for a target passively
+					// Search for a target
 					if (!target)
 					{
 						ai.CurrentTarget = FindClosestTarget(drone);
 					}
-					// Otherwise if we can see our target, enter attack state
+					// Otherwise enter attack state if we can see our target
 					else if (CanSeeTarget(drone, target))
 					{
 						ai.CurrentState = Controller_Attacking;
+
+						// Update our move position to be around our target
+						if (ai.Moving)
+						{
+							FVector movePosition;
+							FVector targetPos;
+							targetPos = target.GetPosition();
+							targetPos.Z += 150.0;
+							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 700.0);
+
+							ai.SetMovePosition(movePosition);
+							ai.NextMovementTime = GetGameTime() + ai.IdleTime * 2.0; // double our next move time
+						}
 					}
 				}
 			}
-			case Controller_Attacking:
+		}
+		case Controller_Attacking:
+		{
+			bool moveTick = false;
+			if (ai.NextMovementTime <= GetGameTime())
 			{
-				ADroneWeapon weapon = seat.ActiveWeapon;
-				weapon.Simulate();
+				ai.NextMovementTime = GetGameTime() + ai.IdleTime;
+				moveTick = true;
+			}
+
+			if (seat.HasWeapon() && weapon)
+			{
+				APersistentObject target = ai.CurrentTarget;
+
 				if (thinkTick)
 				{
 					if (target && CanSeeTarget(drone, target))
@@ -84,6 +181,18 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 						{
 							ai.NextCombatCheckTime = GetGameTime() + params.CombatTime;
 							target = FindClosestTarget(drone);
+						}
+
+						if (moveTick && !ai.Moving)
+						{
+							FVector movePosition;
+							FVector targetPos;
+							targetPos = target.GetPosition();
+							targetPos.Z += 150.0;
+							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 700.0);
+
+							ai.SetMovePosition(movePosition);
+							ai.Moving = true;
 						}
 
 						if (!ai.InAttack && weapon.State == WeaponState_Ready)
@@ -129,17 +238,156 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 			}
 		}
 	}
+}
 
-	// Handle our ai view angles if we are a drone or pilot
-	if (ai.IsGunner || ai.IsPilot)
+void ClampVector(FVector vector, float magnitude)
+{
+	FVector temp;
+	temp = vector;
+	float sizeSquared = (temp.X * temp.X + temp.Y * temp.Y + temp.Z * temp.Z);
+	if (sizeSquared > Pow(magnitude, 2.0))
 	{
-		FRotator desiredAngle;
-		desiredAngle = currentAngle;
-		OnDroneAimChanged(desiredAngle, seat, drone);
-
-		currentAngle = FMath.InterpRotatorTo(currentAngle, ai.GetTargetAngle(), GetGameFrameTime(), 80.0);
-		ai.SetViewAngle(currentAngle);
+		float scale = magnitude * (1.0 / Pow(sizeSquared, 0.5));
+		vector.X *= scale;
+		vector.Y *= scale;
+		vector.Z *= scale;
 	}
+}
+
+void CalcMovementVector(ADrone drone, FVector velocity, FVector direction)
+{
+	//float maxSpeed = drone.MaxSpeed;
+	FVector currentVel, inputVel;
+	currentVel = direction;
+	currentVel.Normalize();
+	currentVel.Scale(1.25);
+
+	inputVel = drone.GetInputVelocity();
+	inputVel.Add(currentVel);
+
+	ClampVector(inputVel, drone.MaxSpeed);
+
+	drone.SetInputVelocity(inputVel);
+
+	//FVector realVel;
+	//realVel = drone.GetVelocity();
+	//currentVel.Add(realVel);
+	velocity.Add(inputVel);
+	ClampVector(velocity, drone.MaxSpeed);
+}
+
+void CalcMovementTilt(ADrone drone)
+{
+	FRotator rotation;
+	rotation = drone.GetInputRotation();
+
+	rotation.Pitch = FMath.ClampFloat(CalcForwardTilt(drone, drone.GetInputVelocity(), 0.45), -40.0, 40.0);
+	rotation.Roll = FMath.ClampFloat(CalcRightTilt(drone, drone.GetInputVelocity(), 0.45), -45.0, 45.0);
+
+	drone.SetInputRotation(rotation);
+}
+
+FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0)
+{
+	FVector result;
+
+	if (minDistance > 0.0)
+	{
+		result = RandomUnitVector();
+		result.Scale(GetRandomFloat(minDistance, radius));
+		result.Add(location);
+	}
+	else
+	{
+		result = location;
+
+		result.X += GetRandomFloat(-radius, radius);
+		result.Y += GetRandomFloat(-radius, radius);
+		result.Z += GetRandomFloat(-radius, radius);
+	}
+
+	// This will be a hull trace eventually
+	FRayTraceSingle trace = new FRayTraceSingle(drone.GetPosition(), result, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
+	result = trace.GetEndPosition();
+	trace.DebugTrace();
+	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
+	{
+		FVector normal;
+		normal = trace.GetNormalVector();
+
+		normal.Scale(200.0);
+
+		result.Add(normal);
+	}
+	delete trace;
+
+	// Now check our height
+	FVector end;
+	end = result;
+	end.Z -= minHeight - 5.0;
+	trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
+	trace.DebugTrace();
+	if (trace.DidHit())
+	{
+		result = trace.GetEndPosition();
+		FVector normal;
+		normal = trace.GetNormalVector();
+
+		normal.Scale(minHeight);
+
+		result.Add(normal);
+	}
+	else // Now make sure we're not above our max height ceiling
+	{
+		delete trace;
+		end.Z -= maxHeight;
+		trace = new FRayTraceSingle(result, end, MASK_SHOT, FilterIgnorePlayersEx, drone);
+		trace.DebugTrace();
+		if (!trace.DidHit())
+		{
+			end = GetGroundPosition(drone, end);
+			end.Z += maxHeight;
+
+			result = end;
+		}
+	}
+
+	delete trace;
+
+	return result;
+}
+
+FVector RandomUnitVector()
+{
+	FVector result;
+	float length;
+
+	do
+	{
+		// Check random vectors in the unit sphere so result is statistically uniform.
+		result.X = GetURandomFloat() * 2.0 - 1.0;
+		result.Y = GetURandomFloat() * 2.0 - 1.0;
+		result.Z = GetURandomFloat() * 2.0 - 1.0;
+		length = (result.X * result.X + result.Y * result.Y + result.Z * result.Z);
+	}
+	while (length > 1.0 || length < 0.001);
+
+	result.Scale(1.0 / Pow(length, 0.5));
+
+	return result; 
+}
+
+FVector GetGroundPosition(ADrone drone, FVector position)
+{
+	FVector buffer;
+	buffer = position;
+	buffer.Z -= 9000.0;
+	FRayTraceSingle trace = new FRayTraceSingle(position, buffer, MASK_SHOT, GenericFilter, drone.Get());
+	buffer = trace.GetEndPosition();
+
+	delete trace;
+
+	return buffer;
 }
 
 APersistentObject FindClosestTarget(ADrone drone, bool enemy = true)
@@ -231,4 +479,34 @@ FRotator FindNewLookAngle()
 	//PrintToChatAll("New look angle pitch = %.1f\nyaw = %.1f", rot.Pitch, rot.Yaw);
 
 	return rot;
+}
+
+float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1)
+{
+	FRotator rot;
+	rot = drone.GetAngles();
+
+	rot.Pitch = 0.0;
+
+	FVector forwardVec;
+	forwardVec = rot.GetForwardVector();
+
+	float tilt = Vector_DotProduct(velocity, forwardVec);
+
+	return tilt * adjust;
+}
+
+float CalcRightTilt(ADrone drone, FVector velocity, float adjust = 0.1)
+{
+	FRotator rot;
+	rot = drone.GetAngles();
+
+	rot.Roll = 0.0;
+
+	FVector rightVec;
+	rightVec = rot.GetRightVector();
+
+	float tilt = Vector_DotProduct(velocity, rightVec);
+
+	return tilt * adjust;
 }
