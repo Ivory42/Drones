@@ -12,8 +12,8 @@
 	"plugin"	"combinechopper"
 
 	// Path finding bounds for AI
-	"max_hull"		"60 40 40"
-	"min_hull"		"-60 -40 -40"
+	"max_hull"		"65 35 35"
+	"min_hull"		"-65 -35 -35"
 	//"pathfinding_distance"	"100"
 	
 	// Custom properties

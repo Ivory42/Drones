@@ -291,14 +291,19 @@ bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 {
 	if (entity == drone.Get())
 		return false;
-
-	char classname[64];
-	//Let's ignore drone props as well
-	ConstructObject(entity).GetClassname(classname, sizeof classname);
-
-	if (StrContains(classname, "prop_physics") != -1)
+	
+	//Let's ignore anything attached to this drone as well
+	if (IsValidEntity(entity) && entity > MaxClients)
 	{
-		return false;
+		FObject test;
+		test = ConstructObject(entity);
+		if (test.Valid() && test.HasProp(Prop_Send, "m_hMoveParent"))
+		{
+			if (test.GetParent().Get() == drone.Get())
+			{
+				return false;
+			}
+		}
 	}
 
 	if (drone.Pilot && entity == drone.Pilot.Get())

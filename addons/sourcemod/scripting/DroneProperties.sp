@@ -833,26 +833,108 @@ Action OnDroneOverlap(int droneId, int otherId)
 	{
 		FVector clientPos, dronePos, pushDir;
 		clientPos = client.GetPosition();
-		clientPos.Z += 40.0;
+		clientPos.Z += 60.0;
 
 		dronePos = drone.GetPosition();
 
 		pushDir = Vector_MakeFromPoints(dronePos, clientPos);
-		pushDir.Scale(200.0);
 
 		pushDir.Normalize();
-		pushDir.Scale(50.0);
+		pushDir.Scale(40.0);
 		clientPos = client.GetPosition();
 
 		clientPos.Add(pushDir);
 
+		bool ignoreTele = false;
+		FHullTrace trace = new FHullTrace(client.GetPosition(), clientPos, ConstructVector(-30.0, -30.0, 0.0), ConstructVector(30.0, 30.0, 95.0), MASK_PLAYERSOLID, DroneCollisionTrace, otherId);
+		if (trace.DidHit())
+		{
+			//char entname[64];
+			//trace.GetHitEntity().GetClassname(entname, sizeof entname);
+			//PrintCenterTextAll("hit entity %d, do not teleport\n%s", trace.GetHitEntity().Get(), entname);
+
+			delete trace;
+			ignoreTele = true;
+		}
+
+		pushDir.Normalize();
+		pushDir.Scale(200.0);
+		
 		FVector clientVel;
 		clientVel = client.GetVelocity();
 		clientVel.Add(pushDir);
 
-		TeleportEntity(otherId, clientPos.ToFloat(), NULL_VECTOR, clientVel.ToFloat());
+		if (ignoreTele)
+			TeleportEntity(otherId, NULL_VECTOR, NULL_VECTOR, clientVel.ToFloat());
+		else
+			TeleportEntity(otherId, clientPos.ToFloat(), NULL_VECTOR, clientVel.ToFloat());
 	}
 	return Plugin_Continue;
+}
+
+bool DroneCollisionTrace(int entityId, int mask, int clientId)
+{
+	if (entityId == clientId)
+	{
+		return false;
+	}
+	if (entityId == 0)
+	{
+		return true;
+	}
+
+	FObject entity;
+	entity = ConstructObject(entityId);
+	if (entity.Valid())
+	{
+		// Ignore drones
+		ADrone drone = view_as<ADrone>(FEntityStatics.GetEntity(entity));
+		if (drone && drone.IsDrone)
+		{
+			return false;
+		}
+
+		// And anything parented to a drone
+		if (entity.HasProp(Prop_Send, "m_hMoveParent"))
+		{
+			drone = view_as<ADrone>(FEntityStatics.GetEntity(entity.GetParent()));
+			if (drone && drone.IsDrone)
+			{
+				return false;
+			}
+		}
+
+		// Should only be other drones and other types of entities that we dont care about
+		if (entity.Cast("prop_physics"))
+		{
+			return false;
+		}
+
+		if (entity.Cast("prop_"))
+		{
+			return true;
+		}
+
+		if (entity.Cast("obj_"))
+		{
+			return true;
+		}
+
+		if (entity.Cast("func_"))
+		{
+			return true;
+		}
+	}
+
+	FClient client;
+	client = CastToClient(entity);
+
+	if (client.Valid())
+	{
+		return GetClientTeam(clientId) != client.GetTeam();
+	}
+
+	return true;
 }
 
 /*
@@ -1123,7 +1205,7 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed)
 	// Drones will passively counteract gravity
 	FVector grav;
 
-	grav.Z = 11.5;
+	grav.Z = 14.5;
 
 	velocity.Add(grav);
 

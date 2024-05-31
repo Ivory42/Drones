@@ -127,6 +127,12 @@ methodmap FDroneAI < StringMap
 		public get() { return this.GetBool("DroneAI_IsMovingToPosition"); }
 	}
 
+	property bool Stalling
+	{
+		public set(bool value) { this.SetBool("DroneAI_IsStalling", value); }
+		public get() { return this.GetBool("DroneAI_IsStalling"); }
+	}
+
 	// We are currently looking for our lost target
 	property bool Seeking
 	{

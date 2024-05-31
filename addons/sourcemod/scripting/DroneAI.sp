@@ -34,24 +34,33 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 					
 			CalcMovementVector(ai, drone, velocity, moveDir);
 
-			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < 200.0)
+			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < 270.0)
 			{
 				ai.Moving = false;
-				//ai.NextMovementTime = GetGameTime() + ai.IdleTime;
+				ai.Stalling = true;
+				if (drone.GetVelocity().Length() >= 150.0)
+				{
+					ai.NextMovementTime = GetGameTime() + 1.5; // Slight delay before next move
+				}
 			}
 		}
 		else
 		{
-			FVector inputVel;
-			inputVel = drone.GetInputVelocity();
-			inputVel.Scale(0.92);
+			FVector inputVel, targetVel;
+			targetVel = drone.GetVelocity();
+			targetVel.Negate();
 
+			inputVel = drone.GetInputVelocity();
+			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), 0.95);
 			drone.SetInputVelocity(inputVel);
 
+			//inputVel = drone.GetInputVelocity();
+			//inputVel.Scale(0.98);
+			
 			velocity.Add(inputVel);
 		}
 
-		CalcMovementTilt(drone);
+		CalcMovementTilt(drone, ai.Stalling);
 		SimulateDrone(drone, velocity, drone.MaxSpeed);
 	}
 
@@ -350,13 +359,13 @@ void CalcMovementVector(FDroneAI ai, ADrone drone, FVector velocity, FVector dir
 	ClampVector(velocity, drone.MaxSpeed);
 }
 
-void CalcMovementTilt(ADrone drone)
+void CalcMovementTilt(ADrone drone, bool reverse)
 {
 	FRotator rotation;
 	rotation = drone.GetInputRotation();
 
-	rotation.Pitch = FMath.ClampFloat(CalcForwardTilt(drone, drone.GetInputVelocity(), 0.45), -40.0, 40.0);
-	rotation.Roll = FMath.ClampFloat(CalcRightTilt(drone, drone.GetInputVelocity(), 0.45), -45.0, 45.0);
+	rotation.Pitch = FMath.ClampFloat(CalcForwardTilt(drone, drone.GetInputVelocity(), 0.45, reverse), -22.0, 22.0);
+	rotation.Roll = FMath.ClampFloat(CalcRightTilt(drone, drone.GetInputVelocity(), 0.45, reverse), -35.0, 35.0);
 
 	drone.SetInputRotation(rotation);
 }
@@ -389,7 +398,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	FVector mins, maxs;
 	mins = drone.GetComponents().MinBounds;
 	maxs = drone.GetComponents().MaxBounds;
-	FHullTrace trace = new FHullTrace(drone.GetPosition(), result, mins, maxs, MASK_SHOT, DroneWeaponTrace, drone);
+	FHullTrace trace = new FHullTrace(drone.GetPosition(), result, mins, maxs, MASK_SHOT, DroneMovementTrace, drone);
 	result = trace.GetEndPosition();
 	//trace.DebugTrace();
 	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
@@ -522,7 +531,7 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 		}
 	}
 
-	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneWeaponTrace, drone);
+	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneMovementTrace, drone);
 	if (trace.DidHit())
 	{
 		FObject hit;
@@ -535,6 +544,24 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 	}
 	delete trace;
 	return false;
+}
+
+bool DroneMovementTrace(int entity, int mask, ADrone drone)
+{
+	if (entity == drone.Get())
+		return false;
+
+	if (entity <= MaxClients && entity > 0)
+	{
+		return true;
+	}
+	
+	if (ConstructObject(entity).Cast("prop_physics"))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -574,9 +601,10 @@ void MoveToPosition(FDroneAI ai,FVector position)
 {
 	ai.SetMovePosition(position);
 	ai.Moving = true;
+	ai.Stalling = false;
 }
 
-float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1)
+float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1, bool reverse = false)
 {
 	FRotator rot;
 	rot = drone.GetAngles();
@@ -588,10 +616,13 @@ float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1)
 
 	float tilt = Vector_DotProduct(velocity, forwardVec);
 
+	if (reverse)
+		adjust *= -0.5;
+
 	return tilt * adjust;
 }
 
-float CalcRightTilt(ADrone drone, FVector velocity, float adjust = 0.1)
+float CalcRightTilt(ADrone drone, FVector velocity, float adjust = 0.1, bool reverse = false)
 {
 	FRotator rot;
 	rot = drone.GetAngles();
@@ -602,6 +633,9 @@ float CalcRightTilt(ADrone drone, FVector velocity, float adjust = 0.1)
 	rightVec = rot.GetRightVector();
 
 	float tilt = Vector_DotProduct(velocity, rightVec);
+
+	if (reverse)
+		adjust *= -0.6;
 
 	return tilt * adjust;
 }
