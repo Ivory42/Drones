@@ -375,6 +375,19 @@ forward void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name);
 forward void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name);
 
 /**
+ * Forward called when a drone takes damage
+ *
+ * @param drone				Drone object
+ * @param attacker			Entity that damaged the drone, may be empty.
+ * @param damage			Damage amount for the drone to receive
+ * @param damagetype		Damage bits of the damgae dealt
+ *
+ * @return Plugin_Changed to update damage and damagetype, otherwise continue normally
+ */
+forward Action CD2_OnDroneDamaged(ADrone drone, FObject attacker, float &damage, int& damagetype);
+
+
+/**
  * Forward called after a weapon is fired
  *
  * @param drone				Drone owning this weapon

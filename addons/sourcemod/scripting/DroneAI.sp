@@ -103,9 +103,12 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						{
 							// Get a random position around the drone to move to
 							FVector movePos;
-							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), 1200.0, 800.0, 250.0, 600.0);
-							ai.SetMovePosition(movePos);
-							ai.Moving = true;
+							float radius = ai.MoveRange;
+							float minRad = ai.MinMoveRange;
+							float height = ai.MaxMoveHeight;
+							float hover = ai.HoverHeight;
+							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), radius, minRad, hover, height);
+							MoveToPosition(ai, movePos);
 						}
 					}
 					else
@@ -114,7 +117,11 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						if (GetRandomInt(1, 10) > 3)
 						{
 							FVector movePos;
-							movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), 800.0, 400.0, 250.0, 250.0);
+							float radius = ai.MoveRange;
+							float minRad = ai.MinMoveRange;
+							float height = ai.MaxMoveHeight;
+							float hover = ai.HoverHeight;
+							movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), radius, minRad, hover, height);
 							FRotator velocityRot, direction;
 							velocityRot = Vector_GetAngles(drone.GetVelocity());
 							direction = Vector_GetAngles(movePos);
@@ -138,7 +145,7 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 					// Search for a target
 					if (!target)
 					{
-						ai.CurrentTarget = FindClosestTarget(drone);
+						ai.CurrentTarget = FindClosestTarget(ai, drone);
 					}
 					// Otherwise enter attack state if we can see our target
 					else if (CanSeeTarget(drone, target))
@@ -149,10 +156,7 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						if (ai.Moving)
 						{
 							FVector movePosition;
-							FVector targetPos;
-							targetPos = target.GetPosition();
-							targetPos.Z += 150.0;
-							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 350.0, 500.0);
+							movePosition = FindTargetPosition(ai, drone, target);
 
 							ai.SetMovePosition(movePosition);
 							ai.NextMovementTime = GetGameTime() + ai.IdleTime * 2.0; // double our next move time
@@ -183,7 +187,7 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						if (ai.NextCombatCheckTime <= GetGameTime())
 						{
 							ai.NextCombatCheckTime = GetGameTime() + params.CombatTime;
-							target = FindClosestTarget(drone);
+							target = FindClosestTarget(ai, drone);
 						}
 
 						if (ai.NextMovementTime <= GetGameTime())
@@ -194,29 +198,45 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 						if (moveTick && !ai.Moving)
 						{
 							FVector movePosition;
-							FVector targetPos;
-							targetPos = target.GetPosition();
-							targetPos.Z += 150.0;
-							movePosition = FindPositionAroundLocation(drone, target.GetPosition(), 900.0, 350.0, 250.0, 500.0);
+							movePosition = FindTargetPosition(ai, drone, target);
 
-							ai.SetMovePosition(movePosition);
-							ai.Moving = true;
+							MoveToPosition(ai, movePosition);
 						}
 
-						if (!ai.InAttack && weapon.State == WeaponState_Ready)
+						if (DroneInRange(ai, drone, target))
 						{
-							if (ai.NextFireTime <= GetGameTime())
+							if (!ai.InAttack && weapon.State == WeaponState_Ready)
 							{
-								ai.InAttack = true;
-								if (params.BurstTime <= 0.0) // hold down fire as long as we have a target
+								if (ai.NextFireTime <= GetGameTime())
 								{
-									ai.EndFireTime = -1.0;
-								}
-								else
-								{
-									ai.EndFireTime = GetGameTime() + params.BurstTime;
+									ai.InAttack = true;
+									if (params.BurstTime <= 0.0) // hold down fire as long as we have a target
+									{
+										ai.EndFireTime = -1.0;
+									}
+									else
+									{
+										ai.EndFireTime = GetGameTime() + params.BurstTime;
+									}
 								}
 							}
+						}
+						else if (moveTick)
+						{
+							FVector movePosition;
+							movePosition = FindTargetPosition(ai, drone, target);
+
+							MoveToPosition(ai, movePosition);
+						}
+
+						// Also check if we are too close
+						if (!ai.Moving && DroneTooClose(ai, drone, target))
+						{
+							// Move further away
+							FVector movePosition;
+							movePosition = FindTargetPosition(ai, drone, target);
+
+							MoveToPosition(ai, movePosition);
 						}
 					}
 					else
@@ -253,6 +273,30 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 	}
 }
 
+bool DroneInRange(FDroneAI ai, ADrone drone, APersistentObject target)
+{
+	bool result = false;
+
+	if (target && FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), target.GetObject()) <= ai.DesiredAttackRange)
+	{
+		result = true;
+	}
+
+	return result;
+}
+
+bool DroneTooClose(FDroneAI ai, ADrone drone, APersistentObject target)
+{
+	bool result = false;
+
+	if (target && FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), target.GetObject()) < ai.MinAttackRange)
+	{
+		result = true;
+	}
+
+	return result;
+}
+
 void ClampVector(FVector vector, float magnitude)
 {
 	FVector temp;
@@ -279,11 +323,13 @@ void CalcMovementVector(FDroneAI ai, ADrone drone, FVector velocity, FVector dir
 		inputRotation = Vector_GetAngles(direction);
 
 		float angle = FMath.GetAngle(velRotation, inputRotation);
-		if (angle > 45.0)
+		if (angle > 25.0)
 		{
 			scale = drone.Deceleration;
 		}
 	}
+
+	//PrintCenterTextAll("Drone acceleration = %.1f", scale);
 
 	FVector currentVel, inputVel;
 	currentVel = direction;
@@ -413,11 +459,11 @@ FVector GetGroundPosition(ADrone drone, FVector position)
 }
 */
 
-APersistentObject FindClosestTarget(ADrone drone, bool enemy = true)
+APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true)
 {
 	TFTeam team = drone.Team;
 	float distance;
-	float range = 1200.0; // Will be configurable
+	float range = ai.DetectionRange; // Will be configurable
 	float closest = range;
 
 	APersistentObject best;
@@ -502,6 +548,32 @@ FRotator FindNewLookAngle()
 	//PrintToChatAll("New look angle pitch = %.1f\nyaw = %.1f", rot.Pitch, rot.Yaw);
 
 	return rot;
+}
+
+FTransform FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject target)
+{
+	FVector position;
+	position = FindPositionAroundLocation(drone, target.GetPosition(), ai.DesiredAttackRange, ai.MinAttackRange, ai.HoverHeight, ai.MaxCombatHeight);
+
+	// If we should remain level with our target, do not go below their height position
+	if (ai.LevelCombat)
+	{
+		if (position.Z < target.GetPosition().Z)
+		{
+			position.Z = target.GetPosition().Z + ai.HoverHeight; // stay above based on our hovering height
+
+			// Now make sure we can see this position as well
+			position = FindPositionAroundLocation(drone, position, 20.0, 0.0);
+		}
+	}
+
+	return position;
+}
+
+void MoveToPosition(FDroneAI ai,FVector position)
+{
+	ai.SetMovePosition(position);
+	ai.Moving = true;
 }
 
 float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1)

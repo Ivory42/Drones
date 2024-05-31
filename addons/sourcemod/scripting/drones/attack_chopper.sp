@@ -49,6 +49,13 @@ Action PulseCannonCharge(Handle timer, SDroneStruct data)
 	APulseCannon cannon = view_as<APulseCannon>(data.Weapon);
 	if (cannon && cannon.IsPulseCannon)
 	{
+		if (!cannon.Charging)
+		{
+			EndFire(cannon);
+			delete data;
+			return Plugin_Stop;
+		}
+
 		cannon.Charging = false;
 		char sound[64];
 		cannon.GetDischargeSound(sound, sizeof sound);
@@ -108,6 +115,9 @@ void EndFire(APulseCannon cannon)
 {
 	char sound[64];
 	cannon.GetDischargeSound(sound, sizeof sound);
+	StopSound(cannon.Get(), SNDCHAN_AUTO, sound);
+
+	cannon.GetChargeSound(sound, sizeof sound);
 	StopSound(cannon.Get(), SNDCHAN_AUTO, sound);
 
 	cannon.Firing = false;
@@ -260,21 +270,21 @@ void KillEngine(AHunterChopper chopper)
 	FObject model;
 	model = chopper.GetModelEntity();
 
+	char sound[64];
+	chopper.GetEngineSound(sound, sizeof sound);
+	StopSound(chopper.Get(), SNDCHAN_AUTO, sound);
+
 	if (model.Valid())
 	{
 		SetVariantString("reference");
 		model.Input("SetAnimation");
 	}
-
-	char sound[64];
-	chopper.GetEngineSound(sound, sizeof sound);
-	StopSound(chopper.Get(), SNDCHAN_AUTO, sound);
 }
 
 public void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name)
 {
 	APulseCannon cannon = view_as<APulseCannon>(weapon);
-	if (cannon.IsPulseCannon)
+	if (cannon && cannon.IsPulseCannon)
 	{
 		EndFire(cannon);
 	}

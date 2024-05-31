@@ -35,8 +35,23 @@ enum EControllerState
 
 enum struct FDroneAIParams
 {
-	bool Pilot;
-	bool Gunner;
+	float MinAttackDistance;
+	float MaxAttackDistance;
+	float DetectionRange;
+
+	float IdleMoveRange;
+	float IdleMoveRangeMin;
+
+	bool LevelCombat;
+
+	// Minimum height we try to keep above the ground, if applicable.
+	float HoverHeight;
+
+	// If applicable, when moving to a new position, we will be predisposed to fly no higher than this height from our current position
+	float IdleCeiling;
+
+	// If applicable, when in combat, we will be predisposed to fly no higher than this height from our current position
+	float CombatCeiling;
 
 	// How often we process think requests
 	float ThinkRate;
@@ -106,22 +121,17 @@ methodmap FDroneAI < StringMap
 		return value;
 	}
 
-	property bool IsPilot
-	{
-		public set(bool value) { this.SetBool("DroneAI_IsPilot", value); }
-		public get() { return this.GetBool("DroneAI_IsPilot"); }
-	}
-
-	property bool IsGunner
-	{
-		public set(bool value) { this.SetBool("DroneAI_IsGunner", value); }
-		public get() { return this.GetBool("DroneAI_IsGunner"); }
-	}
-
 	property bool Moving
 	{
 		public set(bool value) { this.SetBool("DroneAI_IsMovingToPosition", value); }
 		public get() { return this.GetBool("DroneAI_IsMovingToPosition"); }
+	}
+
+	// We are currently looking for our lost target
+	property bool Seeking
+	{
+		public set(bool value) { this.SetBool("DroneAI_IsSeekingTarget", value); }
+		public get() { return this.GetBool("DroneAI_IsSeekingTarget"); }
 	}
 
 	property AClient Owner
@@ -134,6 +144,69 @@ methodmap FDroneAI < StringMap
 	{
 		public set(EBehaviorType value) { this.SetValue("DroneAI_Behavior", value); }
 		public get() { return view_as<EBehaviorType>(this.GetObject("DroneAI_Behavior")); }
+	}
+
+	// How far we will try to move when moving to a new location
+	property float MoveRange
+	{
+		public set(float value) { this.SetFloat("DroneAI_TravelDistance", value); }
+		public get() { return this.GetFloat("DroneAI_TravelDistance"); }
+	}
+
+	// Minimum distance we try to move to when moving to a new location
+	property float MinMoveRange
+	{
+		public set(float value) { this.SetFloat("DroneAI_MinTravelDistance", value); }
+		public get() { return this.GetFloat("DroneAI_MinTravelDistance"); }
+	}
+
+	// Our minimum distance where we feel comfortable engaging from. We will back away from targets that are this close
+	property float MinAttackRange
+	{
+		public set(float value) { this.SetFloat("DroneAI_MinEngageDistance", value); }
+		public get() { return this.GetFloat("DroneAI_MinEngageDistance"); }
+	}
+
+	// How close we try to stay to a target when engaging. If they leave this range, we will pursue if allowed.
+	property float DesiredAttackRange
+	{
+		public set(float value) { this.SetFloat("DroneAI_MaxEngageRange", value); }
+		public get() { return this.GetFloat("DroneAI_MaxEngageRange"); }
+	}
+
+	// Distance at which we detect targets
+	property float DetectionRange
+	{
+		public set(float value) { this.SetFloat("DroneAI_DetectionDistance", value); }
+		public get() { return this.GetFloat("DroneAI_DetectionDistance"); }
+	}
+
+	// If we are flying, when moving to a new position, we will try not to go above this extra height
+	property float MaxMoveHeight
+	{
+		public set(float value) { this.SetFloat("DroneAI_MaxMovementCeiling", value); }
+		public get() { return this.GetFloat("DroneAI_MaxMovementCeiling"); }
+	}
+
+	// If we are flying, when in combat, we will try not to go above this extra height
+	property float MaxCombatHeight
+	{
+		public set(float value) { this.SetFloat("DroneAI_MaxCombatCeiling", value); }
+		public get() { return this.GetFloat("DroneAI_MaxCombatCeiling"); }
+	}
+
+	// If we are flying, this is the closest we will try to be to the ground at all times
+	property float HoverHeight
+	{
+		public set(float value) { this.SetFloat("DroneAI_HoverHeight", value); }
+		public get() { return this.GetFloat("DroneAI_HoverHeight"); }
+	}
+
+	// If true and we are flying, we will refrain from going below our current target's height level
+	property bool LevelCombat
+	{
+		public set(bool value) { this.SetBool("DroneAI_KeepLevelWithTarget", value); }
+		public get() { return this.GetBool("DroneAI_KeepLevelWithTarget"); }
 	}
 
 	// Our current state of mind
@@ -213,7 +286,29 @@ methodmap FDroneAI < StringMap
 		public get() { return this.GetBool("DroneAI_Attacking"); }
 	}
 
-	property ArrayList QueryPositions
+	// We track these positions for when we seek our current target to retrace steps
+	property ArrayList TargetQueryPositions
+	{
+		public set(ArrayList value) { this.SetValue("DroneAI_PositionsInMemory", value); }
+		public get() { return view_as<ArrayList>(this.GetObject("DroneAI_PositionsInMemory")); }
+	}
+
+	// Next game frame that we track our own and our target's position
+	property float QueryRate
+	{
+		public set(float value) { this.SetFloat("DroneAI_PositionQueryRate", value); }
+		public get() { return this.GetFloat("DroneAI_PositionQueryRate"); }
+	}
+
+	// Next game frame that we track our own and our target's position
+	property float NextQueryTime
+	{
+		public set(float value) { this.SetFloat("DroneAI_NextPositionQueryTick", value); }
+		public get() { return this.GetFloat("DroneAI_NextPositionQueryTick"); }
+	}
+
+	// If losing our target from our own doing, retrace our own last few positions
+	property ArrayList OwnQueryPositions
 	{
 		public set(ArrayList value) { this.SetValue("DroneAI_PositionsInMemory", value); }
 		public get() { return view_as<ArrayList>(this.GetObject("DroneAI_PositionsInMemory")); }
@@ -248,55 +343,122 @@ methodmap FDroneAI < StringMap
 
 	public void ClearAIParams()
 	{
-		if(this.QueryPositions)
+		if (this.TargetQueryPositions)
 		{
-			delete this.QueryPositions;
+			delete this.TargetQueryPositions;
+		}
+
+		if (this.OwnQueryPositions)
+		{
+			delete this.OwnQueryPositions;
 		}
 	}
-
 }
 
-stock FDroneAI CreateDroneAIController(FDroneAIParams params)
+methodmap FDroneAIStatics
 {
-	FDroneAI ai = view_as<FDroneAI>(new StringMap());
-	if (ai)
+	public static FDroneAI CreateDroneAIController(FDroneAIParams params)
 	{
-		ai.SetValue("SMap_IsDroneAI", true);
+		FDroneAI ai = view_as<FDroneAI>(new StringMap());
+		if (ai)
+		{
+			ai.SetValue("SMap_IsDroneAI", true);
+
+			ai.DesiredAttackRange = params.MaxAttackDistance;
+			ai.DetectionRange = params.DetectionRange;
+			ai.MinAttackRange = params.MinAttackDistance;
+			ai.MaxMoveHeight = params.IdleCeiling;
+			ai.MaxCombatHeight = params.CombatCeiling;
+			ai.HoverHeight = params.HoverHeight;
+
+			ai.MoveRange = params.IdleMoveRange;
+			ai.MinMoveRange = params.IdleMoveRangeMin;
+			ai.LevelCombat = params.LevelCombat;
+
+			ai.Behavior = params.Behavior;
+
+			ai.IdleTime = params.IdleTime;
+			ai.ThinkRate = params.ThinkRate;
+
+			ai.SetControllerParams(params);
+		}
+
+		return ai;
+	}
+
+	public static FDroneAIParams CreateDefaultParamSet()
+	{
+		FDroneAIParams params;
+		params.MinAttackDistance = 0.0;
+		params.MaxAttackDistance = 1100.0;
+		params.DetectionRange = 1100.0;
+		params.IdleCeiling = 700.0;
+		params.CombatCeiling = 400.0;
+		params.HoverHeight = 250.0;
 		
-		ai.IsGunner = params.Gunner;
-		ai.IsPilot = params.Pilot;
-		ai.Behavior = params.Behavior;
+		params.IdleMoveRange = 1200.0;
+		params.IdleMoveRangeMin = 800.0;
+		params.LevelCombat = false;
 
-		ai.IdleTime = params.IdleTime;
-		ai.ThinkRate = params.ThinkRate;
+		params.ThinkRate = 0.1;
+		params.IdleTime = 2.0;
+		params.CombatTime = 4.0;
+		params.SeekTime = 6.0;
+		params.BurstTime = 1.0;
+		params.BurstDelay = 2.0;
 
-		ai.SetControllerParams(params);
+		return params;
 	}
 
-	return ai;
-}
-
-stock FDroneAIParams CreateDefaultParamSet()
-{
-	FDroneAIParams params;
-	params.ThinkRate = 0.1;
-	params.IdleTime = 2.0;
-	params.CombatTime = 4.0;
-	params.SeekTime = 6.0;
-	params.BurstTime = 1.0;
-	params.BurstDelay = 2.0;
-
-	return params;
-}
-
-stock FDroneAI GetSeatController(FDroneSeat seat)
-{
-	FDroneAI ai = null;
-
-	if (seat.AIControlled)
+	public static FDroneAIParams CreateParamSetFromConfig(const char[] config)
 	{
-		ai = seat.AIOccupier;
+		FDroneAIParams params;
+
+		char path[256];
+		BuildPath(Path_SM, path, sizeof path, "configs/drones/ai/%s.cfg", config);
+
+		KeyValues kv = new KeyValues("DroneAI");
+		if (kv)
+		{
+			if (kv.ImportFromFile(path))
+			{
+				params.MinAttackDistance = kv.GetFloat("min_attack_range", 0.0);
+				params.MaxAttackDistance = kv.GetFloat("max_attack_range", 1100.0);
+				params.DetectionRange = kv.GetFloat("detection_range", 1100.0);
+				params.IdleCeiling = kv.GetFloat("max_idle_height", 700.0);
+				params.CombatCeiling = kv.GetFloat("max_combat_height", 400.0);
+				params.HoverHeight = kv.GetFloat("min_height", 250.0);
+
+				params.IdleMoveRange = kv.GetFloat("max_move_range", 1200.0);
+				params.IdleMoveRangeMin = kv.GetFloat("min_move_range", 800.0);
+				params.LevelCombat = view_as<bool>(kv.GetNum("level_combat_height", 0));
+
+				params.ThinkRate = kv.GetFloat("think_rate", 0.1);
+				params.IdleTime = kv.GetFloat("idle_timer", 2.0);
+				params.CombatTime = kv.GetFloat("combat_timer", 4.0);
+				params.SeekTime = kv.GetFloat("pursue_timer", 6.0);
+				params.BurstTime = kv.GetFloat("burst_time", 1.0);
+				params.BurstDelay = kv.GetFloat("burst_delay", 2.0);
+			}
+			else
+			{
+				PrintToServer("AI config %s not found!", config);
+			}
+		}
+		delete kv;
+
+		return params;
 	}
 
-	return ai;
+	public static FDroneAI GetSeatController(FDroneSeat seat)
+	{
+		FDroneAI ai = null;
+
+		if (seat.AIControlled)
+		{
+			ai = seat.AIOccupier;
+		}
+
+		return ai;
+	}
 }

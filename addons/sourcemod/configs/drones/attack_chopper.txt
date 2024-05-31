@@ -4,7 +4,7 @@
 	"model"	"models/drones/hunterchopper/chopper.mdl"//"models/combine_helicopter.mdl"
 	"camera_height"	"60"
 	"turn_rate"	"60"
-	"health"	"200"
+	"health"	"400"
 	"speed"		"450"
 	"acceleration"	"1.25"
 	"deceleration"	"8" // Acceleration to use when breaking or changing directions
@@ -12,8 +12,8 @@
 	"plugin"	"combinechopper"
 
 	// Path finding bounds for AI
-	"max_hull"		"40 20 20"
-	"min_hull"		"-40 -20 -20"
+	"max_hull"		"60 40 40"
+	"min_hull"		"-60 -40 -40"
 	//"pathfinding_distance"	"100"
 	
 	// Custom properties

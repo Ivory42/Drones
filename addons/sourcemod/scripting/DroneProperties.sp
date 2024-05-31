@@ -865,13 +865,13 @@ Action OnDroneDamaged(int entity, int &attacker, int &inflictor, float &damage, 
 	ADrone drone = view_as<ADrone>(FEntityStatics.GetEntity(ConstructObject(entity)));
 	if (drone && drone.IsDrone)
 	{
-		result = DroneTakeDamage(drone, ConstructObject(attacker), ConstructObject(inflictor), damage, ConstructWeapon(weapon));
+		result = DroneTakeDamage(drone, ConstructObject(attacker), ConstructObject(inflictor), damage, ConstructWeapon(weapon), damagetype);
 	}
 
 	return result;
 }
 
-Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float& damage, FWeapon weapon)
+Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float& damage, FWeapon weapon, int &damagetype)
 {
 	bool sendEvent = true;
 
@@ -880,10 +880,38 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 		return Plugin_Stop;
 	}
 
-	if (attacker.Get() == drone.GetOwner().Get()) //significantly reduce damage if the drone damages itself
+	if (inflictor.Get() == drone.Get()) //significantly reduce damage if the drone damages itself
 	{
 		damage *= 0.25; //Should probably be a convar
 		sendEvent = false;
+	}
+
+	if (CastToClient(attacker).Get())
+	{
+		ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClient(CastToClient(attacker)));
+		if (player.InDrone && player.GetDrone() == drone)
+		{
+			damage *= 0.25;
+			sendEvent = false;
+		}
+	}
+
+	float forwardDamage = damage;
+	int forwardDmgType = damagetype;
+	Action result = Plugin_Continue;
+	Call_StartForward(DroneDamaged);
+
+	Call_PushCell(drone);
+	Call_PushArray(attacker, sizeof FObject);
+	Call_PushFloatRef(forwardDamage);
+	Call_PushCellRef(forwardDmgType);
+
+	Call_Finish(result);
+
+	if (result == Plugin_Changed)
+	{
+		damage = forwardDamage;
+		damagetype = forwardDmgType;
 	}
 
 	if (sendEvent)
@@ -1065,7 +1093,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 	// If no client, check for an AI Controller
 	if (seat.AIControlled)
 	{
-		FDroneAI ai = GetSeatController(seat);
+		FDroneAI ai = FDroneAIStatics.GetSeatController(seat);
 		if (ai)
 		{
 			SimulateController(ai, seat, drone);

@@ -6,6 +6,7 @@ GlobalForward DroneEntered;
 GlobalForward DroneExited;
 GlobalForward DroneRemoved;
 GlobalForward DroneDestroyed;
+GlobalForward DroneDamaged;
 //GlobalForward DroneChangeWeapon;
 GlobalForward DroneAttack;
 GlobalForward DroneCreatedWeapon;
@@ -44,6 +45,9 @@ public void OnPluginStart()
 	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float, Param_String); //drone, attacker, damage, name
 	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
 	DroneAIEnter = CreateGlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
+
+	DroneDamaged = CreateGlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_FloatByRef, Param_CellByRef);
+
 }
 
 public void OnMapStart()
@@ -819,7 +823,10 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 		{
 			if (!player.InDrone && PlayerAimingAtDrone(player, drone))
 			{
-				PlayerEnterVehicle(player, drone);
+				if (!GetPilotSeat(drone).Occupied)
+				{
+					PlayerEnterVehicle(player, drone);
+				}
 				return Plugin_Handled;
 			}
 			else if (player.InDrone)
