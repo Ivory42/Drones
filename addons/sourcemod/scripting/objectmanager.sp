@@ -184,47 +184,27 @@ public void OnEntityDestroyed(int entity)
 {
 	if (IsValidEntity(entity) && entity > MaxClients && entity <= 2048)
 	{
-		// Band-aid fix for now... entities are being called on this function without being deleted and not sure why, doing this until a proper fix can be found
 		ABaseEntity actor = GetEntity(ConstructObject(entity));
 		if (actor)
 		{
-			//PrintToChatAll("(OM OnEntityDestroyed) Entity %d requesting delete", entity);
+			if (actor.CanTick)
+			{
+				DisableEntityTick(actor);
+			}
 
-			DataPack pack = new DataPack();
-			pack.WriteCell(entity);
-			pack.WriteCell(actor);
+			Call_StartForward(OnObjectDestroyed);
+			Call_PushCell(actor);
+			Call_Finish();
 
-			RequestFrame(ValidDestroy, pack);
+			RemoveEntityFromList(actor);
+
+			delete actor;
+			//PrintToChatAll("(OM OnEntityDestroyed) Successfully deleted entity\nHandle = %x", actor);
 		}
 	}
 	else if (0 <= entity < MaxClients)
 	{
 		LogMessage("Deleting entity that is either a player or the world. Was this a mistake? Entity requesting delete = %d", entity);
-	}
-}
-
-void ValidDestroy(DataPack pack)
-{
-	pack.Reset();
-	int entity = pack.ReadCell();
-	ABaseEntity actor = view_as<ABaseEntity>(pack.ReadCell());
-
-	// Now only continue if the entity is no longer valid (it was deleted!)
-	if (!IsValidEntity(entity) && actor)
-	{
-		if (actor.CanTick)
-		{
-			DisableEntityTick(actor);
-		}
-
-		Call_StartForward(OnObjectDestroyed);
-		Call_PushCell(actor);
-		Call_Finish();
-
-		RemoveEntityFromList(actor);
-
-		delete actor;
-		//PrintToChatAll("(OM OnEntityDestroyed) Successfully deleted entity\nHandle = %x", actor);
 	}
 }
 
@@ -236,7 +216,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FEntityStatics.RegisterEntity", EntNative_RegisterEntity);
 	CreateNative("FEntityStatics.RegisterClient", EntNative_RegisterClient);
 	CreateNative("FEntityStatics.GetEntity", EntNative_GetEntity);
+	CreateNative("FEntityStatics.GetEntityFromIndex", EntNative_GetEntityIndex);
 	CreateNative("FEntityStatics.GetClient", EntNative_GetClient);
+	CreateNative("FEntityStatics.GetClientFromIndex", EntNative_GetClientIndex);
 	CreateNative("FEntityStatics.DestroyEntity", EntNative_Destroy);
 	CreateNative("FEntityStatics.EnableEntityTick", EntNative_EnableTick);
 	CreateNative("FEntityStatics.DisableEntityTick", EntNative_DisableTick);
@@ -325,12 +307,31 @@ any EntNative_GetEntity(Handle plugin, int args)
 	return GetEntity(entity);
 }
 
+any EntNative_GetEntityIndex(Handle plugin, int args)
+{
+	int index = GetNativeCell(1);
+	FObject entity;
+	entity = ConstructObject(index);
+
+	return GetEntity(entity);
+}
+
+
 any EntNative_GetClient(Handle plugin, int args)
 {
 	FClient clientRef;
 	GetNativeArray(1, clientRef, sizeof FClient);
 
 	return GetClient(clientRef);
+}
+
+any EntNative_GetClientIndex(Handle plugin, int args)
+{
+	int index = GetNativeCell(1);
+	FClient client;
+	client = ConstructClient(index);
+
+	return GetClient(client);
 }
 
 any EntNative_Destroy(Handle plugin, int args)
@@ -470,7 +471,7 @@ ABaseEntity GetEntity(FObject entity)
 {
 	ABaseEntity actor = null;
 	if (EntityList.HasKey(entity))
-		actor = view_as<ABaseEntity>(EntityList.GetObject(entity));
+		actor = ValidObject(EntityList.GetObject(entity));
 
 	return actor;
 }
@@ -503,7 +504,6 @@ ABaseEntity RegisterEntity(ABaseEntity entity)
 	}
 
 	// Entity is already registered, remove this extra handle
-	//PrintToChatAll("(OM Register Entity) Entity %d deleted", entity.Get());
 	delete entity;
 	return null;
 }
@@ -527,9 +527,10 @@ ABaseEntity CreateBaseEntity(FObject base, FObject owner = {})
 	char template[16];
 	FormatEx(template, sizeof template, EmptyTemplateName);
 	ABaseEntity entity = new ABaseEntity(base, template);
-
 	if (owner.Valid())
+	{
 		entity.SetOwner(owner);
+	}
 
 	return entity;
 }

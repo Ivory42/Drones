@@ -250,32 +250,56 @@ void RemoveWearables(AClient client)
 * Drone Creation
 ****************/
 
+/*
+public void OnEntityDestroyed(int entity)
+{
+	
+}
+*/
+
+ADrone CastToDrone(ABaseEntity entity)
+{
+	if (!entity)
+	{
+		return null;
+	}
+
+	ADrone drone = null;
+	if (entity.GetObjectProp("Entity_IsDrone"))
+	{
+		//PrintToChatAll("Drone cast success (%d): Value = %d", entity.Get(), view_as<int>(entity.GetObjectProp("Entity_IsDrone")));
+		drone = view_as<ADrone>(entity);
+	}
+
+	return drone;
+}
+
+ADroneWeapon CastToDroneWeapon(ABaseEntity entity)
+{
+	if (!entity)
+	{
+		return null;
+	}
+
+	ADroneWeapon weapon = null;
+	if (entity.GetObjectProp("Entity_IsDroneWeapon"))
+	{
+		//PrintToChatAll("Weapon cast success (%d): Value = %d", entity.Get(), view_as<int>(entity.GetObjectProp("Entity_IsDroneWeapon")));
+		weapon = view_as<ADroneWeapon>(entity);
+	}
+
+	return weapon;
+}
+
 // When a new entity is created, lets make sure it is not initialized as a drone
 public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 {
-	ADroneWeapon weapon = view_as<ADroneWeapon>(entity);
-	if (weapon.IsDroneWeapon)
+	ADrone drone = CastToDrone(entity);
+	if (drone && drone.IsDrone)
 	{
-		char name[64];
-		weapon.GetInternalName(name, sizeof name);
-		Call_StartForward(DroneWeaponRemoved);
-
-		Call_PushCell(weapon);
-		Call_PushString(name);
-
-		Call_Finish();
-		weapon.Destroy();
-	}
-
-	ADrone drone = view_as<ADrone>(entity);
-	if (drone.IsDrone)
-	{
-		ADronePlayer player = drone.Pilot;
-		if (player)
-			PlayerExitVehicle(player, GetPilotSeat(drone), drone);
-
 		char name[64];
 		drone.GetInternalName(name, sizeof name);
+		//PrintToChatAll("Drone deleted: %d\nName: %s\nEntity ID: %d", drone.Get(), name, entity);
 
 		Call_StartForward(DroneRemoved);
 
@@ -284,6 +308,22 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 
 		Call_Finish();
 		drone.Destroy();
+	}
+
+	ADroneWeapon weapon = CastToDroneWeapon(entity);
+	if (weapon && weapon.IsDroneWeapon)
+	{
+		char name[64];
+		weapon.GetInternalName(name, sizeof name);
+
+		//PrintToChatAll("Weapon deleted: %d\nName: %s\nEntity ID: %d", weapon.Get(), name, entity);
+		Call_StartForward(DroneWeaponRemoved);
+
+		Call_PushCell(weapon);
+		Call_PushString(name);
+
+		Call_Finish();
+		weapon.Destroy();
 	}
 }
 
@@ -757,6 +797,7 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone)
 		seat = GetPilotSeat(drone);
 		seat.Occupier = null;
 		seat.Occupied = false;
+		drone.Team = TFTeam_Unassigned;
 	}
 	//seat.Occupied = false;
 	//seat.Occupier = null;
@@ -846,6 +887,7 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 	player.InDrone = true;
 	player.Drone = drone;
 	drone.Pilot = player;
+	drone.Team = player.Team;
 	
 	// Temp
 	GetPilotSeat(drone).Occupier = player;

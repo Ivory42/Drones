@@ -54,8 +54,8 @@ int Native_ControlDrone(Handle plugin, int args)
 		seat.Occupied = true;
 		seat.AIControlled = true;
 		seat.AIOccupier = ai;
-		ai.TargetQueryPositions = new ArrayList();
-		ai.OwnQueryPositions = new ArrayList();
+		ai.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
+		ai.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
 	}
 
 	Call_StartForward(DroneAIEnter);

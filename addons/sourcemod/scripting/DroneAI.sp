@@ -1,3 +1,6 @@
+#include "AIControllers/AggressiveAI.sp"
+#include "AIControllers/SupportAI.sp"
+
 void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 {
 	FRotator currentAngle;
@@ -9,17 +12,8 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 		ai.NextThinkTime = GetGameTime() + ai.ThinkRate;
 		thinkTick = true;
 	}
-	switch (drone.MoveType)
-	{
-		case MoveType_Helo:
-		{
-			SimulateHeloAI(ai, seat, drone, thinkTick);
-		}
-		case MoveType_Fly:
-		{
 
-		}
-	}
+	SimulateDecisionTree(ai, seat, drone, thinkTick);
 
 	if (seat.Type == Seat_Pilot)
 	{
@@ -29,34 +23,47 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 			FVector moveDir;
 			moveDir = Vector_MakeFromPoints(drone.GetPosition(), ai.GetMovePosition());
 
+			// If we do not have a target, turn towards the direction we are moving
 			if (ai.CurrentState != Controller_Attacking)
 				ai.SetTargetAngle(Vector_GetAngles(moveDir));
 					
 			CalcMovementVector(ai, drone, velocity, moveDir);
 
-			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < 270.0)
+			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < GetBrakingDistance(drone)) // 270.0
 			{
 				ai.Moving = false;
 				ai.Stalling = true;
-				if (drone.GetVelocity().Length() >= 150.0)
+				if (ai.CurrentState == Controller_Seeking)
+				{
+					ai.NextMovementTime = GetGameTime() + 0.5;
+				}
+				else if (drone.GetVelocity().Length() >= 150.0)
 				{
 					ai.NextMovementTime = GetGameTime() + 1.5; // Slight delay before next move
 				}
 			}
 		}
-		else
+		else // If we arent currently moving to a position, negate our input direction and begin braking
 		{
-			FVector inputVel, targetVel;
-			targetVel = drone.GetVelocity();
+			FVector inputVel, currentVel, targetVel;
+			currentVel = drone.GetVelocity();
+			targetVel = currentVel;
 			targetVel.Negate();
 
 			inputVel = drone.GetInputVelocity();
-			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), 0.95);
+			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), 0.95); // 0.95
 			drone.SetInputVelocity(inputVel);
+
+			//currentVel = FMath.InterpVectorTo(currentVel, targetVel, GetGameFrameTime(), 0.05);
 
 			//inputVel = drone.GetInputVelocity();
 			//inputVel.Scale(0.98);
 			
+			//if (!(0.0 <= velocity.Length() <= 50.0))
+			//{
+			//	velocity.Add(currentVel);	
+			//}
+
 			velocity.Add(inputVel);
 		}
 
@@ -71,12 +78,12 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 		desiredAngle = currentAngle;
 		OnDroneAimChanged(desiredAngle, seat, drone);
 
-		currentAngle = FMath.InterpRotatorTo(currentAngle, ai.GetTargetAngle(), GetGameFrameTime(), 80.0);
+		currentAngle = FMath.InterpRotatorTo(currentAngle, ai.GetTargetAngle(), GetGameFrameTime(), ai.GetControllerParams().AimSpeed);
 		ai.SetViewAngle(currentAngle);
 	}
 }
 
-void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
+void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 {
 	FDroneAIParams params;
 	params = ai.GetControllerParams();
@@ -93,191 +100,37 @@ void SimulateHeloAI(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 	{
 		case Controller_Idle:
 		{
-			if (seat.Type == Seat_Pilot) // Pilot seat controls the drone's movement
+			switch (ai.Behavior)
 			{
-				bool moveTick = false;
-				if (ai.NextMovementTime <= GetGameTime())
-				{
-					ai.NextMovementTime = GetGameTime() + ai.IdleTime;
-					moveTick = true;
-				}
-				if (moveTick)
-				{
-					if (!ai.Moving)
-					{
-						// Either look around or move to a new position
-						if (GetRandomInt(1, 10) > 4)
-							ai.SetTargetAngle(FindNewLookAngle());
-						else
-						{
-							// Get a random position around the drone to move to
-							FVector movePos;
-							float radius = ai.MoveRange;
-							float minRad = ai.MinMoveRange;
-							float height = ai.MaxMoveHeight;
-							float hover = ai.HoverHeight;
-							movePos = FindPositionAroundLocation(drone, drone.GetPosition(), radius, minRad, hover, height);
-							MoveToPosition(ai, movePos);
-						}
-					}
-					else
-					{
-						// We can still change direction if we choose to
-						if (GetRandomInt(1, 10) > 3)
-						{
-							FVector movePos;
-							float radius = ai.MoveRange;
-							float minRad = ai.MinMoveRange;
-							float height = ai.MaxMoveHeight;
-							float hover = ai.HoverHeight;
-							movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), radius, minRad, hover, height);
-							FRotator velocityRot, direction;
-							velocityRot = Vector_GetAngles(drone.GetVelocity());
-							direction = Vector_GetAngles(movePos);
-
-							float angle = FMath.GetAngle(velocityRot, direction);
-							if (angle < 90.0) // Do not completely change direction while already moving
-							{
-								ai.SetMovePosition(movePos);
-							}
-						}
-					}
-				}
-			}
-			// If this seat has a weapon, perform weapon checks
-			if (seat.HasWeapon())
-			{
-				APersistentObject target = ai.CurrentTarget;
-
-				if (thinkTick)
-				{
-					// Search for a target
-					if (!target)
-					{
-						ai.CurrentTarget = FindClosestTarget(ai, drone);
-					}
-					// Otherwise enter attack state if we can see our target
-					else if (CanSeeTarget(drone, target))
-					{
-						ai.CurrentState = Controller_Attacking;
-
-						// Update our move position to be around our target
-						if (ai.Moving)
-						{
-							FVector movePosition;
-							movePosition = FindTargetPosition(ai, drone, target);
-
-							ai.SetMovePosition(movePosition);
-							ai.NextMovementTime = GetGameTime() + ai.IdleTime * 2.0; // double our next move time
-						}
-					}
-				}
+				case Behavior_Aggressive: Aggressive_SimulateIdle(ai, seat, drone, thinkTick);
+				case Behavior_Support: Support_SimulateIdle(ai, seat, drone, thinkTick);
 			}
 		}
 		case Controller_Attacking:
 		{
-			bool moveTick = false;
-
-			if (seat.HasWeapon() && weapon)
+			switch (ai.Behavior)
 			{
-				APersistentObject target = ai.CurrentTarget;
+				case Behavior_Aggressive: Aggressive_SimulateAttack(ai, seat, drone, weapon, params, thinkTick);
+				case Behavior_Support: Support_SimulateAttack(ai, seat, drone, weapon, params, thinkTick);
+			}
 
-				if (thinkTick)
+			if (thinkTick && params.PursueTarget && ai.CurrentTarget)
+			{
+				FVector targetPos;
+				targetPos = ai.CurrentTarget.GetPosition();
+				ai.TargetQueryPositions.SetArray(ai.TargetQueryIndex, targetPos, sizeof FVector);
+				ai.TargetQueryIndex++;
+
+				// Reset our position index if above max
+				if (ai.TargetQueryIndex >= MaxQueriedPositions)
 				{
-					if (target && CanSeeTarget(drone, target))
-					{
-						FRotator angleTowardsEnemy;
-						FVector vecTowardsEnemy;
-
-						vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), target.GetPosition());
-						angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
-						ai.SetTargetAngle(angleTowardsEnemy);
-
-						if (ai.NextCombatCheckTime <= GetGameTime())
-						{
-							ai.NextCombatCheckTime = GetGameTime() + params.CombatTime;
-							target = FindClosestTarget(ai, drone);
-						}
-
-						if (ai.NextMovementTime <= GetGameTime())
-						{
-							moveTick = true;
-						}
-
-						if (moveTick && !ai.Moving)
-						{
-							FVector movePosition;
-							movePosition = FindTargetPosition(ai, drone, target);
-
-							MoveToPosition(ai, movePosition);
-						}
-
-						if (DroneInRange(ai, drone, target))
-						{
-							if (!ai.InAttack && weapon.State == WeaponState_Ready)
-							{
-								if (ai.NextFireTime <= GetGameTime())
-								{
-									ai.InAttack = true;
-									if (params.BurstTime <= 0.0) // hold down fire as long as we have a target
-									{
-										ai.EndFireTime = -1.0;
-									}
-									else
-									{
-										ai.EndFireTime = GetGameTime() + params.BurstTime;
-									}
-								}
-							}
-						}
-						else if (moveTick)
-						{
-							FVector movePosition;
-							movePosition = FindTargetPosition(ai, drone, target);
-
-							MoveToPosition(ai, movePosition);
-						}
-
-						// Also check if we are too close
-						if (!ai.Moving && DroneTooClose(ai, drone, target))
-						{
-							// Move further away
-							FVector movePosition;
-							movePosition = FindTargetPosition(ai, drone, target);
-
-							MoveToPosition(ai, movePosition);
-						}
-					}
-					else
-					{
-						ai.CurrentTarget = null;
-						ai.CurrentState = Controller_Idle; // return to idle for now
-					}
-				}
-
-				if (moveTick)
-				{
-					ai.NextMovementTime = GetGameTime() + ai.IdleTime;
-				}
-
-				if (ai.InAttack)
-				{
-					OnDroneAIAttack(ai, weapon, drone, seat);
-					if (ai.EndFireTime <= -1.0)
-					{
-						if (!target || !(weapon.State == WeaponState_Ready)) // We lose our target or our weapon is no longer ready
-						{
-							ai.InAttack = false;
-							ai.NextFireTime = GetGameTime() + params.BurstDelay;
-						}
-					}
-					else if (ai.EndFireTime <= GetGameTime())
-					{
-						ai.InAttack = false;
-						ai.NextFireTime = GetGameTime() + params.BurstDelay;
-					}
+					ai.TargetQueryIndex = 0;
 				}
 			}
+		}
+		case Controller_Seeking:
+		{
+			Aggressive_SimulatePursuing(ai, seat, drone, params, thinkTick);
 		}
 	}
 }
@@ -451,6 +304,21 @@ FVector RandomUnitVector()
 	result.Scale(1.0 / Pow(length, 0.5));
 
 	return result; 
+}
+
+float GetBrakingDistance(ADrone drone)
+{
+	float speed = drone.GetVelocity().Length();
+	float decel = drone.Deceleration * (1 / GetGameFrameTime()); // Hu/s
+
+	float distance = 0.0;
+
+	if (decel > 0.0)
+	{
+		distance = (speed * speed) / (2 * decel);
+	}
+
+	return distance;
 }
 
 /*

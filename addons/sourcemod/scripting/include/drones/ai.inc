@@ -3,68 +3,54 @@
 #endif
 #define _customdrones_ai_included
 
+const MaxQueriedPositions = 5;
+
 enum EBehaviorType
 {
-	// Drone will actively pursue enemies
-	Behavior_Aggressive,
+	Behavior_Aggressive, 	// Drone will actively pursue enemies
 
-	// Drone will stand its ground and defend its position
-	Behavior_Passive,
-
-	// Drone will actively find teammates to remain around
-	Behavior_Support
+	Behavior_Support		// Drone will actively find teammates to remain around
 };
 
 enum EControllerState
 {
-	// Currently idle, nothing of interest
-	Controller_Idle,
+	Controller_Idle, 		// Currently idle, nothing of interest
 
-	// We have a target and are attacking
-	Controller_Attacking,
+	Controller_Attacking, 	// We have a target and are attacking
 
-	// Seeking our current target but cannot see it
-	Controller_Seeking,
+	Controller_Seeking, 	// Seeking our current target but cannot see it
 
-	// Retreating if possible
-	Controller_Fleeing,
+	Controller_Fleeing, 	// Retreating if possible
 
-	// We were fired at or took damage, look in direction of alert source
-	Controller_Alerted
+	Controller_Alerted 		// We were fired at or took damage, look in direction of alert source
 };
 
 enum struct FDroneAIParams
 {
-	float MinAttackDistance;
-	float MaxAttackDistance;
-	float DetectionRange;
+	float MinAttackDistance;	// Closest distance we will maintain when attacking
+	float MaxAttackDistance;	// Farthest distance we will maintain when attacking
+	float DetectionRange;		// How far we can detect targets from our current position
 
-	float IdleMoveRange;
-	float IdleMoveRangeMin;
+	float IdleMoveRange;		// Max distance we will check for a new move position, while idle
+	float IdleMoveRangeMin;		// Minimum distance we will check for a new move position, while idle
 
-	bool LevelCombat;
+	bool LevelCombat;			// Do we try to maintain similar height to our target
+	bool PursueTarget;			// For aggressive, do we pursue targets after losing line of sight
 
-	// Minimum height we try to keep above the ground, if applicable.
-	float HoverHeight;
+	float HoverHeight;			// Minimum height we try to keep above the ground, if applicable.
+	float IdleCeiling;			// If applicable, when moving to a new position, we will be predisposed to fly no higher than this height from our current position	
+	float CombatCeiling;		// If applicable, when in combat, we will be predisposed to fly no higher than this height from our current position
+	
+	float ThinkRate;			// How often we process think requests
+	float IdleTime; 			// How long we wait to issue idle requests
+	float CombatTime;			// How often we check if we can switch to a new target while in combat
+	float CombatMoveTime;		// How long between move requests while we are in combat
 
-	// If applicable, when moving to a new position, we will be predisposed to fly no higher than this height from our current position
-	float IdleCeiling;
+	float SeekTime;				// How long we will seek for a lost target before giving up
+	float BurstTime;			// How long we hold our trigger down when firing. 0 = continuously held down
+	float BurstDelay;			// How long we wait between firing bursts
 
-	// If applicable, when in combat, we will be predisposed to fly no higher than this height from our current position
-	float CombatCeiling;
-
-	// How often we process think requests
-	float ThinkRate;
-	// How long we wait to issue idle requests
-	float IdleTime;
-	// How often we check if we can switch to a new target while in combat
-	float CombatTime;
-	// How long we will seek for a lost target before giving up
-	float SeekTime;
-	// How long we hold our trigger down when firing. 0 = continuously held down
-	float BurstTime;
-	// How long we wait between firing bursts
-	float BurstDelay;
+	float AimSpeed;				// How quickly we take to aim at our target, higher speeds is more accurate
 
 	EBehaviorType Behavior;
 }
@@ -292,6 +278,12 @@ methodmap FDroneAI < StringMap
 		public get() { return this.GetBool("DroneAI_Attacking"); }
 	}
 
+	property int TargetQueryIndex
+	{
+		public set(int value) { this.SetInt("DroneAI_TargetQueryIndex", value); }
+		public get() { return this.GetInt("DroneAI_TargetQueryIndex"); }
+	}
+
 	// We track these positions for when we seek our current target to retrace steps
 	property ArrayList TargetQueryPositions
 	{
@@ -405,6 +397,7 @@ methodmap FDroneAIStatics
 		params.IdleMoveRange = 1200.0;
 		params.IdleMoveRangeMin = 800.0;
 		params.LevelCombat = false;
+		params.PursueTarget = false;
 
 		params.ThinkRate = 0.1;
 		params.IdleTime = 2.0;
@@ -412,6 +405,8 @@ methodmap FDroneAIStatics
 		params.SeekTime = 6.0;
 		params.BurstTime = 1.0;
 		params.BurstDelay = 2.0;
+		params.CombatMoveTime = 2.0;
+		params.AimSpeed = 360.0;
 
 		return params;
 	}
@@ -438,6 +433,7 @@ methodmap FDroneAIStatics
 				params.IdleMoveRange = kv.GetFloat("max_move_range", 1200.0);
 				params.IdleMoveRangeMin = kv.GetFloat("min_move_range", 800.0);
 				params.LevelCombat = view_as<bool>(kv.GetNum("level_combat_height", 0));
+				params.PursueTarget = view_as<bool>(kv.GetNum("pursue_target", 0));
 
 				params.ThinkRate = kv.GetFloat("think_rate", 0.1);
 				params.IdleTime = kv.GetFloat("idle_timer", 2.0);
@@ -445,6 +441,8 @@ methodmap FDroneAIStatics
 				params.SeekTime = kv.GetFloat("pursue_timer", 6.0);
 				params.BurstTime = kv.GetFloat("burst_time", 1.0);
 				params.BurstDelay = kv.GetFloat("burst_delay", 2.0);
+				params.CombatMoveTime = kv.GetFloat("combat_move_time", 2.0);
+				params.AimSpeed = kv.GetFloat("aim_speed", 360.0);
 			}
 			else
 			{

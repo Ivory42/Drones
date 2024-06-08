@@ -37,7 +37,6 @@ methodmap FComponentArray < ArrayList
 			for (int i = 0; i < length; i++)
 			{
 				AComponent component = this.Get(i);
-				PrintToChatAll("Destroy entity: %d", component.Get());
 				FEntityStatics.DestroyEntity(component);
 			}
 		}

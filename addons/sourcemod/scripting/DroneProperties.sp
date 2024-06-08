@@ -976,6 +976,10 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 			damage *= 0.25;
 			sendEvent = false;
 		}
+		else if (player.Team == drone.Team)
+		{
+			return Plugin_Stop;
+		}
 	}
 
 	float forwardDamage = damage;

@@ -272,6 +272,7 @@ void KillEngine(AHunterChopper chopper)
 
 	char sound[64];
 	chopper.GetEngineSound(sound, sizeof sound);
+
 	StopSound(chopper.Get(), SNDCHAN_AUTO, sound);
 
 	if (model.Valid())
