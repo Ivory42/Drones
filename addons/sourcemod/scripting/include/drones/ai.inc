@@ -25,6 +25,14 @@ enum EControllerState
 	Controller_Alerted 		// We were fired at or took damage, look in direction of alert source
 };
 
+enum struct FDroneMoveParams
+{
+	float MaxDist;
+	float MinDist;
+	float Ceiling;
+	float MinHeight;
+}
+
 enum struct FDroneAIParams
 {
 	float MinAttackDistance;	// Closest distance we will maintain when attacking

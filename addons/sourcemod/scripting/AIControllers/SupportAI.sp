@@ -139,15 +139,14 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 
 			// If we are too far from our target, move anyway. Otherwise, only move when we can
 			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);
-			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange)
+			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange || (moveTick && !support.Moving))
 			{
-				movePos = FindFollowPosition(support, drone, follow);
-				MoveToPosition(support, movePos);
-			}
-			else if (moveTick && !support.Moving)
-			{
-				movePos = FindFollowPosition(support, drone, follow);
-				MoveToPosition(support, movePos);
+				FDroneMoveParams params;
+				params.MaxDist = ai.SupportRange;
+				params.MinDist = ai.MinSupportRange;
+				params.Ceiling = ai.MaxCombatHeight;
+				params.MinHeight = ai.HoverHeight;
+				DroneFindMovePosition(ai, drone, follow.GetPosition(), params);
 			}
 		}
 		else
@@ -161,12 +160,4 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 	{
 		support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, false, true)); // Follow teammates
 	}
-}
-
-FTransform FindFollowPosition(FSupportAI ai, ADrone drone, APersistentObject target)
-{
-	FVector position;
-	position = FindPositionAroundLocation(ai, drone, target.GetPosition(), ai.SupportRange, ai.MinSupportRange, ai.HoverHeight, ai.MaxCombatHeight);
-
-	return position;
 }

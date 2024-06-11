@@ -31,15 +31,14 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 
 			if (drone.GetPosition().DistanceTo(ai.GetMovePosition()) < GetBrakingDistance(drone)) // 270.0
 			{
-				ai.Moving = false;
-				ai.Stalling = true;
+				EndMove(ai);
 				if (ai.CurrentState == Controller_Seeking)
 				{
 					ai.NextMovementTime = GetGameTime() + 0.5;
 				}
 				else if (drone.GetVelocity().Length() >= 150.0)
 				{
-					ai.NextMovementTime = GetGameTime() + 1.5; // Slight delay before next move
+					ai.NextMovementTime = GetGameTime() + GetRandomFloat(1.5, 3.5); // Slight delay before next move
 				}
 			}
 		}
@@ -211,6 +210,36 @@ void CalcMovementTilt(ADrone drone, bool reverse)
 	rotation.Roll = FMath.ClampFloat(CalcRightTilt(drone, drone.GetInputVelocity(), 0.45, reverse), -35.0, 35.0);
 
 	drone.SetInputRotation(rotation);
+}
+
+void DroneFindMovePosition(FDroneAI controller, ADrone drone, FVector position, FDroneMoveParams params)
+{
+	FVector movePos;
+	Action move = ForwardDroneMovement(ai, drone, movePos);
+	if (move == Plugin_Continue)
+	{
+		movePos = FindPositionAroundLocation(controller, drone, position, params.MaxDist, params.MinDist, params.MinHeight, params.Ceiling);
+	}
+	else if (move == Plugin_Handled || move == Plugin_Stop)
+	{
+		return; // do nothing
+	}
+
+	MoveToPosition(ai, movePos);
+}
+
+Action DroneForwardPosition(FDroneAI controller, ADrone drone, FVector movePosition)
+{
+	Action result = Plugin_Continue;
+	Call_StartForward(DroneAIFindPosition);
+
+	Call_PushCell(controller);
+	Call_PushCell(drone);
+	Call_PushArray(movePosition, sizeof FVector);
+
+	Call_Finish(result);
+
+	return result;
 }
 
 FVector FindPositionAroundLocation(FDroneAI ai, ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0)
@@ -481,7 +510,7 @@ FRotator FindNewLookAngle()
 	return rot;
 }
 
-FTransform FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject target)
+FVector FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject target)
 {
 	FVector position;
 	position = FindPositionAroundLocation(ai, drone, target.GetPosition(), ai.DesiredAttackRange, ai.MinAttackRange, ai.HoverHeight, ai.MaxCombatHeight);
@@ -501,11 +530,17 @@ FTransform FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject targe
 	return position;
 }
 
-void MoveToPosition(FDroneAI ai,FVector position)
+void MoveToPosition(FDroneAI ai, FVector position)
 {
 	ai.SetMovePosition(position);
 	ai.Moving = true;
 	ai.Stalling = false;
+}
+
+void EndMove(FDroneAI controller)
+{
+	ai.Moving = false;
+	ai.Stalling = true;
 }
 
 float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1, bool reverse = false)

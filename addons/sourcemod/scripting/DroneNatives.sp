@@ -5,6 +5,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FDroneStatics.FireBullets", Native_FireBullets);
 	CreateNative("FDroneStatics.SpawnDroneByConfig", Native_CreateDrone);
 	CreateNative("FDroneStatics.AIControlDroneSeat", Native_ControlDrone);
+	CreateNative("FDroneStatics.CreateDroneWithController", Native_SpawnDroneController);
 
 	return APLRes_Success;
 }
@@ -39,6 +40,26 @@ any Native_CreateDrone(Handle plugin, int args)
 	return drone;
 }
 
+any Native_SpawnDroneController(Handle plugin, int args)
+{
+	char configName[64], controllerConf[64];
+	GetNativeString(1, configName, sizeof configName);
+	FTransform spawn;
+	GetNativeArray(3, spawn, sizeof FTransform);
+
+	ADrone drone = CreateDroneByName(GetWorld(), configName, spawn);
+
+	GetNativeString(2, controllerConf, sizeof controllerConf);
+	FDroneAIParams params;
+	params = FDroneAIStatics.CreateParamSetFromConfig(controllerConf);
+
+	FDroneAI controller = FDroneAIStatics.CreateDroneAIController(params);
+
+	ControlDrone(drone, GetPilotSeat(drone), controller);
+
+	return drone;
+}
+
 int Native_ControlDrone(Handle plugin, int args)
 {
 	ADrone drone = null;
@@ -48,23 +69,31 @@ int Native_ControlDrone(Handle plugin, int args)
 	drone = view_as<ADrone>(GetNativeCell(1));
 	seat = view_as<FDroneSeat>(GetNativeCell(2));
 	ai = view_as<FDroneAI>(GetNativeCell(3));
-
-	if (seat && !seat.Occupied && ai && ai.ValidDroneAI())
-	{
-		seat.Occupied = true;
-		seat.AIControlled = true;
-		seat.AIOccupier = ai;
-		ai.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
-		ai.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
-	}
-
-	Call_StartForward(DroneAIEnter);
-
-	Call_PushCell(drone);
-	Call_PushCell(ai);
-	Call_PushCell(seat);
-
-	Call_Finish();
+	
+	ControlDrone(drone, seat, ai);
 
 	return 0;
+}
+
+void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
+{
+	if (drone && seat)
+	{
+		if (!seat.Occupied && controller && controller.ValidDroneAI())
+		{
+			seat.Occupied = true;
+			seat.AIControlled = true;
+			seat.AIOccupier = controller;
+			ai.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
+			ai.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
+		}
+
+		Call_StartForward(DroneAIEnter);
+
+		Call_PushCell(drone);
+		Call_PushCell(controller);
+		Call_PushCell(seat);
+
+		Call_Finish();
+	}
 }

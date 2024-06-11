@@ -99,6 +99,16 @@ methodmap FDroneStatics
 	public static native ADrone SpawnDroneByConfig(char[] config, any spawn[sizeof FTransform]);
 
 	/**
+	 * Spawns a controlled drone with the given config and AI
+	 * 
+	 * @param drone			Drone config to spawn
+	 * @param controller	AI controller config to use
+	 * @param spawn			Spawn transform for this drone
+	 * @note 	This controller will always occupy the pilot seat of the drone
+	 */
+	public static native ADrone SpawnDroneWithController(char[] drone, char[] controller, any spawn[sizeof FTransform]);
+
+	/**
 	 * Occupies a drone seat with an AI controller
 	 * 
 	 * @param drone			Drone being entered
@@ -405,13 +415,24 @@ forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon 
  * Forward called when an AI controlled drone finds a target
  *
  * @param controller 		AI controller controlling this drone
- * @param drone			Drone occupied by the AI
+ * @param drone				Drone occupied by the AI
  * @param targetEnemies		If true, this drone is looking for enemies, otherwise it is looking for teammates
- * @param target 		Target that this drone has acquired
+ * @param target 			Target that this drone has acquired
  *
  * @return 			How to handle target acquisition: Plugin_Continue keeps the original target. Plugin_Handled or Plugin_Changed will update the target upon completion of this forward.
  */
 forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool targetEnemies, APersistentObject& target);
+
+/**
+ * Forward called when an AI controlled drone is about to move
+ *
+ * @param controller 		AI controller controlling this drone
+ * @param drone				Drone occupied by the AI
+ * @param position 			Position this drone will move to
+ *
+ * @return 			How to handle movement: Plugin_Continue finds a position normally. Plugin_Changed will force the given move position. Plugin_Handled or Plugin_Stopped will prevent a move position from being found.
+ */
+forward Action CD2_OnAIGetMovePosition(FDroneAI controller, ADrone drone, FVector position);
 
 
 /****************************************************************
