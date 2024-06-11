@@ -401,6 +401,17 @@ forward Action CD2_OnDroneDamaged(ADrone drone, FObject attacker, float &damage,
  */
 forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, FDroneSeat seat, int& ammo, const char[] name);
 
+/**
+ * Forward called when an AI controlled drone finds a target
+ *
+ * @param controller 		AI controller controlling this drone
+ * @param drone			Drone occupied by the AI
+ * @param targetEnemies		If true, this drone is looking for enemies, otherwise it is looking for teammates
+ * @param target 		Target that this drone has acquired
+ *
+ * @return 			How to handle target acquisition: Plugin_Continue keeps the original target. Plugin_Handled or Plugin_Changed will update the target upon completion of this forward.
+ */
+forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool targetEnemies, APersistentObject& target);
 
 
 /****************************************************************

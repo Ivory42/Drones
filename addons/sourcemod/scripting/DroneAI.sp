@@ -51,18 +51,8 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 			targetVel.Negate();
 
 			inputVel = drone.GetInputVelocity();
-			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), 0.95); // 0.95
+			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), ai.GetControllerParams().Braking); // 0.95
 			drone.SetInputVelocity(inputVel);
-
-			//currentVel = FMath.InterpVectorTo(currentVel, targetVel, GetGameFrameTime(), 0.05);
-
-			//inputVel = drone.GetInputVelocity();
-			//inputVel.Scale(0.98);
-			
-			//if (!(0.0 <= velocity.Length() <= 50.0))
-			//{
-			//	velocity.Add(currentVel);	
-			//}
 
 			velocity.Add(inputVel);
 		}
@@ -223,7 +213,7 @@ void CalcMovementTilt(ADrone drone, bool reverse)
 	drone.SetInputRotation(rotation);
 }
 
-FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0)
+FVector FindPositionAroundLocation(FDroneAI ai, ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0)
 {
 	FVector result;
 
@@ -253,13 +243,13 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	maxs = drone.GetComponents().MaxBounds;
 	FHullTrace trace = new FHullTrace(drone.GetPosition(), result, mins, maxs, MASK_SHOT, DroneMovementTrace, drone);
 	result = trace.GetEndPosition();
-	//trace.DebugTrace();
+	//trace.DebugTrace(0.5);
 	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
 	{
 		FVector normal;
 		normal = trace.GetNormalVector();
 
-		normal.Scale(200.0);
+		normal.Scale(ai.GetControllerParams().PathFindRadius);
 
 		result.Add(normal);
 	}
@@ -270,7 +260,7 @@ FVector FindPositionAroundLocation(ADrone drone, FVector location, float radius,
 	end = result;
 	end.Z -= minHeight - 5.0;
 	trace = new FHullTrace(result, end, mins, maxs, MASK_SHOT, FilterIgnorePlayersEx, drone.Get());
-	//trace.DebugTrace();
+	//trace.DebugTrace(0.5);
 	if (trace.DidHit())
 	{
 		result = trace.GetEndPosition();
@@ -336,7 +326,7 @@ FVector GetGroundPosition(ADrone drone, FVector position)
 }
 */
 
-APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true)
+APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true, bool playersOnly = false)
 {
 	TFTeam team = drone.Team;
 	float distance;
@@ -346,6 +336,21 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 	APersistentObject best;
 	AClient test;
 
+	Action result = Plugin_Continue;
+	Call_StartForward(DroneAIFindTarget);
+
+	Call_PushCell(ai);
+	Call_PushCell(drone);
+	Call_PushCell(enemy);
+	Call_PushCellRef(best);
+
+	Call_Finish(result);
+
+	if (result == Plugin_Handled || result == Plugin_Changed)
+	{
+		return best;
+	}
+
 	// Clients first
 	FClient client;
 	for (int i = 1; i <= MaxClients; i++)
@@ -353,9 +358,16 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 		if (IsClientInGame(i))
 		{
 			client = ConstructClient(i);
-			if (enemy)
+			if (enemy) // Enemies only
 			{
 				if (client.GetTeam() == view_as<int>(team))
+				{
+					continue;
+				}
+			}
+			else // otherwise only look for teammates
+			{
+				if (client.GetTeam() != view_as<int>(team))
 				{
 					continue;
 				}
@@ -379,6 +391,12 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 		}
 	}
 
+	// TODO - check buildings too
+	if (!playersOnly)
+	{
+
+	}
+
 	return best;
 }
 
@@ -399,7 +417,7 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 		}
 	}
 
-	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneMovementTrace, drone);
+	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneVisionTrace, drone);
 	if (trace.DidHit())
 	{
 		FObject hit;
@@ -414,7 +432,7 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 	return false;
 }
 
-bool DroneMovementTrace(int entity, int mask, ADrone drone)
+bool DroneVisionTrace(int entity, int mask, ADrone drone)
 {
 	if (entity == drone.Get())
 		return false;
@@ -422,6 +440,24 @@ bool DroneMovementTrace(int entity, int mask, ADrone drone)
 	if (entity <= MaxClients && entity > 0)
 	{
 		return true;
+	}
+	
+	if (ConstructObject(entity).Cast("prop_physics"))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool DroneMovementTrace(int entity, int mask, ADrone drone)
+{
+	if (entity == drone.Get())
+		return false;
+
+	if (entity <= MaxClients && entity > 0)
+	{
+		return false;
 	}
 	
 	if (ConstructObject(entity).Cast("prop_physics"))
@@ -448,7 +484,7 @@ FRotator FindNewLookAngle()
 FTransform FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject target)
 {
 	FVector position;
-	position = FindPositionAroundLocation(drone, target.GetPosition(), ai.DesiredAttackRange, ai.MinAttackRange, ai.HoverHeight, ai.MaxCombatHeight);
+	position = FindPositionAroundLocation(ai, drone, target.GetPosition(), ai.DesiredAttackRange, ai.MinAttackRange, ai.HoverHeight, ai.MaxCombatHeight);
 
 	// If we should remain level with our target, do not go below their height position
 	if (ai.LevelCombat)
@@ -458,7 +494,7 @@ FTransform FindTargetPosition(FDroneAI ai, ADrone drone, APersistentObject targe
 			position.Z = target.GetPosition().Z + ai.HoverHeight; // stay above based on our hovering height
 
 			// Now make sure we can see this position as well
-			position = FindPositionAroundLocation(drone, position, 20.0, 0.0);
+			position = FindPositionAroundLocation(ai, drone, position, 20.0, 0.0);
 		}
 	}
 

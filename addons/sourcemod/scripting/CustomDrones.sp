@@ -12,6 +12,8 @@ GlobalForward DroneAttack;
 GlobalForward DroneCreatedWeapon;
 GlobalForward DroneWeaponRemoved;
 
+GlobalForward DroneAIFindTarget;
+
 #include "DroneProperties.sp"
 #include "DroneNatives.sp"
 
@@ -48,6 +50,7 @@ public void OnPluginStart()
 
 	DroneDamaged = CreateGlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_FloatByRef, Param_CellByRef);
 
+	DroneAIFindTarget = CreateGlobalForward("CD2_OnAIFindTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
 }
 
 public void OnMapStart()

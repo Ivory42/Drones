@@ -33,7 +33,7 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 					float minRad = ai.MinMoveRange;
 					float height = ai.MaxMoveHeight;
 					float hover = ai.HoverHeight;
-					movePos = FindPositionAroundLocation(drone, drone.GetPosition(), radius, minRad, hover, height);
+					movePos = FindPositionAroundLocation(ai, drone, drone.GetPosition(), radius, minRad, hover, height);
 					MoveToPosition(ai, movePos);
 				}
 			}
@@ -47,7 +47,7 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 					float minRad = ai.MinMoveRange;
 					float height = ai.MaxMoveHeight;
 					float hover = ai.HoverHeight;
-					movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), radius, minRad, hover, height);
+					movePos = FindPositionAroundLocation(ai, drone, ai.GetMovePosition(), radius, minRad, hover, height);
 					FRotator velocityRot, direction;
 					velocityRot = Vector_GetAngles(drone.GetVelocity());
 					direction = Vector_GetAngles(movePos);
@@ -224,7 +224,7 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 			ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
 
 			FVector movePosition;
-			movePosition = FindPositionAroundLocation(drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
+			movePosition = FindPositionAroundLocation(ai, drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
 
 			if (movePosition.DistanceTo(drone.GetPosition()) > GetBrakingDistance(drone))
 			{

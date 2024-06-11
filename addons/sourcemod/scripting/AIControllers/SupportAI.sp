@@ -10,55 +10,19 @@
 
 void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 {
+	FSupportAI support = view_as<FSupportAI>(ai);
 	if (seat.Type == Seat_Pilot) // Pilot seat controls the drone's movement
 	{
 		bool moveTick = false;
-		if (ai.NextMovementTime <= GetGameTime())
+		if (thinkTick)
 		{
-			ai.NextMovementTime = GetGameTime() + ai.IdleTime;
-			moveTick = true;
-		}
-		if (moveTick)
-		{
-			if (!ai.Moving)
+			if (ai.NextMovementTime <= GetGameTime())
 			{
-				// Either look around or move to a new position
-				if (GetRandomInt(1, 10) > 4)
-					ai.SetTargetAngle(FindNewLookAngle());
-				else
-				{
-					// Get a random position around the drone to move to
-					FVector movePos;
-					float radius = ai.MoveRange;
-					float minRad = ai.MinMoveRange;
-					float height = ai.MaxMoveHeight;
-					float hover = ai.HoverHeight;
-					movePos = FindPositionAroundLocation(drone, drone.GetPosition(), radius, minRad, hover, height);
-					MoveToPosition(ai, movePos);
-				}
+				ai.NextMovementTime = GetGameTime() + ai.IdleTime;
+				moveTick = true;
 			}
-			else
-			{
-				// We can still change direction if we choose to
-				if (GetRandomInt(1, 10) > 3)
-				{
-					FVector movePos;
-					float radius = ai.MoveRange;
-					float minRad = ai.MinMoveRange;
-					float height = ai.MaxMoveHeight;
-					float hover = ai.HoverHeight;
-					movePos = FindPositionAroundLocation(drone, ai.GetMovePosition(), radius, minRad, hover, height);
-					FRotator velocityRot, direction;
-					velocityRot = Vector_GetAngles(drone.GetVelocity());
-					direction = Vector_GetAngles(movePos);
-
-					float angle = FMath.GetAngle(velocityRot, direction);
-					if (angle < 90.0) // Do not completely change direction while already moving
-					{
-						ai.SetMovePosition(movePos);
-					}
-				}
-			}
+			// First we check to see if we have a target, then move to them if they are too far
+			SimulateSupportFollow(support, drone, moveTick);
 		}
 	}
 	// If this seat has a weapon, perform weapon checks
@@ -73,20 +37,10 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 			{
 				ai.CurrentTarget = FindClosestTarget(ai, drone);
 			}
-			// Otherwise enter attack state if we can see our target
+			// Otherwise enter attack state if we can see our target. Support drones do not move towards their targets
 			else if (CanSeeTarget(drone, target))
 			{
 				ai.CurrentState = Controller_Attacking;
-
-				// Update our move position to be around our target
-				if (ai.Moving)
-				{
-					FVector movePosition;
-					movePosition = FindTargetPosition(ai, drone, target);
-
-					ai.SetMovePosition(movePosition);
-					ai.NextMovementTime = GetGameTime() + ai.GetControllerParams().CombatMoveTime;
-				}
 			}
 		}
 	}
@@ -96,11 +50,18 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 {
 	if (seat.HasWeapon() && weapon)
 	{
+		FSupportAI support = view_as<FSupportAI>(ai);
 		bool moveTick = false;
 		APersistentObject target = ai.CurrentTarget;
 
 		if (thinkTick)
 		{
+			if (ai.NextMovementTime <= GetGameTime())
+			{
+				moveTick = true;
+			}
+
+			SimulateSupportFollow(support, drone, moveTick);
 			if (target && CanSeeTarget(drone, target))
 			{
 				FRotator angleTowardsEnemy;
@@ -114,19 +75,6 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 				{
 					ai.NextCombatCheckTime = GetGameTime() + params.CombatTime;
 					target = FindClosestTarget(ai, drone);
-				}
-
-				if (ai.NextMovementTime <= GetGameTime())
-				{
-					moveTick = true;
-				}
-
-				if (moveTick && !ai.Moving)
-				{
-					FVector movePosition;
-					movePosition = FindTargetPosition(ai, drone, target);
-
-					MoveToPosition(ai, movePosition);
 				}
 
 				if (DroneInRange(ai, drone, target))
@@ -146,23 +94,6 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 							}
 						}
 					}
-				}
-				else if (moveTick)
-				{
-					FVector movePosition;
-					movePosition = FindTargetPosition(ai, drone, target);
-
-					MoveToPosition(ai, movePosition);
-				}
-
-				// Also check if we are too close
-				if (!ai.Moving && DroneTooClose(ai, drone, target))
-				{
-					// Move further away
-					FVector movePosition;
-					movePosition = FindTargetPosition(ai, drone, target);
-
-					MoveToPosition(ai, movePosition);
 				}
 			}
 			else
@@ -195,4 +126,47 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 			}
 		}
 	}
+}
+
+void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
+{
+	AClient follow = support.FollowTarget;
+	if (follow)
+	{
+		if (CanSeeTarget(drone, follow))
+		{
+			FVector movePos;
+
+			// If we are too far from our target, move anyway. Otherwise, only move when we can
+			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);
+			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange)
+			{
+				movePos = FindFollowPosition(support, drone, follow);
+				MoveToPosition(support, movePos);
+			}
+			else if (moveTick && !support.Moving)
+			{
+				movePos = FindFollowPosition(support, drone, follow);
+				MoveToPosition(support, movePos);
+			}
+		}
+		else
+		{
+			//support.CurrentState = Controller_Seeking; // Start looking where our follow target was last
+			support.FollowTarget = null;
+			follow = null;
+		}
+	}
+	else
+	{
+		support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, false, true)); // Follow teammates
+	}
+}
+
+FTransform FindFollowPosition(FSupportAI ai, ADrone drone, APersistentObject target)
+{
+	FVector position;
+	position = FindPositionAroundLocation(ai, drone, target.GetPosition(), ai.SupportRange, ai.MinSupportRange, ai.HoverHeight, ai.MaxCombatHeight);
+
+	return position;
 }

@@ -52,6 +52,11 @@ enum struct FDroneAIParams
 
 	float AimSpeed;				// How quickly we take to aim at our target, higher speeds is more accurate
 
+	float Braking;
+	float PathFindRadius;
+
+	float SupportRange;
+	float MinSupportRange;
 	EBehaviorType Behavior;
 }
 
@@ -353,6 +358,27 @@ methodmap FDroneAI < StringMap
 	}
 }
 
+methodmap FSupportAI < FDroneAI
+{
+	property AClient FollowTarget
+	{
+		public set(AClient client) { this.SetValue("SupportAI_FollowTarget", client); }
+		public get() { return view_as<AClient>(this.GetObject("SupportAI_FollowTarget")); }
+	}
+
+	property float SupportRange
+	{
+		public set(float value) { this.SetFloat("SupportAI_MaxFollowDistance", value); }
+		public get() { return this.GetFloat("SupportAI_MaxFollowDistance"); }
+	}
+
+	property float MinSupportRange
+	{
+		public set(float value) { this.SetFloat("SupportAI_MinFollowDistance", value); }
+		public get() { return this.GetFloat("SupportAI_MinFollowDistance"); }
+	}
+}
+
 methodmap FDroneAIStatics
 {
 	public static FDroneAI CreateDroneAIController(FDroneAIParams params)
@@ -377,6 +403,13 @@ methodmap FDroneAIStatics
 
 			ai.IdleTime = params.IdleTime;
 			ai.ThinkRate = params.ThinkRate;
+
+			if (params.Behavior == Behavior_Support)
+			{
+				FSupportAI support = view_as<FSupportAI>(ai);
+				support.SupportRange = params.SupportRange;
+				support.MinSupportRange = params.MinSupportRange;
+			}
 
 			ai.SetControllerParams(params);
 		}
@@ -407,6 +440,12 @@ methodmap FDroneAIStatics
 		params.BurstDelay = 2.0;
 		params.CombatMoveTime = 2.0;
 		params.AimSpeed = 360.0;
+
+		params.SupportRange = 200.0;
+		params.MinSupportRange = 0.0;
+
+		params.Braking = 0.95;
+		params.PathFindRadius = 200.0;
 
 		return params;
 	}
@@ -443,6 +482,12 @@ methodmap FDroneAIStatics
 				params.BurstDelay = kv.GetFloat("burst_delay", 2.0);
 				params.CombatMoveTime = kv.GetFloat("combat_move_time", 2.0);
 				params.AimSpeed = kv.GetFloat("aim_speed", 360.0);
+
+				params.SupportRange = kv.GetFloat("max_support_range", 200.0);
+				params.MinSupportRange = kv.GetFloat("min_support_range", 0.0);
+
+				params.Braking = kv.GetFloat("braking_speed", 0.95);
+				params.PathFindRadius = kv.GetFloat("path_find_radius", 200.0);
 			}
 			else
 			{
