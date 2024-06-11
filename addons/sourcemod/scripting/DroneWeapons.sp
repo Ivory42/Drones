@@ -28,6 +28,8 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		//SetupMount(kv, weapon, drone, components);
 		SetStringValues(weapon, kv);
 
+		components.ProjOffset = Vector_GetFromKV(kv, "proj_offset");
+
 		char attachment[64], muzzle[64];
 		kv.GetString("attachment", attachment, sizeof attachment);
 		kv.GetString("muzzle", muzzle, sizeof muzzle);
@@ -125,10 +127,10 @@ void SetupAttachments(ADroneWeapon weapon)
 	}
 	else
 	{
+		muzzle = FGameplayStatics.CreateObject("info_target");
 		if (weapon.GetMuzzleTransform(attach))
 		{
 			//PrintToChatAll("Found only one muzzle");
-			muzzle = FGameplayStatics.CreateObject("info_target");
 			muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
 			if (weapon.UsesParent)
 			{
@@ -138,6 +140,26 @@ void SetupAttachments(ADroneWeapon weapon)
 			{
 				muzzle.SetParent(weapon.GetReceiver());
 			}
+
+			weapon.MuzzlePositions.Push(muzzle.Reference);
+		}
+		else
+		{
+			// If no attachment found, resort to offset from origin
+			FObject attachEntity;
+			attachEntity = weapon.GetReceiver();
+			if (weapon.UsesParent)
+			{
+				AComponent parent = weapon.GetParent();
+				attach.Position = FMath.OffsetVector(parent.GetPosition(), parent.GetAngles(), weapon.GetObjects().ProjOffset);
+			}
+			else
+			{
+				attach.Position = FMath.OffsetVector(weapon.GetPosition(), weapon.GetAngles(), weapon.GetObjects().ProjOffset);
+			}
+
+			muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
+			muzzle.SetParent(attachEntity);
 
 			weapon.MuzzlePositions.Push(muzzle.Reference);
 		}
@@ -259,72 +281,6 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 
 		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
 	}
-}
-
-FVector GetDroneAimPosition(ADrone drone, FRotator rotation)
-{
-	FVector start, direction, end;
-	start = GetCameraOffset(drone);
-
-	direction = rotation.GetForwardVector();
-	direction.Scale(8000.0);
-	direction.Add(start);
-
-	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
-	end = trace.GetEndPosition(); // Surface we are aiming at
-	delete trace;
-
-	return end;
-}
-
-FVector GetCameraOffset(ADrone drone)
-{
-	float cameraHeight = drone.CameraHeight;
-
-	FVector start;
-	start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), ConstructVector(0.0, 0.0, cameraHeight));
-
-	return start;
-}
-
-bool DroneWeaponTrace(int entity, int mask, ADrone drone)
-{
-	if (entity == drone.Get())
-		return false;
-	
-	//Let's ignore anything attached to this drone as well
-	if (IsValidEntity(entity) && entity > MaxClients)
-	{
-		FObject test;
-		test = ConstructObject(entity);
-		if (test.Valid() && test.HasProp(Prop_Send, "m_hMoveParent"))
-		{
-			if (test.GetParent().Get() == drone.Get())
-			{
-				return false;
-			}
-		}
-	}
-
-	if (drone.Pilot && entity == drone.Pilot.Get())
-		return false;
-	
-	// Loop through our seats to make sure we don't hit any passengers
-	/*int seats = drone.Seats.Length;
-	for (int i = 0; i < seats; i++)
-	{
-		FDroneSeat seat = drone.Seats.Get(i);
-		if (seat && seat.Valid())
-		{
-			ADronePlayer player = seat.Occupier;
-			if (player && entity == player.Get())
-			{
-				return false;
-			}
-		}
-	}
-	*/
-	return true;
 }
 
 // Whenever the mount takes damage, send that damage over to the weapon itself

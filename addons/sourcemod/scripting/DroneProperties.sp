@@ -1209,7 +1209,7 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed)
 	// Drones will passively counteract gravity
 	FVector grav;
 
-	grav.Z = 23.5;
+	grav.Z = 15.5;
 
 	velocity.Add(grav);
 

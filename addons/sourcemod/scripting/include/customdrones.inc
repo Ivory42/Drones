@@ -551,6 +551,72 @@ stock FDroneSeat GetPilotSeat(ADrone drone)
 	return null;
 }
 
+stock FVector GetDroneAimPosition(ADrone drone, FRotator rotation, float range = 8000.0)
+{
+	FVector start, direction, end;
+	start = GetCameraOffset(drone);
+
+	direction = rotation.GetForwardVector();
+	direction.Scale(range);
+	direction.Add(start);
+
+	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+	end = trace.GetEndPosition(); // Surface we are aiming at
+	delete trace;
+
+	return end;
+}
+
+stock FVector GetCameraOffset(ADrone drone)
+{
+	float cameraHeight = drone.CameraHeight;
+
+	FVector start;
+	start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), ConstructVector(0.0, 0.0, cameraHeight));
+
+	return start;
+}
+
+stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
+{
+	if (entity == drone.Get())
+		return false;
+	
+	//Let's ignore anything attached to this drone as well
+	if (IsValidEntity(entity) && entity > MaxClients)
+	{
+		FObject test;
+		test = ConstructObject(entity);
+		if (test.Valid() && test.HasProp(Prop_Send, "m_hMoveParent"))
+		{
+			if (test.GetParent().Get() == drone.Get())
+			{
+				return false;
+			}
+		}
+	}
+
+	if (drone.Pilot && entity == drone.Pilot.Get())
+		return false;
+	
+	// Loop through our seats to make sure we don't hit any passengers
+	/*int seats = drone.Seats.Length;
+	for (int i = 0; i < seats; i++)
+	{
+		FDroneSeat seat = drone.Seats.Get(i);
+		if (seat && seat.Valid())
+		{
+			ADronePlayer player = seat.Occupier;
+			if (player && entity == player.Get())
+			{
+				return false;
+			}
+		}
+	}
+	*/
+	return true;
+}
+
 /**
  * Checks if the given client is in a drone and returns the seat index
  * 

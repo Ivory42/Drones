@@ -84,8 +84,8 @@ void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
 			seat.Occupied = true;
 			seat.AIControlled = true;
 			seat.AIOccupier = controller;
-			ai.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
-			ai.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
+			controller.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
+			controller.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
 		}
 
 		Call_StartForward(DroneAIEnter);

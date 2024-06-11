@@ -135,18 +135,16 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 	{
 		if (CanSeeTarget(drone, follow))
 		{
-			FVector movePos;
-
 			// If we are too far from our target, move anyway. Otherwise, only move when we can
 			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);
 			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange || (moveTick && !support.Moving))
 			{
 				FDroneMoveParams params;
-				params.MaxDist = ai.SupportRange;
-				params.MinDist = ai.MinSupportRange;
-				params.Ceiling = ai.MaxCombatHeight;
-				params.MinHeight = ai.HoverHeight;
-				DroneFindMovePosition(ai, drone, follow.GetPosition(), params);
+				params.MaxDist = support.SupportRange;
+				params.MinDist = support.MinSupportRange;
+				params.Ceiling = support.MaxCombatHeight;
+				params.MinHeight = support.HoverHeight;
+				DroneFindMovePosition(support, drone, follow.GetPosition(), params);
 			}
 		}
 		else

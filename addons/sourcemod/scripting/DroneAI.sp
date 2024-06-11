@@ -215,7 +215,7 @@ void CalcMovementTilt(ADrone drone, bool reverse)
 void DroneFindMovePosition(FDroneAI controller, ADrone drone, FVector position, FDroneMoveParams params)
 {
 	FVector movePos;
-	Action move = ForwardDroneMovement(ai, drone, movePos);
+	Action move = ForwardDronePosition(controller, drone, movePos);
 	if (move == Plugin_Continue)
 	{
 		movePos = FindPositionAroundLocation(controller, drone, position, params.MaxDist, params.MinDist, params.MinHeight, params.Ceiling);
@@ -225,10 +225,10 @@ void DroneFindMovePosition(FDroneAI controller, ADrone drone, FVector position, 
 		return; // do nothing
 	}
 
-	MoveToPosition(ai, movePos);
+	MoveToPosition(controller, movePos);
 }
 
-Action DroneForwardPosition(FDroneAI controller, ADrone drone, FVector movePosition)
+Action ForwardDronePosition(FDroneAI controller, ADrone drone, FVector movePosition)
 {
 	Action result = Plugin_Continue;
 	Call_StartForward(DroneAIFindPosition);
@@ -539,8 +539,8 @@ void MoveToPosition(FDroneAI ai, FVector position)
 
 void EndMove(FDroneAI controller)
 {
-	ai.Moving = false;
-	ai.Stalling = true;
+	controller.Moving = false;
+	controller.Stalling = true;
 }
 
 float CalcForwardTilt(ADrone drone, FVector velocity, float adjust = 0.1, bool reverse = false)

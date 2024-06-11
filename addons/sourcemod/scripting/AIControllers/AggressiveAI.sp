@@ -125,12 +125,12 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				if (moveTick && !ai.Moving)
 				{
 					// Find a position around our target
-					FDroneMoveParams params;
-					params.MaxDist = ai.DesiredAttackRange;
-					params.MinDist = ai.MinAttackRange;
-					params.Ceiling = ai.MaxCombatHeight;
-					params.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), params);
+					FDroneMoveParams move;
+					move.MaxDist = ai.DesiredAttackRange;
+					move.MinDist = ai.MinAttackRange;
+					move.Ceiling = ai.MaxCombatHeight;
+					move.MinHeight = ai.HoverHeight;
+					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
 				}
 
 				if (DroneInRange(ai, drone, target))
@@ -153,24 +153,24 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				}
 				else if (moveTick)
 				{
-					FDroneMoveParams params;
-					params.MaxDist = ai.DesiredAttackRange;
-					params.MinDist = ai.MinAttackRange;
-					params.Ceiling = ai.MaxCombatHeight;
-					params.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), params);
+					FDroneMoveParams move;
+					move.MaxDist = ai.DesiredAttackRange;
+					move.MinDist = ai.MinAttackRange;
+					move.Ceiling = ai.MaxCombatHeight;
+					move.MinHeight = ai.HoverHeight;
+					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
 				}
 
 				// Also check if we are too close
 				if (!ai.Moving && DroneTooClose(ai, drone, target))
 				{
 					// Move further away
-					FDroneMoveParams params;
-					params.MaxDist = ai.DesiredAttackRange;
-					params.MinDist = ai.MinAttackRange;
-					params.Ceiling = ai.MaxCombatHeight;
-					params.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), params);
+					FDroneMoveParams move;
+					move.MaxDist = ai.DesiredAttackRange;
+					move.MinDist = ai.MinAttackRange;
+					move.Ceiling = ai.MaxCombatHeight;
+					move.MinHeight = ai.HoverHeight;
+					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
 				}
 			}
 			else
@@ -231,12 +231,12 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 			FVector queriedPosition;
 			ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
 			
-			FDroneMoveParams params;
-			params.MaxDist = 20.0;
-			params.MinDist = 0.0;
-			params.Ceiling = ai.MaxCombatHeight;
-			params.MinHeight = ai.HoverHeight;
-			DroneFindMovePosition(ai, drone, queriedPosition, params);
+			FDroneMoveParams move;
+			move.MaxDist = 20.0;
+			move.MinDist = 0.0;
+			move.Ceiling = params.CombatCeiling;
+			move.MinHeight = ai.HoverHeight;
+			DroneFindMovePosition(ai, drone, queriedPosition, move);
 
 			FVector movePosition;
 			//movePosition = FindPositionAroundLocation(ai, drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
