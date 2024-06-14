@@ -14,6 +14,8 @@ GlobalForward DroneWeaponRemoved;
 
 GlobalForward DroneAIFindTarget;
 GlobalForward DroneAIFindPosition;
+//GlobalForward DroneAIThink;
+GlobalForward DroneAIAttack;
 
 #include "DroneProperties.sp"
 #include "DroneNatives.sp"
@@ -53,6 +55,8 @@ public void OnPluginStart()
 
 	DroneAIFindTarget = CreateGlobalForward("CD2_OnAIFindTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
 	DroneAIFindPosition = CreateGlobalForward("CD2_OnAIGetMovePosition", ET_Hook, Param_Cell, Param_Cell, Param_Array);
+	//DroneAIThink = CreateGlobalForward("CD2_OnAITick", ET_Ignore, Param_Cell, Param_Cell);
+	DroneAIAttack = CreateGlobalForward("CD2_OnAIAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 }
 
 public void OnMapStart()
@@ -396,7 +400,7 @@ void OpenMenu(FClient client)
 		Format(dirName, sizeof dirName, "%s/%s", droneDir, fileName);
 		if (FileExists(dirName))
 		{
-			ReplaceString(fileName, sizeof fileName, ".txt", "", false);
+			ReplaceString(fileName, sizeof fileName, ".cfg", "", false);
 			DroneMenu.AddItem(fileName, fileName);
 		}
 	}
@@ -446,7 +450,7 @@ ADrone CreateDroneByName(FClient owner, const char[] name, const FTransform spaw
 		if (type != FileType_File)
 			continue;
 
-		ReplaceString(FileName, sizeof FileName, ".txt", "", false);
+		ReplaceString(FileName, sizeof FileName, ".cfg", "", false);
 		if (StrEqual(name, FileName))
 		{
 			//PrintToChatAll("Found drone %s", drone_name);
@@ -466,7 +470,7 @@ void SpawnDrone(FClient owner, const char[] name, const FTransform spawnPos, ADr
 	//PrintToChatAll("Drone spawned");
 	KeyValues kv = new KeyValues("Drone");
 	char path[64];
-	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.txt", name);
+	BuildPath(Path_SM, path, sizeof path, "configs/drones/%s.cfg", name);
 
 	if (!FileExists(path))
 	{
@@ -719,6 +723,18 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 		if (StrEqual(weapons, "ALL")) // Provide access to all weapons
 		{
 			seat.Weapons = drone.Weapons;
+
+			if (seat.Weapons.Length > 0)
+			{
+				for (int i = 0; i < seat.Weapons.Length; i++)
+				{
+					ADroneWeapon weapon = view_as<ADroneWeapon>(seat.Weapons.Get(i));
+					if (weapon && weapon.IsDroneWeapon)
+					{
+						weapon.Seat = seat;
+					}
+				}
+			}
 		}
 		else // Otherwise let's get the weapons allowed for this seat
 		{

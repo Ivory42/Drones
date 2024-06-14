@@ -20,6 +20,7 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDron
 
 				char weaponName[64];
 				weapon.GetInternalName(weaponName, sizeof weaponName);
+
 				Call_StartForward(DroneAttack);
 
 				Call_PushCell(drone);
@@ -60,6 +61,20 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 {
 	if (weapon.CanFire())
 	{
+		Action actionCanAttack = Plugin_Continue;
+		Call_StartForward(DroneAIAttack);
+
+		Call_PushCell(ai);
+		Call_PushCell(drone);
+		Call_PushCell(weapon);
+
+		Call_Finish(actionCanAttack);
+
+		if (actionCanAttack != Plugin_Continue)
+		{
+			return;
+		}
+
 		if (weapon.FireRate > 0.0)
 			weapon.NextPrimaryAttack = GetGameTime() + (1.0 / weapon.FireRate);
 
@@ -324,6 +339,7 @@ FRotator InterpRotation(FRotator current, FRotator target, float deltaTime, floa
 	}
 
 	float interpSpeedDelta = speed * deltaTime;
+
 	FRotator delta;
 	delta = SubtractRotators(target, current).GetNormalized();
 
@@ -368,7 +384,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 					movementRot = currentAngle;
 
 					movementRotTarg.Yaw = currentAngle.Yaw; // Ignore yaw
-					movementRot = InterpRotation(movementRot, movementRotTarg, GetGameFrameTime(), 90.0);
+					movementRot = InterpRotation(movementRot, movementRotTarg, GetGameFrameTime(), drone.TurnRate * 90.0);
 
 					drone.SetInputRotation(movementRot);
 
@@ -376,7 +392,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 					desiredAngle.Roll = movementRot.Roll;
 				}
 				
-				currentAngle = InterpRotation(currentAngle, desiredAngle, GetGameFrameTime(), 2.0/*drone.TurnRate*/);
+				currentAngle = InterpRotation(currentAngle, desiredAngle, GetGameFrameTime(), drone.TurnRate);
 
 				// For flying based drones we want to adjust the roll based on how much we are turning
 				if (drone.MoveType == MoveType_Fly)

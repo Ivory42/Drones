@@ -358,6 +358,13 @@ any EntNative_EnableTick(Handle plugin, int args)
 	Function callbackFunc = GetNativeFunction(2);
 	float tickrate = GetNativeCell(3);
 
+	if (!entity.TickCallbacks)
+	{
+		entity.TickCallbacks = new PrivateForward(ET_Ignore, Param_Cell);
+	}
+
+	entity.TickCallbacks.AddFunction(plugin, callbackFunc);
+
 	FEntityProps props;
 	props.TickFunction = callbackFunc;
 	props.CallingPlugin = plugin;
@@ -368,6 +375,7 @@ any EntNative_EnableTick(Handle plugin, int args)
 	// Do not hook unregistered entities
 	if (!IsEntInList(entity))
 	{
+		delete entity.TickCallbacks;
 		FObjectStatics.RemoveObject(entity);
 		return 0;
 	}
@@ -383,6 +391,9 @@ any EntNative_EnableTick(Handle plugin, int args)
 any EntNative_DisableTick(Handle plugin, int args)
 {
 	ABaseEntity entity = view_as<ABaseEntity>(GetNativeCell(1));
+	Function callbackFunc = GetNativeFunction(2);
+
+	UnHookEntityTick(entity, plugin, callbackFunc);
 	
 	DisableEntityTick(entity);
 
@@ -454,6 +465,19 @@ int Native_Test(Handle plugin, int args)
  * 
  **************************/
 
+void UnHookEntityTick(ABaseEntity entity, Handle plugin, Function func)
+{
+	if (entity.TickCallbacks)
+	{
+		entity.TickCallbacks.RemoveFunction(plugin, func);
+		if (entity.TickCallbacks.FunctionCount < 1)
+		{
+			// Disable our entity from ticking
+			DisableEntityTick(entity);
+		}
+	}
+}
+
 void DisableEntityTick(ABaseEntity entity)
 {
 	if (TickingEntities)
@@ -465,6 +489,11 @@ void DisableEntityTick(ABaseEntity entity)
 		}
 	}
 	entity.CanTick = false;
+
+	if (entity.TickCallbacks)
+	{
+		delete entity.TickCallbacks;
+	}
 }
 
 ABaseEntity GetEntity(FObject entity)
@@ -573,6 +602,15 @@ public void OnGameFrame()
 			{
 				entity.NextTickTime = GetGameTime() + entity.TickRate;
 
+				if (entity.TickCallbacks)
+				{
+					Call_StartForward(entity.TickCallbacks);
+					Call_PushCell(entity);
+
+					Call_Finish();
+				}
+
+				/*
 				FEntityProps props;
 				props = entity.GetCallbackProps();
 
@@ -583,6 +621,7 @@ public void OnGameFrame()
 
 					Call_Finish();
 				}
+				*/
 			}
 		}
 	}

@@ -1,5 +1,3 @@
-#pragma semicolon 1
-
 #include <drones/modules/hunterchopper>
 
 public Plugin MyInfo = {
@@ -8,6 +6,7 @@ public Plugin MyInfo = {
 	description		= 	"Combine Chopper attack drone",
 	version 		= 	"1.0"
 };
+
 
 public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon weapon, FDroneSeat seat, int& ammo, const char[] name)
 {
@@ -34,7 +33,7 @@ public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon w
 			cannon.Firing = false;
 		}
 
-		return Plugin_Stop;
+		return Plugin_Handled;
 	}
 	return Plugin_Continue;
 }

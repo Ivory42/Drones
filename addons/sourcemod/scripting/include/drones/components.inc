@@ -93,6 +93,12 @@ methodmap ADroneWeapon < AComponent
 		public set(bool value) { this.SetObjectProp("Entity_IsDroneWeapon", value); }
 	}
 
+	property FDroneSeat Seat // Seat controlling this weapon
+	{
+		public get() { return view_as<FDroneSeat>(this.GetObjectProp("Weapon_ControllingSeat")); }
+		public set(FDroneSeat seat) { this.SetObjectProp("Weapon_ControllingSeat", seat); }
+	}
+
 	property int Ammo // Ammo currently loaded
 	{
 		public get() { return this.GetObjectProp("Weapon_CurrentAmmo"); }

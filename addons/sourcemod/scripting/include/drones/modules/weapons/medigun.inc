@@ -20,6 +20,48 @@ methodmap AMediGun < ADroneWeapon
 		public set(float value) { this.SetObjectPropFloat("Medigun_BeamRange", value); }
 	}
 
+	property float HealAmount
+	{
+		public get() { return this.GetObjectPropFloat("Medigun_HealPerTick"); }
+		public set(float value) { this.SetObjectPropFloat("Medigun_HealPerTick", value); }
+	}
+
+	property float HealRate
+	{
+		public get() { return this.GetObjectPropFloat("Medigun_HealTickRate"); }
+		public set(float value) { this.SetObjectPropFloat("Medigun_HealTickRate", value); }
+	}
+
+	property float Overheal
+	{
+		public get() { return this.GetObjectPropFloat("Medigun_OverhealPercent"); }
+		public set(float value) { this.SetObjectPropFloat("Medigun_OverhealPercent", value); }
+	}
+
+	property int HealingTotal // How much healing to display on heal events
+	{
+		public get() { return this.GetObjectProp("Medigun_HealEventTotal"); }
+		public set(int value) { this.SetObjectProp("Medigun_HealEventTotal", value); }
+	}
+
+	property STimer DisplayTimer
+	{
+		public get() { return view_as<STimer>(this.GetObjectProp("Medigun_HealDisplayTimer")); }
+		public set(STimer value) { this.SetObjectProp("Medigun_HealDisplayTimer", value); }
+	}
+
+	property STimer HealTick
+	{
+		public get() { return view_as<STimer>(this.GetObjectProp("Medigun_HealTickTimer")); }
+		public set(STimer value) { this.SetObjectProp("Medigun_HealTickTimer", value); }
+	}
+
+	property bool ShowEvent // Is this a medigun
+	{
+		public get() { return view_as<bool>(this.GetObjectProp("Medigun_ShowHealEvent")); }
+		public set(bool value) { this.SetObjectProp("Medigun_ShowHealEvent", value); }
+	}
+
 	public void CreateBeamEntity()
 	{
 		if (!this.Target)
@@ -203,7 +245,7 @@ stock void CreateHealBeamEntity(FClient player, FObject entity, FObject particle
 	attachbuffer = particle2;
 }
 
-stock AMediGun CastToMedigun(ADroneWeapon weapon)
+stock AMediGun CastToMedigun(ABaseEntity weapon)
 {
 	AMediGun medigun = null;
 	if (weapon && weapon.GetObjectProp("Weapon_IsMedigun"))

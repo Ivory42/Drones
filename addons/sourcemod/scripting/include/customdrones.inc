@@ -434,6 +434,25 @@ forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool target
  */
 forward Action CD2_OnAIGetMovePosition(FDroneAI controller, ADrone drone, FVector position);
 
+/**
+ * Forward called upon an AI controller processing a think request
+ * 
+ * @param controller		AI controller processing request
+ * @param drone				Drone being controlled
+ */
+forward void CD2_OnAITick(FDroneAI controller, ADrone drone);
+
+/**
+ * Forward called upon an AI controller attempting to fire a weapon
+ * 
+ * @param controller		AI controller processing request
+ * @param drone				Drone being controlled
+ * @param weapon			Weapon being fired
+ * 
+ * @return Plugin_Continue to allow the weapon to fire, otherwise prevent the weapon from firing
+ */
+forward Action CD2_OnAIAttack(FDroneAI controller, ADrone drone, ADroneWeapon weapon);
+
 
 /****************************************************************
 	STOCKS
