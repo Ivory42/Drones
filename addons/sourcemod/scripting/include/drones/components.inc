@@ -541,6 +541,18 @@ methodmap FDroneSeat < StringMap
 		public set(bool value) { this.SetValue("SeatTaken", value); }
 	}
 
+	property ADrone Drone // Drone this seat is attached to
+	{
+		public get()
+		{
+			ADrone drone;
+			this.GetValue("SeatConnectedDrone", drone);
+
+			return drone;
+		}
+		public set(ADrone drone) { this.SetValue("SeatConnectedDrone", drone); }
+	}
+
 	property ESeatType Type // What type of seat this is, defines what the client occupying this seat can do.
 	{
 		public get()

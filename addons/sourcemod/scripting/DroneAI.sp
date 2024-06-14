@@ -16,7 +16,7 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 	SimulateDecisionTree(ai, seat, drone, thinkTick);
 
 	if (seat.Type == Seat_Pilot)
-	{
+	{	
 		FVector velocity;
 		if (ai.Moving)
 		{
@@ -57,7 +57,10 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 		}
 
 		CalcMovementTilt(drone, ai.Stalling);
-		SimulateDrone(drone, velocity, drone.MaxSpeed);
+		if (!ai.OverrideMovement)
+		{
+			SimulateDrone(drone, velocity, drone.MaxSpeed);
+		}
 	}
 
 	// Now handle our view angles
@@ -235,7 +238,7 @@ Action ForwardDronePosition(FDroneAI controller, ADrone drone, FVector movePosit
 
 	Call_PushCell(controller);
 	Call_PushCell(drone);
-	Call_PushArray(movePosition, sizeof FVector);
+	Call_PushArrayEx(movePosition, sizeof FVector, SM_PARAM_COPYBACK);
 
 	Call_Finish(result);
 

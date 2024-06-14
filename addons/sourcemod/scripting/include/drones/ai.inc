@@ -120,6 +120,12 @@ methodmap FDroneAI < StringMap
 		return value;
 	}
 
+	property bool OverrideMovement // Prevents native movement for this drone, if applicable
+	{
+		public set(bool value) { this.SetBool("DroneAI_OverrideMovement", value); }
+		public get() { return this.GetBool("DroneAI_OverrideMovement"); }
+	}
+
 	property bool Moving
 	{
 		public set(bool value) { this.SetBool("DroneAI_IsMovingToPosition", value); }

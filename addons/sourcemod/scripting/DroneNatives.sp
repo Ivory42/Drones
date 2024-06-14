@@ -3,6 +3,7 @@ GlobalForward DroneAIEnter;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	CreateNative("FDroneStatics.FireBullets", Native_FireBullets);
+	CreateNative("FDroneStatics.FireActiveWeapon", Native_FireWeapon);
 	CreateNative("FDroneStatics.SpawnDroneByConfig", Native_CreateDrone);
 	CreateNative("FDroneStatics.AIControlDroneSeat", Native_ControlDrone);
 	CreateNative("FDroneStatics.CreateDroneWithController", Native_SpawnDroneController);
@@ -25,6 +26,28 @@ int Native_FireBullets(Handle plugin, int args)
 	{
 		DroneFireGun(drone, weapon, gunner);
 	}
+	return 0;
+}
+
+int Native_FireWeapon(Handle plugin, int args)
+{
+	FDroneSeat seat = view_as<FDroneSeat>(GetNativeCell(1));
+	if (seat && seat.Valid())
+	{
+		ADrone drone = seat.Drone;
+		if (drone && drone.IsDrone)
+		{
+			if (seat.AIControlled && seat.AIOccupier)
+			{
+				OnDroneAIAttack(FDroneAIStatics.GetSeatController(seat), seat.ActiveWeapon, drone, seat);
+			}
+			else if (seat.Occupier)
+			{
+				OnDroneAttack(seat.Occupier, seat.ActiveWeapon, drone, seat);
+			}
+		}
+	}
+
 	return 0;
 }
 

@@ -365,11 +365,6 @@ any EntNative_EnableTick(Handle plugin, int args)
 
 	entity.TickCallbacks.AddFunction(plugin, callbackFunc);
 
-	FEntityProps props;
-	props.TickFunction = callbackFunc;
-	props.CallingPlugin = plugin;
-	entity.SetCallbackProps(props);
-
 	entity.TickRate = tickrate;
 
 	// Do not hook unregistered entities
@@ -395,7 +390,7 @@ any EntNative_DisableTick(Handle plugin, int args)
 
 	UnHookEntityTick(entity, plugin, callbackFunc);
 	
-	DisableEntityTick(entity);
+	//DisableEntityTick(entity);
 
 	return 0;
 }

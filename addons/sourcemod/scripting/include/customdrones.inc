@@ -419,7 +419,7 @@ forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon 
  * @param targetEnemies		If true, this drone is looking for enemies, otherwise it is looking for teammates
  * @param target 			Target that this drone has acquired
  *
- * @return 			How to handle target acquisition: Plugin_Continue keeps the original target. Plugin_Handled or Plugin_Changed will update the target upon completion of this forward.
+ * @return 			How to handle target acquisition: Plugin_Continue keeps the original target. Plugin_Changed will update the target upon completion of this forward. Plugin_Handled will prevent a target form being found.
  */
 forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool targetEnemies, APersistentObject& target);
 
@@ -430,17 +430,9 @@ forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool target
  * @param drone				Drone occupied by the AI
  * @param position 			Position this drone will move to
  *
- * @return 			How to handle movement: Plugin_Continue finds a position normally. Plugin_Changed will force the given move position. Plugin_Handled or Plugin_Stopped will prevent a move position from being found.
+ * @return 			How to handle movement: Plugin_Continue finds a position normally. Plugin_Changed will force the given move position. Plugin_Handled will prevent a move position from being found.
  */
 forward Action CD2_OnAIGetMovePosition(FDroneAI controller, ADrone drone, FVector position);
-
-/**
- * Forward called upon an AI controller processing a think request
- * 
- * @param controller		AI controller processing request
- * @param drone				Drone being controlled
- */
-forward void CD2_OnAITick(FDroneAI controller, ADrone drone);
 
 /**
  * Forward called upon an AI controller attempting to fire a weapon

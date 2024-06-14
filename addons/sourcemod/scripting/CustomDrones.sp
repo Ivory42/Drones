@@ -608,7 +608,7 @@ bool DroneSpawnTrace(int entity, int mask, int exclude)
 	return (entity != exclude);
 }
 
-public void OnDroneTick(APersistentObject entity)
+void OnDroneTick(APersistentObject entity)
 {
 	ADrone drone = view_as<ADrone>(entity);
 	if (drone && drone.IsDrone && drone.Alive)
@@ -713,6 +713,7 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 {
 	FDroneSeat seat = new FDroneSeat();
 	seat.Type = view_as<ESeatType>(kv.GetNum("type")); // 0 = pilot, 1 = gunner, 2 = passenger
+	seat.Drone = drone;
 
 	// If this is not a passenger seat, let's find the associated weapons that this seat can use
 	if (seat.Type != Seat_Passenger)
