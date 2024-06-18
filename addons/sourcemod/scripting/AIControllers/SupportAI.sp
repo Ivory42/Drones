@@ -40,7 +40,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 			// Otherwise enter attack state if we can see our target. Support drones do not move towards their targets
 			else if (CanSeeTarget(drone, target))
 			{
-				ai.CurrentState = Controller_Attacking;
+				ChangeControllerState(ai, Controller_Attacking);
 			}
 		}
 	}
@@ -99,7 +99,7 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 			else
 			{
 				ai.CurrentTarget = null;
-				ai.CurrentState = Controller_Idle; // return to idle for now
+				ChangeControllerState(ai, Controller_Idle); // return to idle for now
 			}
 		}
 
@@ -128,6 +128,67 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 	}
 }
 
+void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDroneAIParams params, bool thinkTick)
+{
+	if (seat.Type == Seat_Pilot && thinkTick)
+	{
+		FSupportAI support = view_as<FSupportAI>(ai);
+		bool moveTick = false;
+		if (ai.NextMovementTime <= GetGameTime())
+		{
+			ai.NextMovementTime = GetGameTime() + 0.5;
+			moveTick = true;
+		}
+
+		if (moveTick)
+		{
+			FVector queriedPosition;
+			ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
+
+			if (ai.TargetQueryIndex == 0)
+			{
+				FVector direction;
+				direction = Vector_MakeFromPoints(drone.GetPosition(), queriedPosition);
+				direction.Scale(100.0);
+				queriedPosition.Add(direction);
+			}
+
+			queriedPosition.Z += 50.0;
+			
+			FDroneMoveParams move;
+			move.MaxDist = 0.0;
+			move.MinDist = 0.0;
+			move.Ceiling = params.CombatCeiling;
+			move.MinHeight = ai.HoverHeight;
+			DroneFindMovePosition(ai, drone, queriedPosition, move);
+
+			FVector movePosition;
+			//movePosition = FindPositionAroundLocation(ai, drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
+			
+			movePosition = ai.GetMovePosition();
+			if (movePosition.DistanceTo(drone.GetPosition()) <= GetBrakingDistance(drone))
+			{
+				EndMove(ai);
+			}
+			ai.TargetQueryIndex++;
+
+			if (ai.TargetQueryIndex >= ai.MaxQueriedPositions || ai.EndPursuitTime <= GetGameTime())
+			{
+				ChangeControllerState(ai, Controller_Idle); // If we cant find any targets, go back to being idle
+			}
+		}
+
+		if (!support.FollowTarget)
+		{
+			support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, false, true))
+		}
+		else
+		{
+			ChangeControllerState(ai, Controller_Idle); // We found our target, go back to being idle
+		}
+	}
+}
+
 void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 {
 	AClient follow = support.FollowTarget;
@@ -137,19 +198,31 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 		{
 			// If we are too far from our target, move anyway. Otherwise, only move when we can
 			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);
-			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange || (moveTick && !support.Moving))
+			if (follow.GetPosition().DistanceTo(drone.GetPosition()) > support.SupportRange)
+			{
+				FDroneMoveParams params;
+				params.MaxDist = 5.0;
+				params.MinDist = 0.0;
+				params.Ceiling = support.MaxCombatHeight;
+				params.MinHeight = support.HoverHeight;
+				
+				DroneFindMovePosition(support, drone, follow.GetEyePosition(), params);
+			}
+			else if (moveTick && !support.Moving)
 			{
 				FDroneMoveParams params;
 				params.MaxDist = support.SupportRange;
 				params.MinDist = support.MinSupportRange;
 				params.Ceiling = support.MaxCombatHeight;
 				params.MinHeight = support.HoverHeight;
-				DroneFindMovePosition(support, drone, follow.GetPosition(), params);
+				
+				DroneFindMovePosition(support, drone, follow.GetEyePosition(), params);
 			}
 		}
 		else
 		{
-			//support.CurrentState = Controller_Seeking; // Start looking where our follow target was last
+			support.EndPursuitTime = GetGameTime() + support.GetControllerParams().SeekTime;
+			ChangeControllerState(support, Controller_Seeking); // Start looking where our follow target was last
 			support.FollowTarget = null;
 			follow = null;
 		}

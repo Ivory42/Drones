@@ -14,7 +14,7 @@ GlobalForward DroneWeaponRemoved;
 
 GlobalForward DroneAIFindTarget;
 GlobalForward DroneAIFindPosition;
-//GlobalForward DroneAIThink;
+GlobalForward DroneAIStateChanged;
 GlobalForward DroneAIAttack;
 
 #include "DroneProperties.sp"
@@ -57,6 +57,7 @@ public void OnPluginStart()
 	DroneAIFindPosition = CreateGlobalForward("CD2_OnAIGetMovePosition", ET_Hook, Param_Cell, Param_Cell, Param_Array);
 	//DroneAIThink = CreateGlobalForward("CD2_OnAITick", ET_Ignore, Param_Cell, Param_Cell);
 	DroneAIAttack = CreateGlobalForward("CD2_OnAIAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
+	DroneAIStateChanged = new GlobalForward("CD2_OnAIStateChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 }
 
 public void OnMapStart()
@@ -634,7 +635,7 @@ void OnDroneTick(APersistentObject entity)
 // Physically spawn our drone in the world
 void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 {
-	drone = view_as<ADrone>(FEntityStatics.CreateEntity("prop_physics_multiplayer"));
+	drone = view_as<ADrone>(CreateComponent("prop_physics_multiplayer"));
 
 	drone.IsDrone = true;
 	char droneName[MAX_DRONE_LENGTH], pluginName[64];
@@ -669,6 +670,11 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	char movetype[64];
 	config.GetString("movetype", movetype, sizeof movetype);
 	drone.MoveType = GetMoveType(movetype);
+
+	if (drone.MoveType == MoveType_Helo)
+	{
+		drone.HeloChangePitch = view_as<bool>(config.GetNum("helo_changepitch", 0));
+	}
 
 	//config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
 	drone.CameraHeight = config.GetFloat("camera_height", 30.0);

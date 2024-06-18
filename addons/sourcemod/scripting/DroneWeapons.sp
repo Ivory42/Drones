@@ -16,15 +16,16 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 			FormatEx(propType, sizeof propType, "prop_physics_override");
 		}
 
-		ADroneWeapon weapon = view_as<ADroneWeapon>(FEntityStatics.CreateEntity(propType));
+		ADroneWeapon weapon = view_as<ADroneWeapon>(CreateComponent(propType));
 		weapon.SetKeyValue("model", modelname);
 
 		weapon.Type = GetWeaponType(kv);
 		weapon.UsesParent = nomodel;
 		weapon.IsDroneWeapon = true;
+		weapon.Drone = drone;
 
 		FDroneWeaponExtras components;
-		components.Parent = drone;
+		components.Parent = drone; // TODO - configure different parents for weapons
 		//SetupMount(kv, weapon, drone, components);
 		SetStringValues(weapon, kv);
 
@@ -46,6 +47,10 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.GetObject().Input("SetParentAttachment");
 
 		weapon.Ammo = kv.GetNum("ammo_loaded", -1);
+		if (weapon.Ammo == -1)
+		{
+			weapon.BottomlessAmmo = true;
+		}
 		weapon.MaxAmmo = weapon.Ammo;
 		weapon.Damage = kv.GetFloat("damage");
 		weapon.FireRate = kv.GetFloat("fire_rate");
@@ -378,7 +383,7 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+	end = GetWeaponAimPosition(weapon, ai.GetViewAngle());
 
 	// Now fire our bullets
 	int bullets = weapon.ProjPerShot;
@@ -387,11 +392,6 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 	{
 		if (weapon.GetNextMuzzleTransform(muzzle))
 		{
-			FVector velocity;
-			velocity = drone.GetVelocity();
-			velocity.Scale(0.1);
-			muzzle.Position.Add(velocity);
-
 			start = muzzle.Position;
 		}
 
@@ -434,7 +434,7 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+	end = GetWeaponAimPosition(weapon, ai.GetViewAngle());
 
 	// Now fire our rockets
 	int rockets = weapon.ProjPerShot;

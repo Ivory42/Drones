@@ -46,14 +46,17 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 		{
 			FVector inputVel, currentVel, targetVel;
 			currentVel = drone.GetVelocity();
-			targetVel = currentVel;
-			targetVel.Negate();
+			if (currentVel.Length() > 15.0)
+			{
+				targetVel = currentVel;
+				targetVel.Negate();
 
-			inputVel = drone.GetInputVelocity();
-			inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), ai.GetControllerParams().Braking); // 0.95
-			drone.SetInputVelocity(inputVel);
+				inputVel = drone.GetInputVelocity();
+				inputVel = FMath.InterpVectorTo(inputVel, targetVel, GetGameFrameTime(), ai.GetControllerParams().Braking); // 0.95
+				drone.SetInputVelocity(inputVel);
 
-			velocity.Add(inputVel);
+				velocity.Add(inputVel);
+			}
 		}
 
 		CalcMovementTilt(drone, ai.Stalling);
@@ -95,7 +98,24 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 			switch (ai.Behavior)
 			{
 				case Behavior_Aggressive: Aggressive_SimulateIdle(ai, seat, drone, thinkTick);
-				case Behavior_Support: Support_SimulateIdle(ai, seat, drone, thinkTick);
+				case Behavior_Support:
+				{
+					Support_SimulateIdle(ai, seat, drone, thinkTick);
+					FSupportAI controller = view_as<FSupportAI>(ai);
+					if (thinkTick && controller.FollowTarget)
+					{
+						FVector targetPos;
+						targetPos = controller.FollowTarget.GetPosition();
+						ai.TargetQueryPositions.SetArray(ai.TargetQueryIndex, targetPos, sizeof FVector);
+						ai.TargetQueryIndex++;
+
+						// Reset our position index if above max
+						if (ai.TargetQueryIndex >= ai.MaxQueriedPositions)
+						{
+							ai.TargetQueryIndex = 0;
+						}
+					}
+				}
 			}
 		}
 		case Controller_Attacking:
@@ -106,7 +126,7 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				case Behavior_Support: Support_SimulateAttack(ai, seat, drone, weapon, params, thinkTick);
 			}
 
-			if (thinkTick && params.PursueTarget && ai.CurrentTarget)
+			if (thinkTick && ((params.PursueTarget && ai.CurrentTarget) || ai.Behavior == Behavior_Support)) // Support always tries to find its follow
 			{
 				FVector targetPos;
 				targetPos = ai.CurrentTarget.GetPosition();
@@ -114,7 +134,7 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				ai.TargetQueryIndex++;
 
 				// Reset our position index if above max
-				if (ai.TargetQueryIndex >= MaxQueriedPositions)
+				if (ai.TargetQueryIndex >= ai.MaxQueriedPositions)
 				{
 					ai.TargetQueryIndex = 0;
 				}
@@ -122,9 +142,25 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 		}
 		case Controller_Seeking:
 		{
-			Aggressive_SimulatePursuing(ai, seat, drone, params, thinkTick);
+			switch (ai.Behavior)
+			{
+				case Behavior_Aggressive: Aggressive_SimulatePursuing(ai, seat, drone, params, thinkTick);
+				case Behavior_Support: Support_SimulatePursuing(ai, seat, drone, params, thinkTick);
+			}
 		}
 	}
+}
+
+bool InDetectionRange(FDroneAI controller, ADrone drone, APersistentObject target)
+{
+	bool result = false;
+
+	if (target && FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), target.GetObject()) <= controller.DetectionRange)
+	{
+		result = true;
+	}
+
+	return result;
 }
 
 bool DroneInRange(FDroneAI ai, ADrone drone, APersistentObject target)
@@ -366,7 +402,7 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 	float closest = range;
 
 	APersistentObject best;
-	AClient test;
+	AClient test, owner;
 
 	Action result = Plugin_Continue;
 	Call_StartForward(DroneAIFindTarget);
@@ -408,6 +444,28 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 			if (!client.Alive())
 			{
 				continue;
+			}
+
+			if (!enemy)
+			{
+				if (ai.GetControllerParams().OnlyFollowOwner && ai.Owner)
+				{
+					if (ai.Owner.Get() != client.Get())
+					{
+						continue;
+					}
+				}
+				else if (ai.GetControllerParams().PrioritizeOwner && ai.Owner)
+				{
+					if (ai.Owner.Get() == client.Get())
+					{
+						owner = FEntityStatics.GetClient(client);
+						if (CanSeeTarget(drone, owner))
+						{
+							return owner;
+						}
+					}
+				}
 			}
 
 			distance = FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), client.GetObject());
@@ -580,4 +638,38 @@ float CalcRightTilt(ADrone drone, FVector velocity, float adjust = 0.1, bool rev
 		adjust *= -0.6;
 
 	return tilt * adjust;
+}
+
+void ChangeControllerState(FDroneAI controller, EControllerState state, bool doForward = true)
+{
+	EControllerState oldState = controller.CurrentState;
+	if (oldState == Controller_Seeking && state != Controller_Seeking)
+	{
+		// If we change from seeking, reset our queries
+		//controller.TargetQueryPositions.Clear();
+		controller.TargetQueryIndex = 0;
+	}
+	controller.CurrentState = state;
+
+	if (controller.Behavior == Behavior_Support)
+	{
+		// reset queries when changing to aggressive or idle
+		if (state == Controller_Attacking || state == Controller_Idle)
+		{
+			//controller.TargetQueryPositions.Clear();
+			controller.TargetQueryIndex = 0;
+		}
+	}
+
+	if (doForward)
+	{
+		Call_StartForward(DroneAIStateChanged);
+
+		Call_PushCell(controller);
+		Call_PushCell(controller.Drone);
+		Call_PushCell(oldState);
+		Call_PushCell(state);
+
+		Call_Finish();
+	}
 }

@@ -116,6 +116,15 @@ methodmap FDroneStatics
 	 * @param ai			AI controller to occupy the seat with
 	 */
 	public static native ADrone AIControlDroneSeat(ADrone drone, FDroneSeat seat, FDroneAI ai);
+
+	/**
+	 * Changes the state of the given AI controller to the designated state
+	 * 
+	 * @param controller		AI controller to change the state of
+	 * @param state				New state to set on this controller
+	 * @param ignoreForward		Ignore calling the OnAIStateChanged forward after this is set
+	 */
+	public static native void ChangeAIState(FDroneAI controller, EControllerState state, bool ignoreForward = false);
 }
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
@@ -445,6 +454,17 @@ forward Action CD2_OnAIGetMovePosition(FDroneAI controller, ADrone drone, FVecto
  */
 forward Action CD2_OnAIAttack(FDroneAI controller, ADrone drone, ADroneWeapon weapon);
 
+/**
+ * Forward called when a drone AI controller changes its current state
+ * 
+ * @param controller		AI controller changing state
+ * @param drone				Drone being controlled
+ * @param oldState			Previous state being changed from
+ * @param newState			New state being changed to
+ * 
+ * @note It is safe to override the new state with `FDroneStatics.ChangeAIState`
+ */
+forward void CD2_OnAIStateChanged(FDroneAI controller, ADrone drone, EControllerState oldState, EControllerState newState);
 
 /****************************************************************
 	STOCKS
@@ -562,6 +582,7 @@ stock FDroneSeat GetPilotSeat(ADrone drone)
 	return null;
 }
 
+// Gets the position the drone is aiming at, starting from the camera position
 stock FVector GetDroneAimPosition(ADrone drone, FRotator rotation, float range = 8000.0)
 {
 	FVector start, direction, end;
@@ -572,6 +593,25 @@ stock FVector GetDroneAimPosition(ADrone drone, FRotator rotation, float range =
 	direction.Add(start);
 
 	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+	end = trace.GetEndPosition(); // Surface we are aiming at
+	delete trace;
+
+	return end;
+}
+
+// Gets the position the weapon is aiming at, starting from the weapon's muzzle location
+stock FVector GetWeaponAimPosition(ADroneWeapon weapon, FRotator rotation, float range = 8000.0)
+{
+	FVector start, direction, end;
+	start = weapon.GetPosition();
+
+	//start = ConstructObject(weapon.MuzzlePositions.Get(muzzleIndex)).GetPosition();
+
+	direction = rotation.GetForwardVector();
+	direction.Scale(range);
+	direction.Add(start);
+
+	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, weapon);
 	end = trace.GetEndPosition(); // Surface we are aiming at
 	delete trace;
 
@@ -592,23 +632,19 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 {
 	if (entity == drone.Get())
 		return false;
-	
-	//Let's ignore anything attached to this drone as well
-	if (IsValidEntity(entity) && entity > MaxClients)
+
+	FObject hit;
+	hit = ConstructObject(entity);
+
+	// Ignore components attached to this drone
+	if (hit.Valid())
 	{
-		FObject test;
-		test = ConstructObject(entity);
-		if (test.Valid() && test.HasProp(Prop_Send, "m_hMoveParent"))
+		AComponent test = CastToComponent(FEntityStatics.GetEntity(hit));
+		if (test)
 		{
-			if (test.GetParent().Get() == drone.Get())
-			{
-				return false;
-			}
+			return test.Drone == drone;
 		}
 	}
-
-	if (drone.Pilot && entity == drone.Pilot.Get())
-		return false;
 	
 	// Loop through our seats to make sure we don't hit any passengers
 	/*int seats = drone.Seats.Length;

@@ -77,7 +77,7 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 			// Otherwise enter attack state if we can see our target
 			else if (CanSeeTarget(drone, target))
 			{
-				ai.CurrentState = Controller_Attacking;
+				ChangeControllerState(ai, Controller_Attacking);
 
 				// Update our move position to be around our target
 				if (ai.Moving)
@@ -102,12 +102,17 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 
 		if (thinkTick)
 		{
-			if (target && CanSeeTarget(drone, target))
+			if (target && CanSeeTarget(drone, target) && InDetectionRange(ai, drone, target))
 			{
+				// If we can see our target and they are within our detection range, lets process our combat requests
 				FRotator angleTowardsEnemy;
 				FVector vecTowardsEnemy;
 
-				vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), target.GetPosition());
+				FVector targPos;
+				targPos = target.GetPosition();
+				targPos.Z += 60.0;
+
+				vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), targPos);
 				angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
 				ai.SetTargetAngle(angleTowardsEnemy);
 
@@ -130,7 +135,8 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 					move.MinDist = ai.MinAttackRange;
 					move.Ceiling = ai.MaxCombatHeight;
 					move.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
+
+					DroneFindMovePosition(ai, drone, targPos, move);
 				}
 
 				if (DroneInRange(ai, drone, target))
@@ -151,14 +157,15 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 						}
 					}
 				}
-				else if (moveTick)
+				else // Immediately move into range if we are not currently
 				{
 					FDroneMoveParams move;
 					move.MaxDist = ai.DesiredAttackRange;
 					move.MinDist = ai.MinAttackRange;
 					move.Ceiling = ai.MaxCombatHeight;
 					move.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
+
+					DroneFindMovePosition(ai, drone, targPos, move);
 				}
 
 				// Also check if we are too close
@@ -170,7 +177,8 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 					move.MinDist = ai.MinAttackRange;
 					move.Ceiling = ai.MaxCombatHeight;
 					move.MinHeight = ai.HoverHeight;
-					DroneFindMovePosition(ai, drone, target.GetPosition(), move);
+
+					DroneFindMovePosition(ai, drone, targPos, move);
 				}
 			}
 			else
@@ -181,11 +189,12 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				if (params.PursueTarget)
 				{
 					ai.TargetQueryIndex = 0;
-					ai.CurrentState = Controller_Seeking;
+					ChangeControllerState(ai, Controller_Seeking);
+					ai.EndPursuitTime = GetGameTime() + ai.GetControllerParams().SeekTime;
 				}
 				else // Otherwise return to idle and lose our target
 				{
-					ai.CurrentState = Controller_Idle;
+					ChangeControllerState(ai, Controller_Idle);
 				}
 			}
 		}
@@ -217,12 +226,12 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 
 void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDroneAIParams params, bool thinkTick)
 {
-	if (seat.Type == Seat_Pilot && thinkTick && !ai.Moving)
+	if (seat.Type == Seat_Pilot && thinkTick)
 	{
 		bool moveTick = false;
 		if (ai.NextMovementTime <= GetGameTime())
 		{
-			ai.NextMovementTime = GetGameTime() + 1.0;
+			ai.NextMovementTime = GetGameTime() + 0.5;
 			moveTick = true;
 		}
 
@@ -230,9 +239,19 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 		{
 			FVector queriedPosition;
 			ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
+
+			if (ai.TargetQueryIndex == 0)
+			{
+				FVector direction;
+				direction = Vector_MakeFromPoints(drone.GetPosition(), queriedPosition);
+				direction.Scale(100.0);
+				queriedPosition.Add(direction);
+			}
+
+			queriedPosition.Z += 50.0;
 			
 			FDroneMoveParams move;
-			move.MaxDist = 20.0;
+			move.MaxDist = 5.0;
 			move.MinDist = 0.0;
 			move.Ceiling = params.CombatCeiling;
 			move.MinHeight = ai.HoverHeight;
@@ -248,9 +267,9 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 			}
 			ai.TargetQueryIndex++;
 
-			if (ai.TargetQueryIndex >= MaxQueriedPositions)
+			if (ai.TargetQueryIndex >= ai.MaxQueriedPositions || ai.EndPursuitTime <= GetGameTime())
 			{
-				ai.CurrentState = Controller_Idle; // If we cant find any targets, go back to being idle
+				ChangeControllerState(ai, Controller_Idle); // If we cant find any targets, go back to being idle
 			}
 		}
 
@@ -263,7 +282,7 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 		// Otherwise enter attack state if we can see our target
 		else if (CanSeeTarget(drone, target))
 		{
-			ai.CurrentState = Controller_Attacking;
+			ChangeControllerState(ai, Controller_Attacking);
 		}
 	}
 }

@@ -7,6 +7,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FDroneStatics.SpawnDroneByConfig", Native_CreateDrone);
 	CreateNative("FDroneStatics.AIControlDroneSeat", Native_ControlDrone);
 	CreateNative("FDroneStatics.CreateDroneWithController", Native_SpawnDroneController);
+	CreateNative("FDroneStatics.ChangeAIState", Native_ChangeState);
 
 	return APLRes_Success;
 }
@@ -47,6 +48,17 @@ int Native_FireWeapon(Handle plugin, int args)
 			}
 		}
 	}
+
+	return 0;
+}
+
+any Native_ChangeState(Handle plugin, int args)
+{
+	FDroneAI controller = view_as<FDroneAI>(GetNativeCell(1));
+	EControllerState state = view_as<EControllerState>(GetNativeCell(2));
+	bool doForward = view_as<bool>(GetNativeCell(3));
+
+	ChangeControllerState(controller, state, !doForward);
 
 	return 0;
 }
@@ -107,8 +119,11 @@ void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
 			seat.Occupied = true;
 			seat.AIControlled = true;
 			seat.AIOccupier = controller;
-			controller.TargetQueryPositions = new ArrayList(_, MaxQueriedPositions);
-			controller.OwnQueryPositions = new ArrayList(_, MaxQueriedPositions);
+			controller.TargetQueryPositions = new ArrayList(_, controller.MaxQueriedPositions);
+			controller.OwnQueryPositions = new ArrayList(_, controller.MaxQueriedPositions);
+
+			controller.ControlledSeat = seat;
+			controller.Drone = drone;
 		}
 
 		Call_StartForward(DroneAIEnter);

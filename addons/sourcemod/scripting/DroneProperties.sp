@@ -1195,10 +1195,10 @@ void FormatAmmoString(ADroneWeapon weapon, char[] buffer, int size)
 		case WeaponState_Reloading: FormatEx(buffer, size, "Reloading...");
 		case WeaponState_Ready, WeaponState_Custom:
 		{
-			if (weapon.Ammo == -1)
+			if (weapon.BottomlessAmmo)
 				FormatEx(buffer, size, ""); // No text if weapon has bottomless ammo
-			
-			FormatEx(buffer, size, "Ammo: %d", weapon.Ammo);
+			else
+				FormatEx(buffer, size, "Ammo: %d", weapon.Ammo);
 		}
 	}
 }
@@ -1206,21 +1206,13 @@ void FormatAmmoString(ADroneWeapon weapon, char[] buffer, int size)
 // All passive actions for drones while idling
 void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed)
 {
-	// Drones will passively counteract gravity
-	FVector grav;
-
-	grav.Z = 15.5;
-
-	velocity.Add(grav);
-
-	//FVector absVelocity;
-	//absVelocity = drone.GetObject().GetVelocity();
-	//velocity.Add(absVelocity);
-
-	//Temp solution - clamp drone overall speed.
+	// Clamp drone overall speed.
 	velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
 	velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
 	velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
+
+	// Drones will passively counteract gravity
+	velocity.Z += 12.0;
 
 	TeleportEntity(drone.Get(), NULL_VECTOR, NULL_VECTOR, velocity.ToFloat());
 }

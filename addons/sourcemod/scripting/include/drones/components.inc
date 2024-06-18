@@ -14,10 +14,21 @@ const int MaxSeats = 6;
 
 methodmap AComponent < ABaseEntity
 {
+	property bool IsComponent
+	{
+		public get() { return this.GetObjectProp("Entity_IsDroneComponent"); }
+		public set(bool value) { this.SetObjectProp("Entity_IsDroneComponent", value); }
+	}
 	property int Modifier // Extra damage this drone takes when this component is hit
 	{
 		public get() { return this.GetObjectProp("Comp_DamageModTaken"); }
 		public set(int mod)	{ this.SetObjectProp("Comp_DamageModTaken", mod); }
+	}
+
+	property ADrone Drone // Drone this component is attached to
+	{
+		public get() { return view_as<ADrone>(this.GetObjectProp("Comp_ParentDrone")); }
+		public set(ADrone value) { this.SetObjectProp("Comp_ParentDrone", value); }
 	}
 }
 
@@ -46,11 +57,8 @@ methodmap FComponentArray < ArrayList
 enum struct FDroneWeaponExtras
 {
 	FObject Mount; 		// Optional physical mount to use for the weapon. This will rotate with the player's yaw
-	AComponent Parent; 	/*
-					 	* Usually the drone this weapon is attached to, however it can theoretically be another component as well.
-						* Cast to either a drone or component to make sure the parent is valid.
-	 					*/
-
+	AComponent Parent;
+	
 	// Attachments
 	FVector ProjOffset; 		// Fallback offset to use if this weapon has no muzzle attachment defined
 	char AttachmentPoint[256]; 	// Attachment point on parent to attach this weapon to
@@ -646,6 +654,25 @@ methodmap FDroneSeat < StringMap
 		STOCKS
 
 ******************************************/
+
+stock AComponent CreateComponent(const char[] classname)
+{
+	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity(classname));
+	component.IsComponent = true;
+
+	return component;
+}
+
+stock AComponent CastToComponent(ABaseEntity entity)
+{
+	AComponent component = null;
+	if (entity && entity.GetObjectProp("Entity_IsDroneComponent"))
+	{
+		component = view_as<AComponent>(entity);
+	}
+
+	return component;
+}
 
 /*
 * Quickly creates a new component for usage by a drone. If you need to set parameters before the component is spawned, use CreateDeferredComponent() instead

@@ -3,8 +3,6 @@
 #endif
 #define _customdrones_ai_included
 
-const MaxQueriedPositions = 5;
-
 enum EBehaviorType
 {
 	Behavior_Aggressive, 	// Drone will actively pursue enemies
@@ -65,6 +63,11 @@ enum struct FDroneAIParams
 
 	float SupportRange;
 	float MinSupportRange;
+
+	int MaxQueries;
+
+	bool OnlyFollowOwner;		// Support drone will only follow the owner
+	bool PrioritizeOwner;		// Support drone will prioritize following the owner but can still follow other players
 	EBehaviorType Behavior;
 }
 
@@ -149,6 +152,18 @@ methodmap FDroneAI < StringMap
 	{
 		public set(AClient client) { this.SetValue("ADroneAI_OwningPlayer", client); }
 		public get() { return view_as<AClient>(this.GetObject("ADroneAI_OwningPlayer")); }
+	}
+
+	property ADrone Drone
+	{
+		public set(ADrone drone) { this.SetValue("ADroneAI_ControlledDrone", drone); }
+		public get() { return view_as<ADrone>(this.GetObject("ADroneAI_ControlledDrone")); }
+	}
+
+	property FDroneSeat ControlledSeat
+	{
+		public set(FDroneSeat seat) { this.SetValue("ADroneAI_ControlledSeat", seat); }
+		public get() { return view_as<FDroneSeat>(this.GetObject("ADroneAI_ControlledSeat")); }
 	}
 
 	property EBehaviorType Behavior
@@ -303,6 +318,12 @@ methodmap FDroneAI < StringMap
 		public get() { return this.GetInt("DroneAI_TargetQueryIndex"); }
 	}
 
+	property int MaxQueriedPositions
+	{
+		public set(int value) { this.SetInt("DroneAI_MaxQueryIndex", value); }
+		public get() { return this.GetInt("DroneAI_MaxQueryIndex"); }
+	}
+
 	// We track these positions for when we seek our current target to retrace steps
 	property ArrayList TargetQueryPositions
 	{
@@ -418,6 +439,8 @@ methodmap FDroneAIStatics
 			ai.IdleTime = params.IdleTime;
 			ai.ThinkRate = params.ThinkRate;
 
+			ai.MaxQueriedPositions = params.MaxQueries;
+
 			if (params.Behavior == Behavior_Support)
 			{
 				FSupportAI support = view_as<FSupportAI>(ai);
@@ -460,6 +483,10 @@ methodmap FDroneAIStatics
 
 		params.Braking = 0.95;
 		params.PathFindRadius = 200.0;
+		params.MaxQueries = 5;
+
+		params.OnlyFollowOwner = false;
+		params.PrioritizeOwner = false;
 
 		return params;
 	}
@@ -502,6 +529,10 @@ methodmap FDroneAIStatics
 
 				params.Braking = kv.GetFloat("braking_speed", 0.95);
 				params.PathFindRadius = kv.GetFloat("path_find_radius", 200.0);
+				params.MaxQueries = kv.GetNum("query_positions_max", 5);
+
+				params.OnlyFollowOwner = view_as<bool>(kv.GetNum("support_follow_owner", 0));
+				params.PrioritizeOwner = view_as<bool>(kv.GetNum("support_prioritize_owner", 0));
 			}
 			else
 			{

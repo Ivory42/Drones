@@ -388,7 +388,9 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 
 					drone.SetInputRotation(movementRot);
 
-					desiredAngle.Pitch = movementRot.Pitch;
+					if (!drone.HeloChangePitch)
+						desiredAngle.Pitch = movementRot.Pitch;
+
 					desiredAngle.Roll = movementRot.Roll;
 				}
 				
@@ -450,10 +452,10 @@ float AngleDifference(FRotator currentAngle, FRotator targetAngle)
 
 void UpdateDroneWeaponAngles(FRotator current, FRotator desired, FRotator droneAngle, ADroneWeapon weapon)
 {
-	FRotator newAngle;
-	desired = SubtractRotators(desired, droneAngle);
+	FRotator newAngle, difference;
+	difference = SubtractRotators(desired, droneAngle);
 
-	newAngle = FMath.InterpRotatorTo(current, desired, GetGameFrameTime(), weapon.TurnRate);
+	newAngle = FMath.InterpRotatorTo(current, difference, GetGameFrameTime(), weapon.TurnRate);
 
 	// Let's determine how to use this new angle
 	if (weapon.ComplexAngles)

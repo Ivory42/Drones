@@ -146,6 +146,12 @@ methodmap ADrone < AComponent
 		public set(bool lock) { this.SetObjectProp("Drone_LockAngles", lock); }
 	}
 
+	property bool HeloChangePitch // For helo drones, adjust pitch to match player angles
+	{
+		public get() { return this.GetObjectProp("Drone_HeloUpdatePitch"); }
+		public set(bool value) { this.SetObjectProp("Drone_HeloUpdatePitch", value); }
+	}
+
 	property TFTeam Team
 	{
 		public get() { return view_as<TFTeam>(this.GetObjectProp("Drone_Team")); }
