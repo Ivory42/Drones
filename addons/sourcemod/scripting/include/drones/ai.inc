@@ -379,6 +379,21 @@ methodmap FDroneAI < StringMap
 	}
 	public void SetMovePosition(FVector pos) { this.SetArray("DroneAI_NextMoveLocation", pos, sizeof FVector); }
 
+	public void SetLastSeenVelocity(FVector velocity) { this.SetArray("DroneAI_LastVel", velocity, sizeof FVector); }
+	public FVector GetLastSeenVelocity()
+	{
+		FVector result;
+		this.GetArray("DroneAI_LastVel", result, sizeof FVector);
+
+		return result;
+	}
+
+	property bool PursuitEnding // We reached the end of our pursuit and are now moving in the last direction we saw the target
+	{
+		public set(bool value) { this.SetBool("DroneAI_TrackingLastVelocity", value); }
+		public get() { return this.GetBool("DroneAI_TrackingLastVelocity"); }
+	}
+
 	public void ClearAIParams()
 	{
 		if (this.TargetQueryPositions)

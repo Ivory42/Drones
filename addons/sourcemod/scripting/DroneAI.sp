@@ -78,6 +78,36 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 	}
 }
 
+/*
+FVector ScalePosition(FVector position, FRotator rotation, float scale)
+{
+	FVector scalar;
+	scalar = FMath.OffsetVector(position, rotation, ConstructVector(scale, 0.0, 0.0));
+
+	scalar.Add(position);
+
+	return scalar;
+}
+*/
+
+/*
+void AIMoveTowardsLastDirection(ADrone drone, FDroneAI controller, FVector currentTarget)
+{
+	FVector velocity;
+	velocity = controller.GetLastSeenVelocity();
+
+	FVector position;
+	position = ScalePosition(currentTarget, Vector_GetAngles(velocity), velocity.Length());
+
+	FDroneMoveParams params;
+	params.MaxDist = 0.0;
+	params.MinDist = 0.0;
+	params.Ceiling = 50.0;
+	params.MinHeight = 5.0;
+	DroneFindMovePosition(controller, drone, position, params, true);	
+}
+*/
+
 void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 {
 	FDroneAIParams params;
@@ -109,6 +139,8 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 						ai.TargetQueryPositions.SetArray(ai.TargetQueryIndex, targetPos, sizeof FVector);
 						ai.TargetQueryIndex++;
 
+						ai.SetLastSeenVelocity(controller.FollowTarget.GetVelocity());
+
 						// Reset our position index if above max
 						if (ai.TargetQueryIndex >= ai.MaxQueriedPositions)
 						{
@@ -132,6 +164,8 @@ void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				targetPos = ai.CurrentTarget.GetPosition();
 				ai.TargetQueryPositions.SetArray(ai.TargetQueryIndex, targetPos, sizeof FVector);
 				ai.TargetQueryIndex++;
+
+				ai.SetLastSeenVelocity(ai.CurrentTarget.GetVelocity());
 
 				// Reset our position index if above max
 				if (ai.TargetQueryIndex >= ai.MaxQueriedPositions)
@@ -251,13 +285,13 @@ void CalcMovementTilt(ADrone drone, bool reverse)
 	drone.SetInputRotation(rotation);
 }
 
-void DroneFindMovePosition(FDroneAI controller, ADrone drone, FVector position, FDroneMoveParams params)
+void DroneFindMovePosition(FDroneAI controller, ADrone drone, FVector position, FDroneMoveParams params, bool bDebug = false)
 {
 	FVector movePos;
 	Action move = ForwardDronePosition(controller, drone, movePos);
 	if (move == Plugin_Continue)
 	{
-		movePos = FindPositionAroundLocation(controller, drone, position, params.MaxDist, params.MinDist, params.MinHeight, params.Ceiling);
+		movePos = FindPositionAroundLocation(controller, drone, position, params.MaxDist, params.MinDist, params.MinHeight, params.Ceiling, bDebug);
 	}
 	else if (move == Plugin_Handled || move == Plugin_Stop)
 	{
@@ -281,7 +315,7 @@ Action ForwardDronePosition(FDroneAI controller, ADrone drone, FVector movePosit
 	return result;
 }
 
-FVector FindPositionAroundLocation(FDroneAI ai, ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0)
+FVector FindPositionAroundLocation(FDroneAI ai, ADrone drone, FVector location, float radius, float minDistance, float minHeight = 0.0, float maxHeight = 0.0, bool bDebug = false)
 {
 	FVector result;
 
@@ -311,7 +345,8 @@ FVector FindPositionAroundLocation(FDroneAI ai, ADrone drone, FVector location, 
 	maxs = drone.GetComponents().MaxBounds;
 	FHullTrace trace = new FHullTrace(drone.GetPosition(), result, mins, maxs, MASK_SHOT, DroneMovementTrace, drone);
 	result = trace.GetEndPosition();
-	//trace.DebugTrace(0.5);
+	if (bDebug)
+		trace.DebugTrace(0.5);
 	if (trace.DidHit()) // Shift off the hit surface by this drone's pathfind radius
 	{
 		FVector normal;
@@ -648,6 +683,7 @@ void ChangeControllerState(FDroneAI controller, EControllerState state, bool doF
 		// If we change from seeking, reset our queries
 		//controller.TargetQueryPositions.Clear();
 		controller.TargetQueryIndex = 0;
+		controller.PursuitEnding = false;
 	}
 	controller.CurrentState = state;
 

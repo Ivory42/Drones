@@ -235,41 +235,64 @@ void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDr
 			moveTick = true;
 		}
 
-		if (moveTick)
+		if (moveTick && !ai.Moving)
 		{
-			FVector queriedPosition;
-			ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
-
-			if (ai.TargetQueryIndex == 0)
+			if (ai.TargetQueryIndex <= ai.MaxQueriedPositions)
 			{
-				FVector direction;
-				direction = Vector_MakeFromPoints(drone.GetPosition(), queriedPosition);
-				direction.Scale(100.0);
-				queriedPosition.Add(direction);
+				if (ai.TargetQueryIndex < ai.MaxQueriedPositions)
+				{
+					FVector queriedPosition;
+					ai.TargetQueryPositions.GetArray(ai.TargetQueryIndex, queriedPosition, sizeof FVector);
+
+					if (ai.TargetQueryIndex == 0)
+					{
+						FVector direction;
+						direction = Vector_MakeFromPoints(drone.GetPosition(), queriedPosition);
+						direction.Scale(100.0);
+						queriedPosition.Add(direction);
+					}
+
+					queriedPosition.Z += 50.0;
+					
+					FDroneMoveParams move;
+					move.MaxDist = 5.0;
+					move.MinDist = 0.0;
+					move.Ceiling = params.CombatCeiling;
+					move.MinHeight = ai.HoverHeight;
+					DroneFindMovePosition(ai, drone, queriedPosition, move);
+
+					FVector movePosition;
+					//movePosition = FindPositionAroundLocation(ai, drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
+					
+					movePosition = ai.GetMovePosition();
+					if (movePosition.DistanceTo(drone.GetPosition()) <= GetBrakingDistance(drone))
+					{
+						EndMove(ai);
+					}
+				}
+				ai.TargetQueryIndex++;
 			}
 
-			queriedPosition.Z += 50.0;
-			
-			FDroneMoveParams move;
-			move.MaxDist = 5.0;
-			move.MinDist = 0.0;
-			move.Ceiling = params.CombatCeiling;
-			move.MinHeight = ai.HoverHeight;
-			DroneFindMovePosition(ai, drone, queriedPosition, move);
-
-			FVector movePosition;
-			//movePosition = FindPositionAroundLocation(ai, drone, queriedPosition, 20.0, 0.0, ai.HoverHeight, params.CombatCeiling);
-			
-			movePosition = ai.GetMovePosition();
-			if (movePosition.DistanceTo(drone.GetPosition()) <= GetBrakingDistance(drone))
+			if (ai.TargetQueryIndex >= ai.MaxQueriedPositions)
 			{
-				EndMove(ai);
+				if (ai.EndPursuitTime <= GetGameTime())
+				{
+					ChangeControllerState(ai, Controller_Idle); // Pursuit has ended, go back to being idle
+				}
+
+				/*
+				if (!ai.PursuitEnding)
+				{
+					ai.PursuitEnding = true;
+					
+					AIMoveTowardsLastDirection(drone, ai, ai.GetMovePosition());
+				}
+				*/
 			}
-			ai.TargetQueryIndex++;
 
-			if (ai.TargetQueryIndex >= ai.MaxQueriedPositions || ai.EndPursuitTime <= GetGameTime())
+			if (ai.EndPursuitTime <= GetGameTime())
 			{
-				ChangeControllerState(ai, Controller_Idle); // If we cant find any targets, go back to being idle
+				ChangeControllerState(ai, Controller_Idle);
 			}
 		}
 
