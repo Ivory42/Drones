@@ -56,13 +56,24 @@ methodmap FComponentArray < ArrayList
 
 enum struct FDroneWeaponExtras
 {
-	FObject Mount; 		// Optional physical mount to use for the weapon. This will rotate with the player's yaw
+	AComponent Mount; 		// Optional physical mount to use for the weapon. This will rotate with the player's yaw
 	AComponent Parent;
 	
 	// Attachments
 	FVector ProjOffset; 		// Fallback offset to use if this weapon has no muzzle attachment defined
 	char AttachmentPoint[256]; 	// Attachment point on parent to attach this weapon to
 	char MuzzleAttachment[64]; // Name of muzzle attachment for attack origination
+
+	FObject GetMountObject()
+	{
+		FObject mount;
+		if (this.Mount)
+		{
+			mount = this.Mount.GetObject();
+		}
+
+		return mount;
+	}
 }
 
 methodmap ADroneWeapon < AComponent
@@ -203,7 +214,8 @@ methodmap ADroneWeapon < AComponent
 		public set(bool value) { this.SetObjectProp("Weapon_FixedAngles", value); }
 	}
 
-	property bool UsesParent // Whether or not this weapon looks for attachments on the parent
+	// Whether or not this weapon looks for attachments on the parent instead of the weapon's model.
+	property bool UsesParent
 	{
 		public get() { return this.GetObjectProp("Weapon_HasNoModel"); }
 		public set(bool value) { this.SetObjectProp("Weapon_HasNoModel", value); }
@@ -230,7 +242,7 @@ methodmap ADroneWeapon < AComponent
 	// Returns the mount of the receiver of this weapon
 	public FObject GetMount()
 	{
-		return this.GetObjects().Mount;
+		return this.GetObjects().GetMountObject();
 	}
 
 	// Returns the parent object of this weapon
@@ -442,6 +454,13 @@ methodmap ADroneWeapon < AComponent
 			}
 			delete this.MuzzlePositions;
 		}
+
+		// If this drone has a mount, destroy it
+		//AComponent mount = this.GetObjects.Mount;
+		//if (mount)
+		//{
+		//	FEntityStatics.DestroyEntity(mount);
+		//}
 
 		// Remove this weapon from the given seat
 		ADrone parent = view_as<ADrone>(this.GetParent())

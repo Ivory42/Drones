@@ -8,6 +8,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FDroneStatics.AIControlDroneSeat", Native_ControlDrone);
 	CreateNative("FDroneStatics.CreateDroneWithController", Native_SpawnDroneController);
 	CreateNative("FDroneStatics.ChangeAIState", Native_ChangeState);
+	CreateNative("FDroneStatics.PlayerEnterDrone", Native_PlayerEnterDrone);
+	CreateNative("FDroneStatics.PlayerExitDrone", Native_PlayerExitDrone);
 
 	return APLRes_Success;
 }
@@ -134,4 +136,32 @@ void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
 
 		Call_Finish();
 	}
+}
+
+int Native_PlayerEnterDrone(Handle plugin, int args)
+{
+	ADronePlayer client = view_as<ADronePlayer>(GetNativeCell(1));
+	FDroneSeat seat = view_as<FDroneSeat>(GetNativeCell(2));
+	ADrone drone = view_as<ADrone>(GetNativeCell(3));
+
+	if (!seat.Occupied && !seat.AIControlled)
+	{
+		PlayerEnterVehicle(client, drone);
+	}
+
+	return 0;
+}
+
+int Native_PlayerExitDrone(Handle plugin, int args)
+{
+	ADronePlayer client = view_as<ADronePlayer>(GetNativeCell(1));
+	FDroneSeat seat = view_as<FDroneSeat>(GetNativeCell(2));
+	ADrone drone = view_as<ADrone>(GetNativeCell(3));
+
+	if (!seat.Occupied && !seat.AIControlled)
+	{
+		PlayerExitVehicle(client, seat, drone);
+	}
+
+	return 0;
 }

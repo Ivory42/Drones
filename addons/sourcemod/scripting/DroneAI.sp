@@ -527,6 +527,7 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 
 bool CanSeeTarget(ADrone drone, APersistentObject target)
 {
+
 	FVector start, end;
 	start = drone.GetPosition();
 	end = target.GetPosition();
@@ -534,7 +535,7 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 
 	FClient client;
 	client = CastToClient(target.GetObject());
-	if (client.Valid())
+	if (client.Valid() && ClientVisible(client))
 	{
 		if (!client.Alive())
 		{
@@ -554,6 +555,16 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 		}
 	}
 	delete trace;
+	return false;
+}
+
+bool ClientVisible(FClient client)
+{
+	if (client.InCondition(TFCond_Cloaked) || client.InCondition(TFCond_Stealthed) || client.InCondition(TFCond_StealthedUserBuffFade))
+	{
+		return true;
+	}
+
 	return false;
 }
 

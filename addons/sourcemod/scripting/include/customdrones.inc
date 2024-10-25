@@ -125,6 +125,24 @@ methodmap FDroneStatics
 	 * @param ignoreForward		Ignore calling the OnAIStateChanged forward after this is set
 	 */
 	public static native void ChangeAIState(FDroneAI controller, EControllerState state, bool ignoreForward = false);
+
+	/**
+	 * Forces the player to enter the given drone
+	 * 
+	 * @param client		Player to enter the drone
+	 * @param seat			Seat of the drone to enter
+	 * @param drone			Drone to enter
+	 */
+	public static native void PlayerEnterDrone(AClient client, FDroneSeat seat, ADrone drone);
+
+	/**
+	 * Forces the player to enter the given drone
+	 * 
+	 * @param client		Player to enter the drone
+	 * @param seat			Seat of the drone to enter
+	 * @param drone			Drone to enter
+	 */
+	public static native void PlayerExitDrone(AClient client, FDroneSeat seat, ADrone drone);
 }
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
@@ -479,10 +497,12 @@ stock EMoveType GetMoveType(const char[] movetype)
 		return MoveType_Fly;
 	else if (StrEqual(movetype, "drone_hover"))
 		return MoveType_Hover;
+	else if (StrEqual(movetype, "drone_no_movement"))
+		return MoveType_None;
 	else if (StrEqual(movetype, "drone_custom"))
 		return MoveType_Custom;
 
-	return MoveType_Hover; // Fallback to hover if not a valid entry
+	return MoveType_Helo; // Fallback to helo if not a valid entry
 }
 
 stock EWeaponType GetWeaponType(KeyValues kv)
@@ -647,7 +667,7 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 	}
 	
 	// Loop through our seats to make sure we don't hit any passengers
-	/*int seats = drone.Seats.Length;
+	int seats = drone.Seats.Length;
 	for (int i = 0; i < seats; i++)
 	{
 		FDroneSeat seat = drone.Seats.Get(i);
@@ -660,7 +680,7 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 			}
 		}
 	}
-	*/
+	
 	return true;
 }
 

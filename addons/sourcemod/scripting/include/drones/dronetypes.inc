@@ -36,6 +36,8 @@ enum EMoveType
 
 	MoveType_Hover, // WIP - Hovercraft like movement: Hovers just above the ground and uses 8 directional movement
 
+	MoveType_None, // Drone cannot move. Use this to make turret drones. "drone_no_movement"
+
 	MoveType_Custom // Custom movetype if defining logic in a sub plugin. Defined in configs as "drone_custom"
 };
 

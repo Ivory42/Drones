@@ -20,7 +20,9 @@ enum EControllerState
 
 	Controller_Fleeing, 	// Retreating if possible
 
-	Controller_Alerted 		// We were fired at or took damage, look in direction of alert source
+	Controller_Alerted, 	// We were fired at or took damage, look in direction of alert source
+
+	Controller_Disabled		// Controller is currently disabled and will not function
 };
 
 enum struct FDroneMoveParams

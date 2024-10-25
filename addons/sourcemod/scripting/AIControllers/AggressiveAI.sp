@@ -110,7 +110,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 
 				FVector targPos;
 				targPos = target.GetPosition();
-				targPos.Z += 60.0;
+				targPos.Z += 20.0;
 
 				vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), targPos);
 				angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);

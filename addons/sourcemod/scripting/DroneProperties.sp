@@ -953,6 +953,21 @@ Action OnDroneDamaged(int entity, int &attacker, int &inflictor, float &damage, 
 	return result;
 }
 
+Action OnComponentDamaged(int entity, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
+{
+	Action result = Plugin_Continue;
+	AComponent component = view_as<AComponent>(FEntityStatics.GetEntityFromIndex(entity));
+	if (component && component.IsComponent)
+	{
+		if (component.Drone)
+		{
+			result = DroneTakeDamage(component.Drone, ConstructObject(attacker), ConstructObject(inflictor), damage, ConstructWeapon(weapon), damagetype);
+		}
+	}
+
+	return result;
+}
+
 Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float& damage, FWeapon weapon, int &damagetype)
 {
 	bool sendEvent = true;
@@ -1072,9 +1087,12 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 				activeWeapon.Simulate();
 			}
 
-			SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
-			FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
-			ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
+			if (!drone.NoHud) // Do not display hud if this is true
+			{
+				SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
+				FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
+				ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
+			}
 
 			// Setup player position to given seat
 			FVector position;

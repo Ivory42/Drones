@@ -64,6 +64,12 @@ methodmap ADrone < AComponent
 		public set(bool value) { this.SetObjectProp("Entity_IsDrone", value); }
 	}
 
+	property bool CanMove // Can this drone currently move
+	{
+		public get() { return this.GetObjectProp("CustomDrone_CanMove"); }
+		public set(bool value) { this.SetObjectProp("CustomDrone_CanMove", value); }
+	}
+
 	property ADronePlayer Pilot // Client currently piloting this drone
 	{
 		public get() { return view_as<ADronePlayer>(this.GetObjectProp("Drone_Pilot")); }
@@ -74,6 +80,12 @@ methodmap ADrone < AComponent
 	{
 		public get() { return this.GetObjectPropFloat("Drone_CameraHeight"); }
 		public set(float height) { this.SetObjectPropFloat("Drone_CameraHeight", height); }
+	}
+
+	property bool NoHud // Do not display the default hud with this drone
+	{
+		public get() { return this.GetObjectProp("Drone_DisableDefaultHud"); }
+		public set(bool value) { this.SetObjectProp("Drone_DisableDefaultHud", value); }
 	}
 
 	/*
@@ -150,6 +162,18 @@ methodmap ADrone < AComponent
 	{
 		public get() { return this.GetObjectProp("Drone_HeloUpdatePitch"); }
 		public set(bool value) { this.SetObjectProp("Drone_HeloUpdatePitch", value); }
+	}
+
+	property bool HeloChangeRoll // For helo drones, adjust roll when moving
+	{
+		public get() { return this.GetObjectProp("Drone_HeloUpdateRoll"); }
+		public set(bool value) { this.SetObjectProp("Drone_HeloUpdateRoll", value); }
+	}
+
+	property bool HeloVerticalAxis // Helo drone will use the world vertical axis when moving up and down, rather than the drone's up vector
+	{
+		public get() { return this.GetObjectProp("Drone_HeloUseWorldVertical"); }
+		public set(bool value) { this.SetObjectProp("Drone_HeloUseWorldVertical", value); }
 	}
 
 	property TFTeam Team
@@ -232,7 +256,7 @@ stock void ClearSeats(ArrayList seats)
 	delete seats;
 }
 
-stock void CreateExplosion(float damage, float radius, FObject owner, const char[] particle, const char[] sound, FTransform spawn, int soundlevel = 95)
+stock void CreateExplosion(float damage, float radius, FObject owner, const char[] particle, const char[] sound, FTransform spawn, int soundlevel = 80)
 {
 	FObject explode;
 	explode = FGameplayStatics.CreateObjectDeferred("tf_generic_bomb");
@@ -246,5 +270,5 @@ stock void CreateExplosion(float damage, float radius, FObject owner, const char
 	FGameplayStatics.FinishSpawn(explode, spawn);
 	SDKHooks_TakeDamage(explode.Get(), owner.Get(), owner.Get(), 2.0);
 
-	EmitAmbientSound(sound, spawn.Position.ToFloat(), GetWorld().Get(), soundlevel);
+	EmitAmbientSound(sound, spawn.Position.ToFloat(), GetWorld().Get(), soundlevel, SND_NOFLAGS, 0.8);
 }

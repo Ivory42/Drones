@@ -25,10 +25,17 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.Drone = drone;
 
 		FDroneWeaponExtras components;
-		components.Parent = drone; // TODO - configure different parents for weapons
-		//SetupMount(kv, weapon, drone, components);
 		SetStringValues(weapon, kv);
-
+		
+		if (SetupMount(kv, drone, components))
+		{
+			components.Parent = components.Mount;
+			weapon.ComplexAngles = true;
+		}
+		else // If no mount, parent to the drone
+		{
+			components.Parent = drone;
+		}
 		components.ProjOffset = Vector_GetFromKV(kv, "proj_offset");
 
 		char attachment[64], muzzle[64];
@@ -37,14 +44,15 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		FormatEx(components.MuzzleAttachment, sizeof FDroneWeaponExtras::MuzzleAttachment, muzzle);
 
 		FTransform spawn;
-		//GetAttachmentTransform(drone.GetObject(), "Gun", spawn);
 		spawn.Position = drone.GetPosition();
 		spawn.Rotation = drone.GetAngles();
 		FEntityStatics.FinishSpawningEntity(weapon, spawn);
 
-		weapon.GetObject().SetParent(drone.GetObject());
+		weapon.GetObject().SetParent(components.Parent.GetObject());
 		SetVariantString(attachment);
 		weapon.GetObject().Input("SetParentAttachment");
+
+		SDKHook(weapon.Get(), SDKHook_OnTakeDamage, OnComponentDamaged);
 
 		weapon.Ammo = kv.GetNum("ammo_loaded", -1);
 		if (weapon.Ammo == -1)
@@ -96,6 +104,38 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 	return null;
 }
 
+bool SetupMount(KeyValues kv, ADrone drone, FDroneWeaponExtras components)
+{
+	char modelname[64];
+	kv.GetString("mount", modelname, sizeof modelname);
+	if (strlen(modelname) > 3)
+	{
+		AComponent mount = CreateComponent("prop_dynamic_override");
+		mount.SetKeyValue("model", modelname);
+
+		char attachment[64];
+		kv.GetString("mount_attach", attachment, sizeof attachment);
+
+		FTransform spawn;
+		spawn.Position = drone.GetPosition();
+		spawn.Rotation = drone.GetAngles();
+		FEntityStatics.FinishSpawningEntity(mount, spawn);
+
+		mount.GetObject().SetParent(drone.GetObject());
+		SetVariantString(attachment);
+		mount.GetObject().Input("SetParentAttachment");
+
+		mount.Drone = drone;
+
+		components.Mount = mount;
+		SDKHook(mount.Get(), SDKHook_OnTakeDamage, OnComponentDamaged);
+
+		return true;
+	}
+
+	return false;
+}
+
 void SetupAttachments(ADroneWeapon weapon)
 {
 	weapon.MuzzlePositions = new ArrayList();
@@ -145,12 +185,12 @@ void SetupAttachments(ADroneWeapon weapon)
 			{
 				muzzle.SetParent(weapon.GetReceiver());
 			}
-
 			weapon.MuzzlePositions.Push(muzzle.Reference);
 		}
 		else
 		{
 			// If no attachment found, resort to offset from origin
+			//PrintToChatAll("no muzzle found");
 			FObject attachEntity;
 			attachEntity = weapon.GetReceiver();
 			if (weapon.UsesParent)
@@ -207,14 +247,47 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 	FTransform muzzle;
 	for (int i = 0; i < bullets; i++)
 	{
-		if (weapon.GetNextMuzzleTransform(muzzle))
+		if (weapon.ComplexAngles)
 		{
+			// This needs to be adjusted at some point, wont work for every weapon position
+			muzzle.Position = drone.GetPosition();
+			muzzle.Position.Add(weapon.GetMount().GetRelativePosition());
+			muzzle.Position.Add(weapon.GetRelativePosition());
+
+			muzzle.Position.Z += weapon.GetObjects().ProjOffset.Z;
+
+			FObject marker;
+			marker = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
+			marker.SetModel("models/weapons/w_models/w_baseball.mdl");
+			FGameplayStatics.FinishSpawn(marker, muzzle);
+			marker.KillOnDelay(2.0);
+
+			muzzle.Rotation = weapon.GetMount().GetAngles();
+			FRotator difference;
+
+			difference.Yaw = muzzle.Rotation.Yaw + drone.GetAngles().Yaw;
+
+			difference.Pitch = weapon.GetAngles().Pitch;
+
+			//PrintCenterTextAll("Mount Yaw: %.1f\nDrone Yaw: %.1f\nDifference: %.1f", muzzle.Rotation.Yaw, drone.GetAngles().Yaw, difference.Yaw);
+
+			FVector offset;
+			offset = weapon.GetObjects().ProjOffset;
+			offset.Z = 0.0;
+			muzzle.Position = FMath.OffsetVector(muzzle.Position, difference, offset);
+			start = muzzle.Position;
+		}
+		else if (weapon.GetNextMuzzleTransform(muzzle))
+		{
+			/*
 			FVector velocity;
 			velocity = drone.GetVelocity();
 			velocity.Scale(0.1);
 			muzzle.Position.Add(velocity);
+			*/
 
 			start = muzzle.Position;
+			//PrintToChatAll("Fire position = %.1f, %.1f, %.1f", start.X, start.Y, start.Z);
 		}
 
 		FVector direction;
@@ -229,6 +302,8 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 		direction.Scale(8000.0);
 		direction.Add(start);
 
+		//PrintToChatAll("Aim position = %.1f, %.1f, %.1f", end.X, end.Y, end.Z);
+
 		FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
 		//trace.DebugTrace();
 		if (trace.DidHit())
@@ -241,6 +316,7 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 			}
 		}
 		end = trace.GetEndPosition();
+		//PrintToChatAll("End position = %.1f, %.1f, %.1f", end.X, end.Y, end.Z);
 		delete trace;
 
 		CreateTracer(start, end);
@@ -383,7 +459,7 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetWeaponAimPosition(weapon, ai.GetViewAngle());
+	end = GetDroneAimPosition(drone, ai.GetViewAngle());
 
 	// Now fire our bullets
 	int bullets = weapon.ProjPerShot;
@@ -434,7 +510,7 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
-	end = GetWeaponAimPosition(weapon, ai.GetViewAngle());
+	end = GetDroneAimPosition(drone, ai.GetViewAngle());
 
 	// Now fire our rockets
 	int rockets = weapon.ProjPerShot;

@@ -524,6 +524,12 @@ void SpawnDrone(FClient owner, const char[] name, const FTransform spawnPos, ADr
 			drone.UsePlayerAngles = false;
 			//SetEntityGravity(drone.Get(), 1.0);
 		}
+		case MoveType_None:
+		{
+			drone.CanMove = false;
+			drone.UsePlayerAngles = false;
+			SetEntityMoveType(drone.Get(), MOVETYPE_NONE);
+		}
 		default:
 		{
 			drone.UsePlayerAngles = true;
@@ -664,6 +670,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	drone.MaxSpeed = config.GetFloat("speed", 300.0);
 	drone.Acceleration = config.GetFloat("acceleration", 1.25);
 	drone.Deceleration = config.GetFloat("deceleration", 8.0);
+	drone.NoHud = view_as<bool>(config.GetNum("nohud", false));
 	//drone.SpeedOverride = 0.0;
 	drone.TurnRate = config.GetFloat("turn_rate", 80.0);
 
@@ -674,8 +681,10 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	if (drone.MoveType == MoveType_Helo)
 	{
 		drone.HeloChangePitch = view_as<bool>(config.GetNum("helo_changepitch", 0));
+		drone.HeloChangeRoll = view_as<bool>(config.GetNum("helo_changeroll", 1));
+		drone.HeloVerticalAxis = view_as<bool>(config.GetNum("helo_uservertical", 0));
 	}
-
+	
 	//config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
 	drone.CameraHeight = config.GetFloat("camera_height", 30.0);
 
@@ -835,6 +844,8 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone)
 
 	CreateTimer(0.1, ResetPlayerHealth, player, TIMER_FLAG_NO_MAPCHANGE);
 
+	SDKUnhook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
+
 	ResetClientView(player.GetClient());
 
 	Call_StartForward(DroneExited);
@@ -926,6 +937,8 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 
 	SetClientViewEntity(player.Get(), drone.GetCamera().Get());
 
+	SDKHook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
+
 	Call_StartForward(DroneEntered);
 
 	Call_PushCell(drone);
@@ -960,6 +973,18 @@ bool PlayerAimingAtDrone(AClient client, ADrone &currentDrone)
 	}
 
 	return false;
+}
+
+Action OnPlayerTakeDamage(int client, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
+{
+	ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClientFromIndex(client));
+	if (player && player.InDrone)
+	{
+		damage = 0.0;
+		return Plugin_Changed;
+	}
+
+	return Plugin_Continue;
 }
 
 bool TraceFilter(int entity, int mask, int exclude)

@@ -12,6 +12,7 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDron
 		switch (weapon.Type)
 		{
 			case WeaponType_Gun: DroneFireGun(drone, weapon, client);
+			case WeaponType_Laser: DroneFireGun(drone, weapon, client);// TODO
 			case WeaponType_Projectile: DroneFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), client);
 			case WeaponType_Custom:
 			{
@@ -83,6 +84,7 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 		switch (weapon.Type)
 		{
 			case WeaponType_Gun: DroneAIFireGun(drone, weapon, ai);
+			case WeaponType_Laser: DroneAIFireGun(drone, weapon, ai);// TODO
 			case WeaponType_Projectile: DroneAIFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), ai);
 			case WeaponType_Custom:
 			{
@@ -221,12 +223,16 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector speeds, FVector vel
 		case MoveType_Helo:
 		{
 			ignoreRoll = true;
-			float roll = MaxRollAngle * axisValue;
 
-			movementRot.Roll = roll;
-			//movementRot = FMath.InterpRotatorTo(movementRot, desiredRot, GetGameFrameTime(), 8.0);
+			if (drone.HeloChangeRoll)
+			{
+				float roll = MaxRollAngle * axisValue;
 
-			drone.SetInputRotation(movementRot);
+				movementRot.Roll = roll;
+				//movementRot = FMath.InterpRotatorTo(movementRot, desiredRot, GetGameFrameTime(), 8.0);
+
+				drone.SetInputRotation(movementRot);
+			}
 		}
 		case MoveType_Custom:
 		{
@@ -270,7 +276,7 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector speeds, FVector vel
 
 	if (ignoreRoll)
 	{
-		direction.Roll = 0.0; // null pitch value for helo drones
+		direction.Roll = 0.0; // null roll value
 	}
 	inputVel = direction.GetRightVector();
 
@@ -317,7 +323,15 @@ void OnDroneMoveUp(ADrone drone, float axisValue, FVector speeds, FVector veloci
 
 	// Now update our velocity
 	FVector inputVel;
-	inputVel = direction.GetUpVector();
+
+	if (drone.HeloVerticalAxis)
+	{
+		inputVel = ConstructVector(0.0, 0.0, 1.0);
+	}
+	else
+	{
+		inputVel = direction.GetUpVector();
+	}
 
 	inputVel.Scale(speeds.Z);
 	velocity.Add(inputVel);
