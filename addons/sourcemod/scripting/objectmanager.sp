@@ -3,6 +3,7 @@
 static SObjectMap EntityList;
 static SObjectMap ClientList;
 static ArrayList TickingEntities;
+static ArrayList UnorderedClientList;
 
 static GlobalForward OnObjectRegistered;
 static GlobalForward OnObjectDestroyed;
@@ -34,6 +35,7 @@ public void OnPluginStart()
 	EntityList = new SObjectMap();
 	TickingEntities = new ArrayList();
 	ClientList = new SObjectMap();
+	UnorderedClientList = new ArrayList();
 
 	OnObjectRegistered = new GlobalForward("EntManager_OnEntityRegistered", ET_Ignore, Param_Any, Param_String);
 	OnObjectDestroyed = new GlobalForward("EntManager_OnEntityDestroyed", ET_Ignore, Param_Any);
@@ -47,6 +49,8 @@ public void OnClientPutInServer(int clientId)
 {
 	AClient client = new AClient(ConstructClient(clientId));
 	RegisterClient(client);
+
+	SDKHook(clientId, SDKHook_GetMaxHealth, OnGetMaxHealth);
 }
 
 public void OnClientDisconnect(int clientId)
@@ -54,6 +58,7 @@ public void OnClientDisconnect(int clientId)
 	AClient client = GetClient(ConstructClient(clientId));
 	if (client)
 	{
+		client.SetObjectProp("Client.MaxHealthAdditive", 0);
 		Call_StartForward(OnClientRemoved);
 		Call_PushCell(client);
 		Call_Finish();
@@ -192,6 +197,11 @@ public void OnEntityDestroyed(int entity)
 				DisableEntityTick(actor);
 			}
 
+			char validation[64];
+			actor.GetValidationProperty(validation, sizeof validation);
+			actor.SetObjectProp(validation, false);
+			actor.SetObjectPropString("Entity.ValidationProperty", "");
+
 			Call_StartForward(OnObjectDestroyed);
 			Call_PushCell(actor);
 			Call_Finish();
@@ -224,6 +234,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FEntityStatics.DisableEntityTick", EntNative_DisableTick);
 	CreateNative("FEntityStatics.IsValid", EntNative_Valid);
 	CreateNative("FEntityStatics.GetConnectedClients", EntNative_GetClients);
+	CreateNative("FEntityStatics.SetValidationProperty", EntNative_ValidationProp);
+	CreateNative("FEntityStatics.GetClientMaxHealth", EntNative_GetClientHealth);
+	CreateNative("FEntityStatics.SetClientMaxHealthAdditive", EntNative_SetClientHealthAdditive);
+	CreateNative("FEntityStatics.GetClientMaxHealthAdditive", EntNative_GetClientHealthAdditive);
+	CreateNative("FEntityStatics.GetClientBaseHealth", EntNative_GetClientBaseHealth);
 
 	return APLRes_Success;
 }
@@ -238,16 +253,17 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 any EntNative_CreateEntity(Handle plugin, int args)
 {
-	char classname[256];
+	char classname[256], validation[128];
 	FObject owner;
 
 	GetNativeString(1, classname, sizeof classname);
 	GetNativeArray(2, owner, sizeof FObject);
+	GetNativeString(3, validation, sizeof validation);
 
 	FObject entity;
 	entity = FGameplayStatics.CreateObjectDeferred(classname);
 
-	return CreateBaseEntity(entity, owner);
+	return CreateBaseEntity(entity, owner, validation);
 }
 
 any EntNative_CreateFromTemplate(Handle plugin, int args)
@@ -284,7 +300,7 @@ any EntNative_RegisterEntity(Handle plugin, int args)
 		return 0;
 	}
 
-	ABaseEntity actor = CreateBaseEntity(entity, ConstructObject(0));
+	ABaseEntity actor = CreateBaseEntity(entity, ConstructObject(0), "");
 
 	return RegisterEntity(actor);
 }
@@ -409,37 +425,46 @@ any EntNative_Valid(Handle plugin, int args)
 
 any EntNative_GetClients(Handle plugin, int args)
 {
-	ArrayList ConnectedClients = new ArrayList();
-	if (ClientList)
-	{
-		StringMapSnapshot snapshot = ClientList.Snapshot();
+	return UnorderedClientList;
+}
 
-		if (snapshot)
-		{
-			int length = snapshot.Length;
+any EntNative_ValidationProp(Handle plugin, int args)
+{
+	ABaseEntity entity = view_as<ABaseEntity>(GetNativeCell(1));
+	char propertyName[64];
+	GetNativeString(2, propertyName, sizeof propertyName);
 
-			if (length > 0)
-			{
-				AClient client;
-				char key[128];
+	entity.SetObjectProp(propertyName, true);
+	entity.SetObjectPropString("Entity.ValidationProperty", propertyName);
+	return 0;
+}
 
-				for (int i = 0; i < length; i++)
-				{
-					snapshot.GetKey(i, key, sizeof key);
+any EntNative_GetClientHealth(Handle plugin, int args)
+{
+	AClient client = view_as<AClient>(GetNativeCell(1));
+	return client.GetObjectProp("Client.CalculatedMaxHealth");
+}
 
-					if (ClientList.ContainsKey(key))
-					{
-						ClientList.GetValue(key, client);
+any EntNative_GetClientBaseHealth(Handle plugin, int args)
+{
+	AClient client = view_as<AClient>(GetNativeCell(1));
+	return client.GetObjectProp("Client.BaseMaxHealth");
+}
 
-						ConnectedClients.Push(client);
-					}
-				}
-			}
-			delete snapshot;
-		}
-	}
+any EntNative_GetClientHealthAdditive(Handle plugin, int args)
+{
+	AClient client = view_as<AClient>(GetNativeCell(1));
+	return client.GetObjectProp("Client.MaxHealthAdditive");
+}
 
-	return ConnectedClients;
+any EntNative_SetClientHealthAdditive(Handle plugin, int args)
+{
+	AClient client = view_as<AClient>(GetNativeCell(1));
+	int health = GetNativeCell(2);
+
+	client.SetObjectProp("Client.MaxHealthAdditive", health);
+
+	return 0;
 }
 
 /*
@@ -459,6 +484,25 @@ int Native_Test(Handle plugin, int args)
  * 
  * 
  **************************/
+
+Action OnGetMaxHealth(int entityId, int& maxHealth)
+{
+	Action action = Plugin_Continue;
+	AClient client = GetClient(ConstructClient(entityId));
+	if (client)
+	{
+		client.SetObjectProp("Client.BaseMaxHealth", maxHealth);
+		int additive = client.GetObjectProp("Client.MaxHealthAdditive");
+		if (additive > 0)
+		{
+			maxHealth += additive;
+			action = Plugin_Changed;
+		}
+		client.SetObjectProp("Client.CalculatedMaxHealth", maxHealth);
+	}
+
+	return action;
+}
 
 void UnHookEntityTick(ABaseEntity entity, Handle plugin, Function func)
 {
@@ -544,13 +588,36 @@ void RegisterClient(AClient client)
 		Call_PushCell(client);
 		Call_Finish();
 	}
+
+	if (UnorderedClientList && CheckDuplicateClient(client))
+	{
+		UnorderedClientList.Push(client);
+	}
 }
 
-ABaseEntity CreateBaseEntity(FObject base, FObject owner = {})
+bool CheckDuplicateClient(AClient client)
+{
+	for (int i = 0; i < UnorderedClientList.Length; i++)
+	{
+		AClient check = UnorderedClientList.Get(i);
+		if (check != client)
+		{
+			continue;
+		}
+		if (check == client) // This client is already in our list, return false
+		{
+			return false;
+		}
+	}
+
+	return true; // If our client is not found, return true
+}
+
+ABaseEntity CreateBaseEntity(FObject base, FObject owner = {}, const char[] validation)
 {
 	char template[16];
 	FormatEx(template, sizeof template, EmptyTemplateName);
-	ABaseEntity entity = new ABaseEntity(base, template);
+	ABaseEntity entity = new ABaseEntity(base, template, validation);
 	if (owner.Valid())
 	{
 		entity.SetOwner(owner);
@@ -696,6 +763,17 @@ void RemoveClient(AClient client)
 		if (ClientList.HasKey(client.GetObject()))
 		{
 			ClientList.RemoveObjectValue(client.GetObject());
+		}
+	}
+
+	if (UnorderedClientList)
+	{
+		for (int i = 0; i < UnorderedClientList.Length; i++)
+		{
+			if (client == UnorderedClientList.Get(i))
+			{
+				UnorderedClientList.Erase(i);
+			}
 		}
 	}
 }

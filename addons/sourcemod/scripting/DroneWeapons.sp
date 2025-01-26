@@ -13,7 +13,7 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		}
 		else
 		{
-			FormatEx(propType, sizeof propType, "prop_physics_override");
+			FormatEx(propType, sizeof propType, "prop_dynamic_override");
 		}
 
 		ADroneWeapon weapon = view_as<ADroneWeapon>(CreateComponent(propType));
@@ -154,7 +154,6 @@ void SetupAttachments(ADroneWeapon weapon)
 		{
 			if (weapon.GetMuzzleTransform(attach))
 			{
-				//PrintToChatAll("Found muzzle %d", i);
 				muzzle = FGameplayStatics.CreateObject("info_target");
 				muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
 				if (weapon.UsesParent)
@@ -249,33 +248,7 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 	{
 		if (weapon.ComplexAngles)
 		{
-			// This needs to be adjusted at some point, wont work for every weapon position
-			muzzle.Position = drone.GetPosition();
-			muzzle.Position.Add(weapon.GetMount().GetRelativePosition());
-			muzzle.Position.Add(weapon.GetRelativePosition());
-
-			muzzle.Position.Z += weapon.GetObjects().ProjOffset.Z;
-
-			FObject marker;
-			marker = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
-			marker.SetModel("models/weapons/w_models/w_baseball.mdl");
-			FGameplayStatics.FinishSpawn(marker, muzzle);
-			marker.KillOnDelay(2.0);
-
-			muzzle.Rotation = weapon.GetMount().GetAngles();
-			FRotator difference;
-
-			difference.Yaw = muzzle.Rotation.Yaw + drone.GetAngles().Yaw;
-
-			difference.Pitch = weapon.GetAngles().Pitch;
-
-			//PrintCenterTextAll("Mount Yaw: %.1f\nDrone Yaw: %.1f\nDifference: %.1f", muzzle.Rotation.Yaw, drone.GetAngles().Yaw, difference.Yaw);
-
-			FVector offset;
-			offset = weapon.GetObjects().ProjOffset;
-			offset.Z = 0.0;
-			muzzle.Position = FMath.OffsetVector(muzzle.Position, difference, offset);
-			start = muzzle.Position;
+			start = GetComplexMuzzlePos(drone, weapon);
 		}
 		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
@@ -323,6 +296,18 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 	}
 }
 
+/*
+bool FilterIgnoreAll(int entity, int mask, any data)
+{
+	if (entity > 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+*/
+
 void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer player)
 {
 	FVector start, end;
@@ -334,7 +319,11 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 	FTransform muzzle;
 	for (int i = 0; i < rockets; i++)
 	{
-		if (weapon.GetNextMuzzleTransform(muzzle))
+		if (weapon.ComplexAngles)
+		{
+			start = GetComplexMuzzlePos(drone, weapon);
+		}
+		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
 			/*
 			FVector velocity;
@@ -353,7 +342,9 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 
-		URocket rocket = URocket();
+		CreateRocket(weapon, player.GetObject(), muzzle, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+		
+		/*URocket rocket = URocket();
 		rocket.Damage = weapon.Damage;
 		rocket.Team = player.GetClient().GetTeam();
 		FGameplayStatics.FinishSpawn(rocket.GetObject(), muzzle);
@@ -361,6 +352,12 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 		rocket.SetOwner(player.GetObject());
 
 		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
+
+		if (rockets == 1)
+		{
+			rocketFired = rocket;
+		}
+		*/
 	}
 }
 
@@ -466,7 +463,11 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 	FTransform muzzle;
 	for (int i = 0; i < bullets; i++)
 	{
-		if (weapon.GetNextMuzzleTransform(muzzle))
+		if (weapon.ComplexAngles)
+		{
+			start = GetComplexMuzzlePos(drone, weapon);
+		}
+		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
 			start = muzzle.Position;
 		}
@@ -517,7 +518,11 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 	FTransform muzzle;
 	for (int i = 0; i < rockets; i++)
 	{
-		if (weapon.GetNextMuzzleTransform(muzzle))
+		if (weapon.ComplexAngles)
+		{
+			start = GetComplexMuzzlePos(drone, weapon);
+		}
+		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
 			/*
 			FVector velocity;
@@ -536,6 +541,18 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 
+		FObject owner;
+		if (ai.Owner)
+		{
+			owner = ai.Owner.GetObject();
+		}
+		else
+		{
+			owner = drone.GetObject();
+		}
+		CreateRocket(weapon, owner, muzzle, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+
+		/*
 		URocket rocket = URocket();
 		rocket.Damage = weapon.Damage;
 		rocket.Team = view_as<int>(drone.Team);
@@ -553,6 +570,52 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 		rocket.SetOwner(owner);
 
 		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
+
+		if (rockets == 1)
+		{
+			rocketFired = rocket;
+		}
+		*/
 	}
 }
 
+// Not a perfect solution, but gets an approximate location of where this muzzle SHOULD be. Getting the world position of an entity in a multi-parented hierarchy doesn't seem to work, so doing this instead.
+FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
+{
+	FTransform muzzle;
+	muzzle.Position = drone.GetPosition();
+	muzzle.Position.Add(weapon.GetMount().GetRelativePosition());
+	muzzle.Position.Add(weapon.GetRelativePosition());
+
+	muzzle.Position.Z += weapon.GetObjects().ProjOffset.Z;
+
+	muzzle.Rotation = weapon.GetMount().GetAngles();
+	FRotator difference;
+
+	difference.Yaw = muzzle.Rotation.Yaw + drone.GetAngles().Yaw;
+
+	difference.Pitch = weapon.GetAngles().Pitch;
+
+	//PrintCenterTextAll("Mount Yaw: %.1f\nDrone Yaw: %.1f\nDifference: %.1f", muzzle.Rotation.Yaw, drone.GetAngles().Yaw, difference.Yaw);
+
+	FVector offset;
+	offset = weapon.GetObjects().ProjOffset;
+	offset.Z = 0.0;
+	muzzle.Position = FMath.OffsetVector(muzzle.Position, difference, offset);
+	return muzzle.Position;
+}
+
+void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname)
+{
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity(classname, owner, "DroneComponents.DroneRocketEntity"));
+	if (rocket)
+	{
+		rocket.Damage = damage;
+		rocket.Team = team;
+
+		FEntityStatics.FinishSpawningEntity(rocket, spawn);
+
+		rocket.FireProjectile(direction, weapon.ProjectileSpeed);
+		rocket.Launcher = weapon;
+	}
+}

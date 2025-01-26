@@ -349,6 +349,17 @@ methodmap ADroneWeapon < AComponent
 		return position;
 	}
 
+	public FObject GetMuzzle(int index)
+	{
+		FObject muzzle;
+		if (this.MuzzlePositions && this.MuzzlePositions.Length > index)
+		{
+			this.MuzzlePositions.GetArray(index, muzzle, sizeof FObject);
+		}
+
+		return muzzle;
+	}
+
 	public int GetMuzzleCount()
 	{
 		char muzzles[16][64];

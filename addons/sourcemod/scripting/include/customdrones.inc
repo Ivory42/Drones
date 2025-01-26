@@ -84,6 +84,16 @@ methodmap FDroneStatics
 	public static native void FireBullets(ADronePlayer gunner, ADrone drone, ADroneWeapon weapon, FDroneSeat seat);
 
 	/**
+	* Fire a hitscan attack from a drone's weapon
+	*
+	* @param gunner		Client firing this weapon
+	* @param drone		Drone that the weapon is attached to
+	* @param weapon		Weapon firing this attack
+	* @param seat		Seat firing this weapon
+	*/
+	public static native void FireRockets(ADronePlayer gunner, ADrone drone, ADroneProjectileWeapon weapon, FDroneSeat seat);
+	
+	/**
  	* Fire the current drone's active weapon
  	*
 	* @param seat	Seat to fire the active weapon for

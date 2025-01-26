@@ -4,7 +4,7 @@
 #define _customdrones_drone_included
 
 #include "drones/components.inc"
-//#include <drones/rocket>
+#include <drones/projectiles>
 //#include <drones/bomb>
 #include <sdkhooks>
 
