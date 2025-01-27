@@ -674,6 +674,14 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 		{
 			return test.Drone == drone;
 		}
+
+		if (hit.Cast("obj_"))
+		{
+			if (GetEntProp(entity, Prop_Send, "m_iTeamNum") == view_as<int>(drone.Team))
+			{
+				return false;
+			}
+		}
 	}
 	
 	// Loop through our seats to make sure we don't hit any passengers

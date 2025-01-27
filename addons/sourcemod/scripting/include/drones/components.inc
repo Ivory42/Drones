@@ -136,6 +136,12 @@ methodmap ADroneWeapon < AComponent
 		public set(bool value) { this.SetObjectProp("Weapon_NoReload", value); }
 	}
 
+	property bool AILeadTargets // If true, AI controllers will attempt to lead shots with targets, if applicable
+	{
+		public get() { return this.GetObjectProp("Weapon_AITargetPrediction"); }
+		public set(bool value) { this.SetObjectProp("Weapon_AITargetPrediction", value); }
+	}
+
 	property float FireRate // Weapon's firerate in rounds per second
 	{
 		public get() { return this.GetObjectPropFloat("Weapon_RateOfFire"); }

@@ -68,6 +68,8 @@ enum struct FDroneAIParams
 
 	int MaxQueries;
 
+	bool Stationary;
+
 	bool OnlyFollowOwner;		// Support drone will only follow the owner
 	bool PrioritizeOwner;		// Support drone will prioritize following the owner but can still follow other players
 	EBehaviorType Behavior;
@@ -129,6 +131,12 @@ methodmap FDroneAI < StringMap
 	{
 		public set(bool value) { this.SetBool("DroneAI_OverrideMovement", value); }
 		public get() { return this.GetBool("DroneAI_OverrideMovement"); }
+	}
+
+	property bool Stationary // This controller is stationary and will not move on its own
+	{
+		public set(bool value) { this.SetBool("DroneAI_Stationary", value); }
+		public get() { return this.GetBool("DroneAI_Stationary"); }
 	}
 
 	property bool Moving
@@ -452,6 +460,7 @@ methodmap FDroneAIStatics
 			ai.LevelCombat = params.LevelCombat;
 
 			ai.Behavior = params.Behavior;
+			ai.Stationary = params.Stationary;
 
 			ai.IdleTime = params.IdleTime;
 			ai.ThinkRate = params.ThinkRate;
@@ -485,6 +494,7 @@ methodmap FDroneAIStatics
 		params.IdleMoveRangeMin = 800.0;
 		params.LevelCombat = false;
 		params.PursueTarget = false;
+		params.Stationary = false;
 
 		params.ThinkRate = 0.1;
 		params.IdleTime = 2.0;
@@ -531,6 +541,7 @@ methodmap FDroneAIStatics
 				params.IdleMoveRangeMin = kv.GetFloat("min_move_range", 800.0);
 				params.LevelCombat = view_as<bool>(kv.GetNum("level_combat_height", 0));
 				params.PursueTarget = view_as<bool>(kv.GetNum("pursue_target", 0));
+				params.Stationary = view_as<bool>(kv.GetNum("stationary", 0));
 
 				params.ThinkRate = kv.GetFloat("think_rate", 0.1);
 				params.IdleTime = kv.GetFloat("idle_timer", 2.0);

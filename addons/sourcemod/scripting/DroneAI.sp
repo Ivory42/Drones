@@ -108,6 +108,33 @@ void AIMoveTowardsLastDirection(ADrone drone, FDroneAI controller, FVector curre
 }
 */
 
+FRotator GetPredictedAngle(ADrone drone, APersistentObject target, FVector targPos, ADroneWeapon weapon)
+{
+	FRotator rotation;
+	// We can only predict with a projectile based weapon
+	if (weapon.Type == WeaponType_Projectile)
+	{
+		ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(weapon);
+		FVector velocity;
+		velocity = target.GetPropVector(Prop_Data, "m_vecAbsVelocity");
+		float distance = FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), target.GetObject());
+
+		// Prediction will be very simple to save on resources. Gravity will not be taken into account and only the current speed will be factored
+		float factor = distance / projWep.ProjectileSpeed;
+		velocity.Scale(factor);
+
+		//PrintCenterTextAll("Distance: %.1f|Speed: %.1f|TravelTime: %.1f", distance, projWep.ProjectileSpeed, factor);
+
+		FVector prediction;
+		prediction = targPos;
+		prediction.Add(velocity);
+
+		rotation = Vector_GetAngles(Vector_MakeFromPoints(drone.GetPosition(), prediction));
+	}
+
+	return rotation;
+}
+
 void SimulateDecisionTree(FDroneAI ai, FDroneSeat seat, ADrone drone, bool thinkTick)
 {
 	FDroneAIParams params;
@@ -529,9 +556,9 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 {
 
 	FVector start, end;
-	start = drone.GetPosition();
+	start = drone.GetCamera().GetPosition();
 	end = target.GetPosition();
-	end.Z += 40.0;
+	end.Z += 65.0;
 
 	FClient client;
 	client = CastToClient(target.GetObject());
@@ -544,10 +571,12 @@ bool CanSeeTarget(ADrone drone, APersistentObject target)
 	}
 
 	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneVisionTrace, drone);
+	//trace.DebugTrace(1.0);
 	if (trace.DidHit())
 	{
 		FObject hit;
 		hit = trace.GetHitEntity();
+		//PrintCenterTextAll("Looking for: %d, hit: %d", target.Get(), hit.Get());
 		if (hit.Get() == target.Get())
 		{
 			delete trace;
@@ -583,6 +612,19 @@ bool DroneVisionTrace(int entity, int mask, ADrone drone)
 		return false;
 	}
 
+	if (ConstructObject(entity).Cast("tf_projectile"))
+	{
+		return false;
+	}
+
+	if (ConstructObject(entity).Cast("obj_")) // ignore friendly buildings
+	{
+		if (GetEntProp(entity, Prop_Send, "m_iTeamNum") == view_as<int>(drone.Team))
+		{
+			return false;
+		}
+	}
+
 	return true;
 }
 
@@ -609,7 +651,7 @@ bool DroneMovementTrace(int entity, int mask, ADrone drone)
 FRotator FindNewLookAngle()
 {
 	FRotator rot;
-	rot.Pitch = GetRandomFloat(-60.0, 60.0);
+	rot.Pitch = GetRandomFloat(-50.0, 50.0);
 	rot.Yaw = GetRandomFloat(-180.0, 180.0);
 
 	//PrintToChatAll("New look angle pitch = %.1f\nyaw = %.1f", rot.Pitch, rot.Yaw);

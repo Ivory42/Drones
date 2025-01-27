@@ -71,6 +71,7 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.MaxYaw = kv.GetFloat("max_yaw");
 		weapon.Fixed = view_as<bool>(kv.GetNum("fixed"));
 		weapon.ProjPerShot = kv.GetNum("bullets_per_shot", 1);
+		weapon.AILeadTargets = view_as<bool>(kv.GetNum("ai_predict_targets", 0));
 
 		if (weapon.Type == WeaponType_Projectile)
 		{
@@ -342,22 +343,9 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 
-		CreateRocket(weapon, player.GetObject(), muzzle, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
-		
-		/*URocket rocket = URocket();
-		rocket.Damage = weapon.Damage;
-		rocket.Team = player.GetClient().GetTeam();
-		FGameplayStatics.FinishSpawn(rocket.GetObject(), muzzle);
-
-		rocket.SetOwner(player.GetObject());
-
-		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
-
-		if (rockets == 1)
-		{
-			rocketFired = rocket;
-		}
-		*/
+		FTransform spawn;
+		spawn = ConstructTransform(start, angle);
+		CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
 	}
 }
 
@@ -550,7 +538,10 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 		{
 			owner = drone.GetObject();
 		}
-		CreateRocket(weapon, owner, muzzle, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+
+		FTransform spawn;
+		spawn = ConstructTransform(start, angle);
+		CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
 
 		/*
 		URocket rocket = URocket();
@@ -614,8 +605,8 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 		rocket.Team = team;
 
 		FEntityStatics.FinishSpawningEntity(rocket, spawn);
+		rocket.WeaponLauncher = weapon;
 
 		rocket.FireProjectile(direction, weapon.ProjectileSpeed);
-		rocket.Launcher = weapon;
 	}
 }

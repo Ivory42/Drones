@@ -16,7 +16,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 		bool moveTick = false;
 		if (thinkTick)
 		{
-			if (ai.NextMovementTime <= GetGameTime())
+			if (!ai.Stationary && ai.NextMovementTime <= GetGameTime())
 			{
 				ai.NextMovementTime = GetGameTime() + ai.IdleTime;
 				moveTick = true;
@@ -52,6 +52,14 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 
 void SimulateIdleNoFollow(FSupportAI controller, ADrone drone, bool moveTick)
 {
+	if (controller.Stationary)
+	{
+		if (GetRandomInt(1, 10) > 4)
+			controller.SetTargetAngle(FindNewLookAngle());
+
+		return;
+	}
+
 	if (moveTick)
 	{
 		if (!controller.Moving)
@@ -83,7 +91,7 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 
 		if (thinkTick)
 		{
-			if (ai.NextMovementTime <= GetGameTime())
+			if (!ai.Stationary && ai.NextMovementTime <= GetGameTime())
 			{
 				moveTick = true;
 			}
@@ -94,8 +102,15 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 				FRotator angleTowardsEnemy;
 				FVector vecTowardsEnemy;
 
-				vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), target.GetPosition());
-				angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
+				if (weapon.AILeadTargets)
+				{
+					angleTowardsEnemy = GetPredictedAngle(drone, target, target.GetPosition(), weapon);
+				}
+				else
+				{
+					vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), target.GetPosition());
+					angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
+				}
 				ai.SetTargetAngle(angleTowardsEnemy);
 
 				if (ai.NextCombatCheckTime <= GetGameTime())
@@ -157,6 +172,11 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 
 void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDroneAIParams params, bool thinkTick)
 {
+	if (ai.Stationary)
+	{
+		return;
+	}
+
 	if (seat.Type == Seat_Pilot && thinkTick)
 	{
 		FSupportAI support = view_as<FSupportAI>(ai);
@@ -252,6 +272,11 @@ void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDrone
 
 void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 {
+	if (support.Stationary)
+	{
+		return;
+	}
+
 	AClient follow = support.FollowTarget;
 	if (follow)
 	{

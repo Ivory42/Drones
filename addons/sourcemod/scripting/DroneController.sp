@@ -14,33 +14,35 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDron
 			case WeaponType_Gun: DroneFireGun(drone, weapon, client);
 			case WeaponType_Laser: DroneFireGun(drone, weapon, client);// TODO
 			case WeaponType_Projectile: DroneFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), client);
-			case WeaponType_Custom:
-			{
-				int newAmmo = 1;
-				Action action = Plugin_Continue;
-
-				char weaponName[64];
-				weapon.GetInternalName(weaponName, sizeof weaponName);
-
-				Call_StartForward(DroneAttack);
-
-				Call_PushCell(drone);
-				Call_PushCell(client);
-				Call_PushCell(weapon);
-				Call_PushCell(seat);
-				Call_PushCellRef(newAmmo);
-				Call_PushString(weaponName);
-
-				Call_Finish(action);
-
-				if (action == Plugin_Changed)
-				{
-					ammoReduce = newAmmo;
-				}
-				else if (action == Plugin_Handled || action == Plugin_Stop)
-					return;
-			}
 		}
+
+		// For custom OnWeaponFire Forward
+		int newAmmo = 1;
+		Action action = Plugin_Continue;
+
+		char weaponName[64];
+		weapon.GetInternalName(weaponName, sizeof weaponName);
+
+		Call_StartForward(DroneAttack);
+
+		Call_PushCell(drone);
+		Call_PushCell(client);
+		Call_PushCell(weapon);
+		Call_PushCell(seat);
+		Call_PushCellRef(newAmmo);
+		Call_PushString(weaponName);
+
+		Call_Finish(action);
+
+		if (action == Plugin_Changed)
+		{
+			ammoReduce = newAmmo;
+		}
+		else if (action == Plugin_Handled || action == Plugin_Stop)
+		{
+			return;
+		}
+
 		char fireSound[64];
 		weapon.GetFireSound(fireSound, sizeof fireSound);
 		if (strlen(fireSound) > 3)
@@ -73,6 +75,11 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 
 		if (actionCanAttack != Plugin_Continue)
 		{
+			if (actionCanAttack == Plugin_Handled) // Set attack cooldown on handled
+			{
+				if (weapon.FireRate > 0.0)
+					weapon.NextPrimaryAttack = GetGameTime() + (1.0 / weapon.FireRate);
+			}
 			return;
 		}
 
@@ -86,32 +93,33 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 			case WeaponType_Gun: DroneAIFireGun(drone, weapon, ai);
 			case WeaponType_Laser: DroneAIFireGun(drone, weapon, ai);// TODO
 			case WeaponType_Projectile: DroneAIFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), ai);
-			case WeaponType_Custom:
-			{
-				int newAmmo = 1;
-				Action action = Plugin_Continue;
-
-				char weaponName[64];
-				weapon.GetInternalName(weaponName, sizeof weaponName);
-				Call_StartForward(DroneAttack);
-
-				Call_PushCell(drone);
-				Call_PushCell(GetWorldSpawn());
-				Call_PushCell(weapon);
-				Call_PushCell(seat);
-				Call_PushCellRef(newAmmo);
-				Call_PushString(weaponName);
-
-				Call_Finish(action);
-
-				if (action == Plugin_Changed)
-				{
-					ammoReduce = newAmmo;
-				}
-				else if (action == Plugin_Handled || action == Plugin_Stop)
-					return;
-			}
 		}
+
+		int newAmmo = 1;
+		Action action = Plugin_Continue;
+
+		char weaponName[64];
+		weapon.GetInternalName(weaponName, sizeof weaponName);
+		Call_StartForward(DroneAttack);
+
+		Call_PushCell(drone);
+		Call_PushCell(GetWorldSpawn());
+		Call_PushCell(weapon);
+		Call_PushCell(seat);
+		Call_PushCellRef(newAmmo);
+		Call_PushString(weaponName);
+
+		Call_Finish(action);
+
+		if (action == Plugin_Changed)
+		{
+			ammoReduce = newAmmo;
+		}
+		else if (action == Plugin_Handled || action == Plugin_Stop)
+		{
+			return;
+		}
+
 		char fireSound[64];
 		weapon.GetFireSound(fireSound, sizeof fireSound);
 		if (strlen(fireSound) > 3)

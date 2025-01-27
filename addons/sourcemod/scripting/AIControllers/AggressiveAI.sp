@@ -25,7 +25,7 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 				// Either look around or move to a new position
 				if (GetRandomInt(1, 10) > 4)
 					ai.SetTargetAngle(FindNewLookAngle());
-				else
+				else if (!ai.Stationary)
 				{
 					// Get a random position around the drone to move to
 					FDroneMoveParams params;
@@ -36,30 +36,6 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 					DroneFindMovePosition(ai, drone, drone.GetPosition(), params);
 				}
 			}
-			/*
-			else
-			{
-				// We can still change direction if we choose to
-				if (GetRandomInt(1, 10) > 3)
-				{
-					FVector movePos;
-					float radius = ai.MoveRange;
-					float minRad = ai.MinMoveRange;
-					float height = ai.MaxMoveHeight;
-					float hover = ai.HoverHeight;
-					movePos = FindPositionAroundLocation(ai, drone, ai.GetMovePosition(), radius, minRad, hover, height);
-					FRotator velocityRot, direction;
-					velocityRot = Vector_GetAngles(drone.GetVelocity());
-					direction = Vector_GetAngles(movePos);
-
-					float angle = FMath.GetAngle(velocityRot, direction);
-					if (angle < 90.0) // Do not completely change direction while already moving
-					{
-						ai.SetMovePosition(movePos);
-					}
-				}
-			}
-			*/
 		}
 	}
 	// If this seat has a weapon, perform weapon checks
@@ -80,7 +56,7 @@ void Aggressive_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool th
 				ChangeControllerState(ai, Controller_Attacking);
 
 				// Update our move position to be around our target
-				if (ai.Moving)
+				if (!ai.Stationary && ai.Moving)
 				{
 					FVector movePosition;
 					movePosition = FindTargetPosition(ai, drone, target);
@@ -112,8 +88,15 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				targPos = target.GetPosition();
 				targPos.Z += 20.0;
 
-				vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), targPos);
-				angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
+				if (weapon.AILeadTargets)
+				{
+					angleTowardsEnemy = GetPredictedAngle(drone, target, targPos, weapon);
+				}
+				else
+				{
+					vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), targPos);
+					angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
+				}
 				ai.SetTargetAngle(angleTowardsEnemy);
 
 				if (ai.NextCombatCheckTime <= GetGameTime())
@@ -122,12 +105,12 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 					target = FindClosestTarget(ai, drone);
 				}
 
-				if (ai.NextMovementTime <= GetGameTime())
+				if (!ai.Stationary && ai.NextMovementTime <= GetGameTime())
 				{
 					moveTick = true;
 				}
 
-				if (moveTick && !ai.Moving)
+				if (!ai.Stationary && moveTick && !ai.Moving)
 				{
 					// Find a position around our target
 					FDroneMoveParams move;
@@ -157,7 +140,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 						}
 					}
 				}
-				else // Immediately move into range if we are not currently
+				else if (!ai.Stationary) // Immediately move into range if we are not currently
 				{
 					FDroneMoveParams move;
 					move.MaxDist = ai.DesiredAttackRange;
@@ -169,7 +152,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				}
 
 				// Also check if we are too close
-				if (!ai.Moving && DroneTooClose(ai, drone, target))
+				if (!ai.Stationary && !ai.Moving && DroneTooClose(ai, drone, target))
 				{
 					// Move further away
 					FDroneMoveParams move;
@@ -186,7 +169,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 				ai.CurrentTarget = null;
 
 				// If we can pursue, let's set our state to pursue
-				if (params.PursueTarget)
+				if (!ai.Stationary && params.PursueTarget)
 				{
 					ai.TargetQueryIndex = 0;
 					ChangeControllerState(ai, Controller_Seeking);
@@ -199,7 +182,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 			}
 		}
 
-		if (moveTick)
+		if (!ai.Stationary && moveTick)
 		{
 			ai.NextMovementTime = GetGameTime() + ai.IdleTime;
 		}
@@ -226,6 +209,11 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 
 void Aggressive_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDroneAIParams params, bool thinkTick)
 {
+	if (ai.Stationary)
+	{
+		return;
+	}
+
 	if (seat.Type == Seat_Pilot && thinkTick)
 	{
 		bool moveTick = false;

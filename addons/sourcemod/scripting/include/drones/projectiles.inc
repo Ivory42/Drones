@@ -97,7 +97,7 @@ methodmap ABaseDroneProjectile < ABaseEntity
 	}
 
 	// The weapon which fired this projectile
-	property ADroneProjectileWeapon Launcher
+	property ADroneProjectileWeapon WeaponLauncher
 	{
 		public set(ADroneProjectileWeapon launcher) { this.SetObjectProp("DroneProjectile.LaunchingWeapon", launcher); }
 		public get() { return this.GetObjectProp("DroneProjectile.LaunchingWeapon"); }
@@ -106,9 +106,9 @@ methodmap ABaseDroneProjectile < ABaseEntity
 	// Returns the drone which fired this projectile
 	public ADrone GetOwningDrone()
 	{
-		if (this.Launcher)
+		if (this.WeaponLauncher)
 		{
-			return this.Launcher.Drone;
+			return this.WeaponLauncher.Drone;
 		}
 	}
 
