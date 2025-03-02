@@ -42,11 +42,11 @@ any Native_FireRockets(Handle plugin, int args)
 
 	if (seat.AIControlled)
 	{
-		DroneAIFireRocket(drone, weapon, seat.AIOccupier);
+		DroneAIFireProjectile(drone, weapon, DroneProj_Rocket, seat.AIOccupier);
 	}
 	else
 	{
-		DroneFireRocket(drone, weapon, gunner);
+		DroneFireProjectile(drone, weapon, DroneProj_Rocket, gunner);
 	}
 	return 0;
 }

@@ -461,6 +461,17 @@ forward Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon 
 forward Action CD2_OnAIFindTarget(FDroneAI controller, ADrone drone, bool targetEnemies, APersistentObject& target);
 
 /**
+ * Forward called to validate a target for the given drone controller
+ *
+ * @param controller 		AI controller controlling this drone
+ * @param drone				Drone occupied by the AI
+ * @param target 			Target to check validation on
+ *
+ * @return 			True to allow the target to be valid, False blacklists this target for current iteration.
+ */
+forward Action CD2_OnAIValidateTarget(FDroneAI controller, ADrone drone, APersistentObject target, bool& valid);
+
+/**
  * Forward called when an AI controlled drone is about to move
  *
  * @param controller 		AI controller controlling this drone
@@ -481,6 +492,18 @@ forward Action CD2_OnAIGetMovePosition(FDroneAI controller, ADrone drone, FVecto
  * @return Plugin_Continue to allow the weapon to fire, otherwise prevent the weapon from firing
  */
 forward Action CD2_OnAIAttack(FDroneAI controller, ADrone drone, ADroneWeapon weapon);
+
+/**
+ * Forward called upon an AI controller computing the toss angle to reach a target with a grenade projectile
+ * 
+ * @param controller		AI controller processing request
+ * @param drone				Drone being controlled
+ * @param weapon			Weapon being fired
+ * @param angle				Angle computed for trajectory
+ * 
+ * @return Plugin_Continue to use the same angle, Plugin_Changed to update
+ */
+forward Action CD2_OnAIFindTossAngle(FDroneAI controller, ADrone drone, ADroneWeapon weapon, float& angle);
 
 /**
  * Forward called when a drone AI controller changes its current state
@@ -650,10 +673,12 @@ stock FVector GetWeaponAimPosition(ADroneWeapon weapon, FRotator rotation, float
 
 stock FVector GetCameraOffset(ADrone drone)
 {
-	float cameraHeight = drone.CameraHeight;
+	FVector offset;
+	offset.Z = drone.CameraHeight;
+	offset.X = drone.CameraDistance;
 
 	FVector start;
-	start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), ConstructVector(0.0, 0.0, cameraHeight));
+	start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), offset);
 
 	return start;
 }

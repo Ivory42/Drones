@@ -13,7 +13,11 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDron
 		{
 			case WeaponType_Gun: DroneFireGun(drone, weapon, client);
 			case WeaponType_Laser: DroneFireGun(drone, weapon, client);// TODO
-			case WeaponType_Projectile: DroneFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), client);
+			case WeaponType_Projectile:
+			{
+				ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(weapon);
+				DroneFireProjectile(drone, projWep, projWep.ProjType, client);
+			}
 		}
 
 		// For custom OnWeaponFire Forward
@@ -92,7 +96,11 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 		{
 			case WeaponType_Gun: DroneAIFireGun(drone, weapon, ai);
 			case WeaponType_Laser: DroneAIFireGun(drone, weapon, ai);// TODO
-			case WeaponType_Projectile: DroneAIFireRocket(drone, view_as<ADroneProjectileWeapon>(weapon), ai);
+			case WeaponType_Projectile:
+			{
+				ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(weapon);
+				DroneAIFireProjectile(drone, projWep, projWep.ProjType, ai);
+			}
 		}
 
 		int newAmmo = 1;
@@ -169,11 +177,12 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector v
 	if (stall)
 	{
 		// Slow to a stop
-		if (speeds.X > 0.0)
+		float minimum = drone.MoveType == MoveType_Fly ? 200.0 : 0.0;
+		if (speeds.X > minimum)
 		{
 			speeds.X -= drone.Acceleration;
 		}
-		else if (speeds.X < 0.0)
+		else if (speeds.X < minimum)
 		{
 			speeds.X += drone.Acceleration;
 		}
@@ -427,6 +436,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 					float turnRate = AngleDifference(currentAngle, desiredAngle);
 					float diff = drone.LastFrameYaw - drone.CurrentFrameYaw;
 					bool positive = (diff > 0);
+					//PrintCenterTextAll("Turn Rate: %.1f\n%s\nCur: %.1f\nPrev: %.1f\n%.1f", turnRate, positive ? "right" : "left", drone.CurrentFrameYaw, drone.LastFrameYaw, diff);
 
 					if (FloatAbs(turnRate) >= 0.2 && FloatAbs(diff) <= 80.0)
 					{

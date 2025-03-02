@@ -13,9 +13,12 @@ GlobalForward DroneCreatedWeapon;
 GlobalForward DroneWeaponRemoved;
 
 GlobalForward DroneAIFindTarget;
+GlobalForward DroneAITargetValid;
 GlobalForward DroneAIFindPosition;
 GlobalForward DroneAIStateChanged;
 GlobalForward DroneAIAttack;
+
+GlobalForward FindTossAngle;
 
 #include "DroneProperties.sp"
 #include "DroneNatives.sp"
@@ -40,24 +43,26 @@ public void OnPluginStart()
 	HookEvent("post_inventory_application", OnPlayerResupply);
 
 	//Forwards
-	DroneCreated = CreateGlobalForward("CD2_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_Any); //drone, plugin, config
-	DroneCreatedWeapon = CreateGlobalForward("CD2_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_Any); //drone, weapon, weapon plugin, config
-	DroneWeaponRemoved = CreateGlobalForward("CD2_OnWeaponRemoved", ET_Ignore, Param_Any, Param_String); //weapon, weaponname
-	DroneEntered = CreateGlobalForward("CD2_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone, client, seat, plugin, config
-	DroneExited = CreateGlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone struct, client, seat, plugin, config
-	DroneRemoved = CreateGlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
+	DroneCreated = new GlobalForward("CD2_OnDroneCreated", ET_Ignore, Param_Any, Param_String, Param_Any); //drone, plugin, config
+	DroneCreatedWeapon = new GlobalForward("CD2_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_Any); //drone, weapon, weapon plugin, config
+	DroneWeaponRemoved = new GlobalForward("CD2_OnWeaponRemoved", ET_Ignore, Param_Any, Param_String); //weapon, weaponname
+	DroneEntered = new GlobalForward("CD2_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone, client, seat, plugin, config
+	DroneExited = new GlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone struct, client, seat, plugin, config
+	DroneRemoved = new GlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	//DroneChangeWeapon = CreateGlobalForward("CD2_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
-	DroneDestroyed = CreateGlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float, Param_String); //drone, attacker, damage, name
-	DroneAttack = CreateGlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
-	DroneAIEnter = CreateGlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
+	DroneDestroyed = new GlobalForward("CD2_OnDroneDestroyed", ET_Ignore, Param_Any, Param_Array, Param_Float, Param_String); //drone, attacker, damage, name
+	DroneAttack = new GlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
+	DroneAIEnter = new GlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
 
-	DroneDamaged = CreateGlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_FloatByRef, Param_CellByRef);
+	DroneDamaged = new GlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_FloatByRef, Param_CellByRef);
 
-	DroneAIFindTarget = CreateGlobalForward("CD2_OnAIFindTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
-	DroneAIFindPosition = CreateGlobalForward("CD2_OnAIGetMovePosition", ET_Hook, Param_Cell, Param_Cell, Param_Array);
+	DroneAIFindTarget = new GlobalForward("CD2_OnAIFindTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
+	DroneAITargetValid = new GlobalForward("CD2_OnAIValidateTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
+	DroneAIFindPosition = new GlobalForward("CD2_OnAIGetMovePosition", ET_Hook, Param_Cell, Param_Cell, Param_Array);
 	//DroneAIThink = CreateGlobalForward("CD2_OnAITick", ET_Ignore, Param_Cell, Param_Cell);
-	DroneAIAttack = CreateGlobalForward("CD2_OnAIAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
+	DroneAIAttack = new GlobalForward("CD2_OnAIAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 	DroneAIStateChanged = new GlobalForward("CD2_OnAIStateChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
+	FindTossAngle = new GlobalForward("CD2_OnAIFindTossAngle", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_FloatByRef);
 }
 
 public void OnMapStart()
@@ -672,7 +677,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	drone.Deceleration = config.GetFloat("deceleration", 8.0);
 	drone.NoHud = view_as<bool>(config.GetNum("nohud", false));
 	//drone.SpeedOverride = 0.0;
-	drone.TurnRate = config.GetFloat("turn_rate", 80.0);
+	drone.TurnRate = config.GetFloat("turn_rate", 1.0);
 
 	char movetype[64];
 	config.GetString("movetype", movetype, sizeof movetype);
@@ -687,9 +692,13 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	
 	//config.GetString("plugin", drone.Plugin, MAX_DRONE_LENGTH, "INVALID_PLUGIN");
 	drone.CameraHeight = config.GetFloat("camera_height", 30.0);
+	drone.CameraDistance = config.GetFloat("camera_distance", 0.0) * -1.0;
+
+	FVector cameraOffset;
+	cameraOffset = ConstructVector(drone.CameraDistance, 0.0, drone.CameraHeight);
 
 	// This will eventually be changed on a per seat basis
-	CreateDroneCamera(drone, drone.CameraHeight, components);
+	CreateDroneCamera(drone, cameraOffset, components);
 
 	if (drone.GetObject().HasProp(Prop_Data, "m_takedamage"))
 	{
@@ -704,7 +713,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	drone.SetComponents(components);
 }
 
-void CreateDroneCamera(ADrone drone, float height, FDroneComponents components)
+void CreateDroneCamera(ADrone drone, FVector cameraOffset, FDroneComponents components)
 {
 	FObject camera;
 	camera = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
@@ -715,7 +724,7 @@ void CreateDroneCamera(ADrone drone, float height, FDroneComponents components)
 	spawn.Position = drone.GetPosition();
 	spawn.Rotation = drone.GetAngles();
 
-	spawn.Position = FMath.OffsetVector(spawn.Position, spawn.Rotation, ConstructVector(0.0, 0.0, height));
+	spawn.Position = FMath.OffsetVector(spawn.Position, spawn.Rotation, cameraOffset);
 
 	FGameplayStatics.FinishSpawn(camera, spawn);
 

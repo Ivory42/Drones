@@ -19,6 +19,8 @@ enum EProjType
 
 	DroneProj_Grenade, // Pipebomb grenade
 
+	DroneProj_Impact, // Default rocket, no explosion
+
 	// Bombs
 	DroneProj_Bomb, // Default bomb projectile - detonates on a fuse timer that is activated upon being spawned
 

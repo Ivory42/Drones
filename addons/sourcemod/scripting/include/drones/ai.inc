@@ -22,6 +22,8 @@ enum EControllerState
 
 	Controller_Alerted, 	// We were fired at or took damage, look in direction of alert source
 
+	Controller_Disengaged,	// We have a target but are not actively pursuing - used for flying drones to break off and get distance
+
 	Controller_Disabled		// Controller is currently disabled and will not function
 };
 
@@ -38,6 +40,7 @@ enum struct FDroneAIParams
 	float MinAttackDistance;	// Closest distance we will maintain when attacking
 	float MaxAttackDistance;	// Farthest distance we will maintain when attacking
 	float DetectionRange;		// How far we can detect targets from our current position
+	float DisengageRange;		// How far flying drones will travel to disengage
 
 	float IdleMoveRange;		// Max distance we will check for a new move position, while idle
 	float IdleMoveRangeMin;		// Minimum distance we will check for a new move position, while idle
@@ -69,9 +72,12 @@ enum struct FDroneAIParams
 	int MaxQueries;
 
 	bool Stationary;
+	bool IgnoreWalls; 			// Controller can detect targets behind walls
+	bool FactorGrav;
 
 	bool OnlyFollowOwner;		// Support drone will only follow the owner
 	bool PrioritizeOwner;		// Support drone will prioritize following the owner but can still follow other players
+	
 	EBehaviorType Behavior;
 }
 
@@ -156,6 +162,18 @@ methodmap FDroneAI < StringMap
 	{
 		public set(bool value) { this.SetBool("DroneAI_IsSeekingTarget", value); }
 		public get() { return this.GetBool("DroneAI_IsSeekingTarget"); }
+	}
+
+	property bool IgnoreWalls
+	{
+		public set(bool value) { this.SetBool("DroneAI_CanSeeThroughWalls", value); }
+		public get() { return this.GetBool("DroneAI_CanSeeThroughWalls"); }
+	}
+
+	property bool FactorGravity
+	{
+		public set(bool value) { this.SetBool("DroneAI_TossesProjectiles", value); }
+		public get() { return this.GetBool("DroneAI_TossesProjectiles"); }
 	}
 
 	property AClient Owner
@@ -461,6 +479,8 @@ methodmap FDroneAIStatics
 
 			ai.Behavior = params.Behavior;
 			ai.Stationary = params.Stationary;
+			ai.IgnoreWalls = params.IgnoreWalls;
+			ai.FactorGravity = params.FactorGrav;
 
 			ai.IdleTime = params.IdleTime;
 			ai.ThinkRate = params.ThinkRate;
@@ -533,6 +553,7 @@ methodmap FDroneAIStatics
 				params.MinAttackDistance = kv.GetFloat("min_attack_range", 0.0);
 				params.MaxAttackDistance = kv.GetFloat("max_attack_range", 1100.0);
 				params.DetectionRange = kv.GetFloat("detection_range", 1100.0);
+				params.DisengageRange = kv.GetFloat("disengage_range", 500.0);
 				params.IdleCeiling = kv.GetFloat("max_idle_height", 700.0);
 				params.CombatCeiling = kv.GetFloat("max_combat_height", 400.0);
 				params.HoverHeight = kv.GetFloat("min_height", 250.0);

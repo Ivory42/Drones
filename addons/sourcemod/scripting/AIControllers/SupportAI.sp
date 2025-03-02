@@ -42,7 +42,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				ai.CurrentTarget = FindClosestTarget(ai, drone);
 			}
 			// Otherwise enter attack state if we can see our target. Support drones do not move towards their targets
-			else if (CanSeeTarget(drone, target))
+			else if (CanSeeTarget(ai, drone, target))
 			{
 				ChangeControllerState(ai, Controller_Attacking);
 			}
@@ -97,20 +97,29 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 			}
 
 			SimulateSupportFollow(support, drone, moveTick);
-			if (target && CanSeeTarget(drone, target))
+			if (target && CanSeeTarget(support, drone, target))
 			{
 				FRotator angleTowardsEnemy;
 				FVector vecTowardsEnemy;
 
+				FVector targPos;
+				targPos = target.GetPosition();
+
 				if (weapon.AILeadTargets)
 				{
-					angleTowardsEnemy = GetPredictedAngle(drone, target, target.GetPosition(), weapon);
+					targPos = GetPredictedPosition(drone, target, target.GetPosition(), weapon);
+				}
+
+				if (ai.FactorGravity || WeaponFiresGrenades(weapon))
+				{
+					angleTowardsEnemy = FindAngleForTrajectory(ai, drone, drone.GetPosition(), targPos, weapon);
 				}
 				else
 				{
-					vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), target.GetPosition());
+					vecTowardsEnemy = Vector_MakeFromPoints(drone.GetPosition(), targPos);
 					angleTowardsEnemy = Vector_GetAngles(vecTowardsEnemy);
 				}
+
 				ai.SetTargetAngle(angleTowardsEnemy);
 
 				if (ai.NextCombatCheckTime <= GetGameTime())
@@ -255,7 +264,7 @@ void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDrone
 			support.FollowTarget = null;
 		}
 
-		if (support.FollowTarget && CanSeeTarget(drone, support.FollowTarget))
+		if (support.FollowTarget && CanSeeTarget(support, drone, support.FollowTarget))
 		{
 			ChangeControllerState(ai, Controller_Idle); // We can see our target once again, go back to idle
 		}
@@ -285,13 +294,13 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 			if (support.Owner && follow != support.Owner)
 			{
 				// Look if we can see our owner, if we can, move to them instead
-				if (CanSeeTarget(drone, support.Owner))
+				if (CanSeeTarget(support, drone, support.Owner))
 				{
 					support.FollowTarget = support.Owner;
 				}
 			}
 		}
-		if (CanSeeTarget(drone, follow))
+		if (CanSeeTarget(support, drone, follow))
 		{
 			// If we are too far from our target, move anyway. Otherwise, only move when we can
 			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);

@@ -5,16 +5,29 @@
 
 #include "components.inc"
 
-/*
-* This include handles the methodmaps for vanilla-based projectiles fire from drones. This includes mostly rockets and pipebombs.
-* These projectiles do not have any custom logic and will behave exactly as projectiles in vanilla TF2 behave.
-*/
+#if defined _ilib_projectiles_included
+ #endinput
+#endif
+#define _ilib_projectiles_included
 
 /*
-* Map for handling projectiles.
+* Map for handling projectiles. This can be used on any projectile already existing in the world
 */
-methodmap ABaseDroneProjectile < ABaseEntity
+methodmap ABaseProjectile < ABaseEntity
 {
+	/*
+	* Used as a cast to check if an object is a projectile. If needing to spawn a specific projectile, use the appropriate methodmap
+	*
+	* @return 			ABaseProjectile wrapping the entity reference.
+	*/
+	public ABaseProjectile(FObject entity)
+	{
+		if (entity.Cast("tf_projectile_"))
+			return view_as<ABaseProjectile>(entity.Reference);
+
+		return view_as<ABaseProjectile>(0);
+	}
+
 	// Damage this projectile will deal. Note: not all projectiles handle damage in the same way, this may not work for all
 	property float Damage
 	{
@@ -96,22 +109,6 @@ methodmap ABaseDroneProjectile < ABaseEntity
 		}
 	}
 
-	// The weapon which fired this projectile
-	property ADroneProjectileWeapon WeaponLauncher
-	{
-		public set(ADroneProjectileWeapon launcher) { this.SetObjectProp("DroneProjectile.LaunchingWeapon", launcher); }
-		public get() { return this.GetObjectProp("DroneProjectile.LaunchingWeapon"); }
-	}
-
-	// Returns the drone which fired this projectile
-	public ADrone GetOwningDrone()
-	{
-		if (this.WeaponLauncher)
-		{
-			return this.WeaponLauncher.Drone;
-		}
-	}
-
 	/*
 	* Fires this projectile in the given direction. This can be used at any time during the projectile's life
 	*
@@ -131,45 +128,64 @@ methodmap ABaseDroneProjectile < ABaseEntity
 	}
 }
 
-methodmap ADroneGrenade < ABaseDroneProjectile
+/*
+* Creates a rocket and prepares it to be used with a drone
+*
+* @param owner		Owner of this rocket
+* @param pos		Position to spawn this rocket
+* @param type		Type of rocket to make
+* @param speed		Speed this rocket should travel at
+* @param damage		Damage this rocket will deal
+*
+* @return 			FRocket containing the information of the created rocket
+*/
+stock ARocket CreateDroneRocket(FClient owner, FVector pos, EProjType type, float speed, float damage)
 {
-	property float FullDamage
+	ARocket rocket;
+	char classname[64], netname[64];
+
+	switch (type)
 	{
-		public get()
+		case DroneProj_Energy:
 		{
-			int offset = FindSendPropInfo("CTFGrenadePipebombProjectile", "m_bDefensiveBomb")-4;
-			return GetEntDataFloat(this.Get(), offset);
+			FormatEx(classname, sizeof classname, "tf_projectile_energy_ball");
+			FormatEx(netname, sizeof netname, "CTFProjectile_EnergyBall");
 		}
-		public set(float damage)
+		case DroneProj_Sentry:
 		{
-			int offset = FindSendPropInfo("CTFGrenadePipebombProjectile", "m_bDefensiveBomb")-4;
-			SetEntDataFloat(this.Get(), offset, damage);
+			FormatEx(classname, sizeof classname, "tf_projectile_sentryrocket");
+			FormatEx(netname, sizeof netname, "CTFProjectile_SentryRocket");
+		}
+		default:
+		{
+			FormatEx(classname, sizeof classname, "tf_projectile_rocket");
+			FormatEx(netname, sizeof netname, "CTFProjectile_Rocket");
 		}
 	}
 
-	property float BlastRadius
-	{
-		public get() { return this.GetPropFloat(Prop_Send, "m_DmgRadius"); }
-		public set(float value) { this.SetPropFloat(Prop_Send, "m_DmgRadius", value); }
-	}
-}
+	//FComponent component;
+	//component = CreateNewComponent(classname);
 
-stock ABaseDroneProjectile CastDroneRocket(ABaseEntity entity)
-{
-	if (entity && IsEntityOfType(entity, "DroneComponents.DroneRocketEntity"))
-	{
-		return view_as<ABaseDroneProjectile>(entity);
-	}
+	rocket.Speed = speed;
 
-	return null;
-}
+	//TODO - Pass through weapon object and set the launcher of this rocket
 
-stock ADroneGrenade CastDroneGrenade(ABaseEntity entity)
-{
-	if (entity && IsEntityOfType(entity, "DroneComponents.DroneGrenadeEntity"))
-	{
-		return view_as<ADroneGrenade>(entity);
-	}
+	int team = owner.GetTeam();
 
-	return null;
+	FObject proj;
+	proj = component.GetObject();
+
+	proj.SetOwner(owner.Obj);
+
+	proj.Teleport(pos, ConstructRotator(), ConstructVector());
+
+	SetVariantInt(team);
+	proj.Input("TeamNum");
+
+	proj.Input("SetTeam");
+
+	if (rocket.Valid())
+		SetEntDataFloat(rocket.Get(), FindSendPropInfo(netname, "m_iDeflected") + 4, damage); //Set Damage for rocket
+
+	return rocket;
 }

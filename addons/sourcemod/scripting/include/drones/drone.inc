@@ -76,10 +76,16 @@ methodmap ADrone < AComponent
 		public set(ADronePlayer client) { this.SetObjectProp("Drone_Pilot", client); }
 	}
 
-	property float CameraHeight // Camera height for this drone. Controls where traces will begin for drone attacks/functions
+	property float CameraHeight // Z-Axis: Camera height for this drone. Controls where traces will begin for drone attacks/functions
 	{
 		public get() { return this.GetObjectPropFloat("Drone_CameraHeight"); }
 		public set(float height) { this.SetObjectPropFloat("Drone_CameraHeight", height); }
+	}
+
+	property float CameraDistance // X-Axis: Camera distance for this drone. Controls where traces will begin for drone attacks/functions
+	{
+		public get() { return this.GetObjectPropFloat("Drone_CameraDistance"); }
+		public set(float height) { this.SetObjectPropFloat("Drone_CameraDistance", height); }
 	}
 
 	property bool NoHud // Do not display the default hud with this drone
@@ -102,6 +108,12 @@ methodmap ADrone < AComponent
 	{
 		public get() { return this.GetObjectPropFloat("Drone_MaxMoveSpeed"); }
 		public set(float speed) { this.SetObjectPropFloat("Drone_MaxMoveSpeed", speed); }
+	}
+
+	property float SpeedOverride // Overrides max speed when non-zero
+	{
+		public get() { return this.GetObjectPropFloat("Drone_MaxMoveSpeedOverride"); }
+		public set(float speed) { this.SetObjectPropFloat("Drone_MaxMoveSpeedOverride", speed); }
 	}
 
 	property float Acceleration // Rate at which this drone can accelerate when moving from a stand still.

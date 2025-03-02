@@ -1133,8 +1133,8 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 						buttons &= ~IN_ATTACK2;
 					}
 
-					// Drone movement
-					float maxSpeed = drone.MaxSpeed;
+					// Drone movement - If we have a speed override set, utilize this instead of our max speed
+					float maxSpeed = drone.SpeedOverride > 0.0 ? drone.SpeedOverride : drone.MaxSpeed;
 
 					float inputVal = 0.0;
 					FVector velocity, speeds;

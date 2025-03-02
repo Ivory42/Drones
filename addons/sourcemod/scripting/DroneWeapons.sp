@@ -309,16 +309,16 @@ bool FilterIgnoreAll(int entity, int mask, any data)
 }
 */
 
-void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer player)
+void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, ADronePlayer player)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
 	end = GetDroneAimPosition(drone, player.GetEyeAngles());
 
-	// Now fire our rockets
-	int rockets = weapon.ProjPerShot;
+	// Now fire our projectiles
+	int projectiles = weapon.ProjPerShot;
 	FTransform muzzle;
-	for (int i = 0; i < rockets; i++)
+	for (int i = 0; i < projectiles; i++)
 	{
 		if (weapon.ComplexAngles)
 		{
@@ -326,12 +326,6 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 		}
 		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
-			/*
-			FVector velocity;
-			velocity = drone.GetVelocity();
-			velocity.Scale(0.075);
-			muzzle.Position.Add(velocity);
-			*/
 			start = muzzle.Position;
 		}
 
@@ -345,9 +339,18 @@ void DroneFireRocket(ADrone drone, ADroneProjectileWeapon weapon, ADronePlayer p
 
 		FTransform spawn;
 		spawn = ConstructTransform(start, angle);
-		CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+
+		switch (projectile)
+		{
+			case DroneProj_Rocket: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+			case DroneProj_Energy: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
+			case DroneProj_Sentry: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
+			case DroneProj_Grenade: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Impact: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
+		}
 	}
 }
+
 
 // Whenever the mount takes damage, send that damage over to the weapon itself
 /*Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
@@ -438,7 +441,6 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 }
 */
 
-
 // AI Controller Functions
 void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 {
@@ -495,16 +497,16 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 	}
 }
 
-void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
+void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, FDroneAI ai)
 {
 	FVector start, end;
 	start = GetCameraOffset(drone);
 	end = GetDroneAimPosition(drone, ai.GetViewAngle());
 
-	// Now fire our rockets
-	int rockets = weapon.ProjPerShot;
+	// Now fire our projectiles
+	int projectiles = weapon.ProjPerShot;
 	FTransform muzzle;
-	for (int i = 0; i < rockets; i++)
+	for (int i = 0; i < projectiles; i++)
 	{
 		if (weapon.ComplexAngles)
 		{
@@ -512,12 +514,6 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 		}
 		else if (weapon.GetNextMuzzleTransform(muzzle))
 		{
-			/*
-			FVector velocity;
-			velocity = drone.GetVelocity();
-			velocity.Scale(0.075);
-			muzzle.Position.Add(velocity);
-			*/
 			start = muzzle.Position;
 		}
 
@@ -541,32 +537,15 @@ void DroneAIFireRocket(ADrone drone, ADroneProjectileWeapon weapon, FDroneAI ai)
 
 		FTransform spawn;
 		spawn = ConstructTransform(start, angle);
-		CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
-
-		/*
-		URocket rocket = URocket();
-		rocket.Damage = weapon.Damage;
-		rocket.Team = view_as<int>(drone.Team);
-		FGameplayStatics.FinishSpawn(rocket.GetObject(), muzzle);
-
-		FObject owner;
-		if (ai.Owner)
+		
+		switch(projectile)
 		{
-			owner = ai.Owner.GetObject();
+			case DroneProj_Rocket: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+			case DroneProj_Energy: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
+			case DroneProj_Sentry: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
+			case DroneProj_Grenade: CreateGrenade(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Impact: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
 		}
-		else
-		{
-			owner = drone.GetObject();
-		}
-		rocket.SetOwner(owner);
-
-		rocket.FireProjectile(angle, weapon.ProjectileSpeed);
-
-		if (rockets == 1)
-		{
-			rocketFired = rocket;
-		}
-		*/
 	}
 }
 
@@ -596,7 +575,7 @@ FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 	return muzzle.Position;
 }
 
-void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname)
+void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false)
 {
 	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity(classname, owner, "DroneComponents.DroneRocketEntity"));
 	if (rocket)
@@ -608,5 +587,90 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 		rocket.WeaponLauncher = weapon;
 
 		rocket.FireProjectile(direction, weapon.ProjectileSpeed);
+
+		if (impact)
+		{
+			SDKHook(rocket.Get(), SDKHook_ShouldCollide, OnRocketOverlap);
+			SDKHook(rocket.Get(), SDKHook_Touch, OnProjHit);
+		}
 	}
+}
+
+void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+{
+	ADroneGrenade grenade = view_as<ADroneGrenade>(FEntityStatics.CreateEntity("tf_projectile_pipe", owner, "DroneComponents.DroneGrenadeEntity"));
+	if (grenade)
+	{
+		grenade.FullDamage = damage;
+		grenade.BlastRadius = 146.0;
+		grenade.Damage = damage * 0.6; // 60% of impact damage
+		grenade.Team = team;
+
+		FEntityStatics.FinishSpawningEntity(grenade, spawn);
+		grenade.WeaponLauncher = weapon;
+
+		grenade.FireProjectile(direction, weapon.ProjectileSpeed);
+	}
+}
+
+Action OnProjHit(int entity, int victim)
+{
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
+	FObject hit;
+	FClient client;
+
+	hit = ConstructObject(victim);
+	client = CastToClient(hit);
+	if (!client.Valid()) // Not a client
+	{
+		if (victim == 0 || hit.Cast("prop_"))
+		{
+			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM);
+			FEntityStatics.DestroyEntity(rocket);
+			return Plugin_Handled;
+		}
+
+		if (hit.Cast("obj_"))
+		{
+			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM);
+			FEntityStatics.DestroyEntity(rocket);
+			return Plugin_Handled;
+		}
+
+		return Plugin_Continue;
+	}
+	else
+	{
+		float damage = rocket.Damage;
+		float distance = FGameplayStatics.GetDistanceBetweenObjects(rocket.GetOwningDrone().GetObject(), hit);
+		float dmgMod = FMath.ClampFloat((512.0 / distance), 1.25, 0.528);
+		damage *= dmgMod;
+		SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM);
+		FEntityStatics.DestroyEntity(rocket);
+		return Plugin_Handled;
+	}
+}
+
+bool OnRocketOverlap(int rocketId, int collision, int mask, bool result)
+{
+	if (collision == 24)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool WeaponFiresGrenades(ADroneWeapon weapon)
+{
+	if (weapon.Type == WeaponType_Projectile)
+	{
+		ADroneProjectileWeapon projLauncher = view_as<ADroneProjectileWeapon>(weapon);
+		if (projLauncher.ProjType == DroneProj_Bomb || projLauncher.ProjType == DroneProj_Grenade)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
