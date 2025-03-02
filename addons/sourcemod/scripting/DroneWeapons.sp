@@ -625,14 +625,14 @@ Action OnProjHit(int entity, int victim)
 	{
 		if (victim == 0 || hit.Cast("prop_"))
 		{
-			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM);
+			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
 			FEntityStatics.DestroyEntity(rocket);
 			return Plugin_Handled;
 		}
 
 		if (hit.Cast("obj_"))
 		{
-			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM);
+			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
 			FEntityStatics.DestroyEntity(rocket);
 			return Plugin_Handled;
 		}
@@ -645,7 +645,7 @@ Action OnProjHit(int entity, int victim)
 		float distance = FGameplayStatics.GetDistanceBetweenObjects(rocket.GetOwningDrone().GetObject(), hit);
 		float dmgMod = FMath.ClampFloat((512.0 / distance), 1.25, 0.528);
 		damage *= dmgMod;
-		SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM);
+		SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
 		FEntityStatics.DestroyEntity(rocket);
 		return Plugin_Handled;
 	}
