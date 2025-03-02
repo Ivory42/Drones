@@ -34,10 +34,12 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 				}
 			}
 			
-			lookDir = Vector_MakeFromPoints(drone.GetPosition(), ai.GetMovePosition());
 			// If we do not have a target, turn towards the direction we are moving
 			if (ai.CurrentState != Controller_Attacking)
+			{
+				lookDir = Vector_MakeFromPoints(drone.GetPosition(), ai.GetMovePosition());
 				ai.SetTargetAngle(Vector_GetAngles(lookDir));
+			}
 			
 			if (drone.MoveType == MoveType_Fly)
 			{
@@ -708,7 +710,7 @@ bool CanSeeTarget(FDroneAI controller, ADrone drone, APersistentObject target)
 	FVector start, end;
 	start = drone.GetCamera().GetPosition();
 	end = target.GetPosition();
-	end.Z += 65.0;
+	end.Z += 55.0;
 
 	FClient client;
 	client = CastToClient(target.GetObject());
@@ -725,17 +727,48 @@ bool CanSeeTarget(FDroneAI controller, ADrone drone, APersistentObject target)
 		return true;
 	}
 
-	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT, DroneVisionTrace, drone);
+	FRayTraceSingle trace = new FRayTraceSingle(start, end, MASK_SHOT_HULL, DroneVisionTrace, drone);
 	//trace.DebugTrace(1.0);
 	if (trace.DidHit())
 	{
 		FObject hit;
 		hit = trace.GetHitEntity();
-		//PrintCenterTextAll("Looking for: %d, hit: %d", target.Get(), hit.Get());
 		if (hit.Get() == target.Get())
 		{
 			delete trace;
 			return true;
+		}
+		else // if something is blocking, check lower to see if we can still see the target
+		{
+			delete trace;
+
+			end.Z -= 45.0;
+			trace = new FRayTraceSingle(start, end, MASK_SHOT_HULL, DroneVisionTrace, drone);
+			if (trace.DidHit())
+			{
+				hit = trace.GetHitEntity();
+				if (hit.Get() == target.Get())
+				{
+					delete trace;
+					return true;
+				}
+				else // One more check on the center. If this fails, we likely cant see the target
+				{
+					delete trace;
+					
+					end.Z += 25.0;
+					trace = new FRayTraceSingle(start, end, MASK_SHOT_HULL, DroneVisionTrace, drone);
+					if (trace.DidHit())
+					{
+						hit = trace.GetHitEntity();
+						if (hit.Get() == target.Get())
+						{
+							delete trace;
+							return true;
+						}
+					}
+				}
+			}
 		}
 	}
 	delete trace;
