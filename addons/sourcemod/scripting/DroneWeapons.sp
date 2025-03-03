@@ -286,7 +286,7 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 			hitEnt = trace.GetHitEntity();
 			if (hitEnt.Valid())
 			{
-				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), player.Get(), weapon.Damage);
+				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), player.Get(), weapon.Damage, _, _, _, _, false);
 			}
 		}
 		end = trace.GetEndPosition();

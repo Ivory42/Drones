@@ -78,6 +78,8 @@ enum struct FDroneAIParams
 	bool OnlyFollowOwner;		// Support drone will only follow the owner
 	bool PrioritizeOwner;		// Support drone will prioritize following the owner but can still follow other players
 	
+	float DetectionFOV;			// FOV for this drone to target enemies
+	float AimFOV;				// FOV for firing weapons
 	EBehaviorType Behavior;
 }
 
@@ -434,6 +436,12 @@ methodmap FDroneAI < StringMap
 			delete this.OwnQueryPositions;
 		}
 	}
+
+	property float AvoidanceCheckTime
+	{
+		public set(float value) { this.SetFloat("DroneAI_LastCheckForAvoidance", value); }
+		public get() { return this.GetFloat("DroneAI_LastCheckForAvoidance"); }
+	}
 }
 
 methodmap FSupportAI < FDroneAI
@@ -535,6 +543,9 @@ methodmap FDroneAIStatics
 		params.OnlyFollowOwner = false;
 		params.PrioritizeOwner = false;
 
+		params.DetectionFOV = 180.0;
+		params.AimFOV = 180.0;
+
 		return params;
 	}
 
@@ -582,6 +593,9 @@ methodmap FDroneAIStatics
 
 				params.OnlyFollowOwner = view_as<bool>(kv.GetNum("support_follow_owner", 0));
 				params.PrioritizeOwner = view_as<bool>(kv.GetNum("support_prioritize_owner", 0));
+
+				params.AimFOV = kv.GetFloat("aim_fov", 180.0);
+				params.DetectionFOV = kv.GetFloat("detection_fov", 180.0);
 			}
 			else
 			{

@@ -88,6 +88,34 @@ void SimulateController(FDroneAI ai, FDroneSeat seat, ADrone drone)
 			}
 		}
 
+		if (ai.AvoidanceCheckTime <= GetGameTime())
+		{
+			ai.AvoidanceCheckTime = GetGameTime() + 0.15;
+			// Collision avoidance. If we are about to hit an object, try to move away
+			FVector position, checkPos;
+			position = drone.GetPosition();
+			checkPos = velocity;
+			//checkPos.Scale(1.2); // Slightly further than 1 second ahead to give enough time
+			checkPos.Add(position);
+
+			FVector mins, maxs, result;
+			mins = drone.GetComponents().MinBounds;
+			maxs = drone.GetComponents().MaxBounds;
+			FHullTrace trace = new FHullTrace(position, checkPos, mins, maxs, MASK_SHOT, DroneMovementTrace, drone);
+			//trace.DebugTrace(0.2);
+			if (trace.DidHit()) // There is something in our way, let's move backwards
+			{
+				result = trace.GetNormalVector();
+				result.Scale(600.0);
+				result.Add(checkPos);
+
+				FDroneMoveParams move; // empty set
+				DroneFindMovePosition(ai, drone, result, move);
+				ai.AvoidanceCheckTime = GetGameTime() + 0.6; // Slight delay so we dont keep recalculating our path
+			}
+			delete trace;
+		}
+
 		CalcMovementTilt(drone, ai.Stalling);
 		if (!ai.OverrideMovement)
 		{
@@ -327,6 +355,27 @@ bool DroneInRange(FDroneAI ai, ADrone drone, APersistentObject target)
 	bool result = false;
 
 	if (target && FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), target.GetObject()) <= ai.DesiredAttackRange)
+	{
+		result = true;
+	}
+
+	return result;
+}
+
+bool InFOV(ADrone drone, APersistentObject target, float fov)
+{
+	bool result = false;
+
+	// TODO - check the active weapon's fov
+	FVector position, targPos;
+	position = drone.GetPosition();
+	targPos = target.GetPosition();
+
+	FVector direction;
+	direction = Vector_MakeFromPoints(position, targPos);
+	
+	float angle = FMath.GetAngle(drone.GetAngles(), Vector_GetAngles(direction));
+	if (angle < fov)
 	{
 		result = true;
 	}
@@ -628,7 +677,7 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 
 			test = FEntityStatics.GetClient(client);
 
-			if (CanSeeTarget(ai, drone, test))
+			if (CanSeeTarget(ai, drone, test) && InFOV(drone, test, ai.GetControllerParams().DetectionFOV))
 			{
 				// Forward to determine if the iterated target is valid for selection
 				Action testValid = Plugin_Continue;
@@ -654,10 +703,50 @@ APersistentObject FindClosestTarget(FDroneAI ai, ADrone drone, bool enemy = true
 		}
 	}
 
-	// TODO - check buildings too
+	// TODO - check buildings/drones too
 	if (!playersOnly)
 	{
+		int entity = -1;
+		while ((entity = FindEntityByClassname(entity, "prop_physics_multiplayer")) != -1)
+		{
+			ADrone targetDrone = CastToDrone(FEntityStatics.GetEntityFromIndex(entity));
+			if (targetDrone)
+			{
+				if (targetDrone.Team == team)
+				{
+					continue;
+				}
 
+				if (!targetDrone.Alive)
+				{
+					continue;
+				}
+
+				if (CanSeeTarget(ai, drone, targetDrone) && InFOV(drone, targetDrone, ai.GetControllerParams().DetectionFOV))
+				{
+					// Forward to determine if the iterated target is valid for selection
+					Action testValid = Plugin_Continue;
+					Call_StartForward(DroneAITargetValid);
+					Call_PushCell(ai);
+					Call_PushCell(drone);
+					Call_PushCell(targetDrone);
+					Call_PushCellRef(validity);
+					Call_Finish(testValid);
+
+					if (testValid != Plugin_Continue)
+					{
+						if (validity)
+						{
+							targetList.Push(targetDrone);
+						}
+					}
+					else
+					{
+						targetList.Push(targetDrone);
+					}
+				}
+			}
+		}
 	}
 
 	APersistentObject listObject;
@@ -809,6 +898,11 @@ bool DroneVisionTrace(int entity, int mask, ADrone drone)
 	{
 		return true;
 	}
+
+	if (ConstructObject(entity).Cast("prop_physics_multiplayer"))
+	{
+		return true;
+	}
 	
 	if (ConstructObject(entity).Cast("prop_physics"))
 	{
@@ -842,6 +936,11 @@ bool DroneMovementTrace(int entity, int mask, ADrone drone)
 	}
 	
 	if (ConstructObject(entity).Cast("prop_physics"))
+	{
+		return false;
+	}
+
+	if (ConstructObject(entity).Cast("tf_projectile"))
 	{
 		return false;
 	}

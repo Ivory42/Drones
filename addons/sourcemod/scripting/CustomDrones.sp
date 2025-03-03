@@ -625,6 +625,7 @@ void OnDroneTick(APersistentObject entity)
 	ADrone drone = view_as<ADrone>(entity);
 	if (drone && drone.IsDrone && drone.Alive)
 	{
+		CheckDroneInMap(drone);
 		if (drone.Seats)
 		{
 			int seats = drone.Seats.Length;
@@ -641,6 +642,43 @@ void OnDroneTick(APersistentObject entity)
 			}
 		}
 	}
+}
+
+void CheckDroneInMap(ADrone drone)
+{
+	if (TR_PointOutsideWorld(drone.GetPosition().ToFloat()))
+	{
+		CreateTimer(5.0, DroneTerminateTimer, drone, TIMER_FLAG_NO_MAPCHANGE);
+	}
+}
+
+Action DroneTerminateTimer(Handle timer, ADrone drone)
+{
+	// check again
+	if (TR_PointOutsideWorld(drone.GetPosition().ToFloat()))
+	{
+		// destroy drone and kill any players onboard
+		if (drone.Seats)
+		{
+			int seats = drone.Seats.Length;
+			if (seats > 0)
+			{
+				for (int i = 0; i < seats; i++)
+				{
+					FDroneSeat seat = drone.Seats.Get(i);
+					if (seat && seat.Valid() && seat.Occupier)
+					{
+						SDKHooks_TakeDamage(seat.Occupier.Get(), 0, 0, 9999.0);
+					}
+				}
+			}
+		}
+
+		FWeapon weapon; // empty
+		KillDrone(drone, GetWorld().GetObject(), GetWorld().GetObject(), 9999.0, weapon);
+	}
+
+	return Plugin_Stop;
 }
 
 // Physically spawn our drone in the world
@@ -707,11 +745,33 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 		SDKHook(drone.Get(), SDKHook_Touch, OnDroneOverlap);
 	}
 
+	// Create teleporter for sentries to target
+	//CreateDroneTeleporter(drone);
+
 	drone.Health = drone.MaxHealth;
 	drone.Alive = true;
 
 	drone.SetComponents(components);
 }
+
+/*
+void CreateDroneTeleporter(ADrone drone)
+{
+	FObject teleporter;
+	teleporter = FGameplayStatics.CreateObjectDeferred("obj_teleporter");
+
+	FTransform spawn;
+	spawn.Position = drone.GetPosition();
+	spawn.Position.Z += 00.0;
+
+	SetVariantInt(2);
+	teleporter.Input("SetTeam");
+	teleporter.SetProp(Prop_Send, "m_bPlacing", 0);
+
+	FGameplayStatics.FinishSpawn(teleporter, spawn);
+	teleporter.SetParent(drone.GetObject());
+}
+*/
 
 void CreateDroneCamera(ADrone drone, FVector cameraOffset, FDroneComponents components)
 {

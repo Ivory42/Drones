@@ -128,7 +128,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 					DroneFindMovePosition(ai, drone, targPos, move);
 				}
 
-				if (DroneInRange(ai, drone, target))
+				if (DroneInRange(ai, drone, target) && InFOV(drone, target, ai.GetControllerParams().AimFOV))
 				{
 					if (!ai.InAttack && weapon.State == WeaponState_Ready)
 					{
