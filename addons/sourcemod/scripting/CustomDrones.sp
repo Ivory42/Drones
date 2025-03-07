@@ -3,6 +3,7 @@
 
 GlobalForward DroneCreated;
 GlobalForward DroneEntered;
+GlobalForward DroneEnteredValid;
 GlobalForward DroneExited;
 GlobalForward DroneRemoved;
 GlobalForward DroneDestroyed;
@@ -63,6 +64,7 @@ public void OnPluginStart()
 	DroneAIAttack = new GlobalForward("CD2_OnAIAttack", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 	DroneAIStateChanged = new GlobalForward("CD2_OnAIStateChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 	FindTossAngle = new GlobalForward("CD2_OnAIFindTossAngle", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_FloatByRef);
+	DroneEnteredValid = new GlobalForward("CD2_CanPlayerEnterDrone", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 }
 
 public void OnMapStart()
@@ -312,6 +314,7 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 	ADrone drone = CastToDrone(entity);
 	if (drone && drone.IsDrone)
 	{
+		//drone.Clear();
 		char name[64];
 		drone.GetInternalName(name, sizeof name);
 		//PrintToChatAll("Drone deleted: %d\nName: %s\nEntity ID: %d", drone.Get(), name, entity);
@@ -340,6 +343,8 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 		Call_Finish();
 		weapon.Destroy();
 	}
+
+	drone = null;
 }
 
 Action CmdDrone(int clientId, int args)
@@ -932,11 +937,18 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone)
 
 Action ResetPlayerHealth(Handle timer, ADronePlayer player)
 {
-	TF2_RegeneratePlayer(player.Get());
+	//TF2_RegeneratePlayer(player.Get());
+	FVector position;
+	position = player.GetPosition();
+
+	FRotator rotation;
+	rotation = player.GetAngles();
+	TF2_RespawnPlayer(player.Get());
+	TeleportEntity(player.Get(), position.ToFloat(), rotation.ToFloat(), NULL_VECTOR);
 
 	SetEntityHealth(player.Get(), player.ExitingHealth);
 
-	return Plugin_Stop;
+	return Plugin_Continue;
 }
 
 // Returns the seat the player is in. Only returns the pilot seat as of now.
@@ -956,6 +968,11 @@ FDroneSeat GetPlayerSeat(ADronePlayer player, ADrone drone)
 
 public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 {
+	if (GameRules_GetProp("m_bInWaitingForPlayers") == 1)
+	{
+		return Plugin_Continue;
+	}
+	
 	FClient client;
 	client = ConstructClient(clientId);
 
@@ -992,6 +1009,20 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 
 void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 {
+	Action action = Plugin_Continue;
+	Call_StartForward(DroneEnteredValid);
+
+	Call_PushCell(player);
+	Call_PushCell(drone);
+	Call_PushCell(GetPilotSeat(drone));
+
+	Call_Finish(action);
+
+	if (action != Plugin_Continue)
+	{
+		return;
+	}
+
 	player.InDrone = true;
 	player.Drone = drone;
 	drone.Pilot = player;
@@ -999,6 +1030,7 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 	
 	// Temp
 	GetPilotSeat(drone).Occupier = player;
+	GetPilotSeat(drone).AIControlled = false;
 
 	SetEntityRenderMode(player.Get(), RENDER_NONE);
 	RemoveWearables(player);

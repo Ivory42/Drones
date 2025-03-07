@@ -260,6 +260,7 @@ stock void ClearSeats(ArrayList seats)
 					delete seat.AIOccupier;
 				}
 				seat.ClearComponents();
+				seat.Clear();
 				delete seat;
 			}
 		}

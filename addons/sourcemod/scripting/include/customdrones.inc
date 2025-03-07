@@ -365,6 +365,17 @@ forward void CD2_OnWeaponCreated(ADrone drone, ADroneWeapon weapon, const char[]
 forward void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
 /**
+ * Forward called when a player tries to enter a drone
+ *
+ * @param drone				Drone being entered
+ * @param client			Player entering the drone
+ * @param seat				Seat being entered
+ * 
+ * @return Plugin_Handled to allow entering. Otherwise cannot enter.
+ */
+forward Action CD2_CanPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
+
+/**
  * Forward called after an AI takes control of a drone seat
  *
  * @param drone				Drone being entered
@@ -697,7 +708,7 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 		AComponent test = CastToComponent(FEntityStatics.GetEntity(hit));
 		if (test)
 		{
-			return test.Drone == drone;
+			return test.Drone != drone;
 		}
 
 		if (hit.Cast("obj_"))
