@@ -286,7 +286,9 @@ void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 			hitEnt = trace.GetHitEntity();
 			if (hitEnt.Valid())
 			{
-				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), player.Get(), weapon.Damage, _, _, _, _, false);
+				direction.Normalize();
+				direction.Scale(100.0);
+				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), player.Get(), weapon.Damage, DMG_BULLET, -1, direction.ToFloat(), trace.GetEndPosition().ToFloat(), false);
 			}
 		}
 		end = trace.GetEndPosition();
@@ -487,7 +489,10 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 				AClient owner = ai.Owner;
 				if (owner)
 					attacker = owner.Get();
-				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), attacker, weapon.Damage);
+
+				direction.Normalize();
+				direction.Scale(100.0);
+				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), attacker, weapon.Damage, DMG_BULLET, -1, direction.ToFloat(), trace.GetEndPosition().ToFloat(), false);
 			}
 		}
 		end = trace.GetEndPosition();

@@ -480,6 +480,7 @@ methodmap ADroneWeapon < AComponent
 		//}
 
 		// Remove this weapon from the given seat
+		/*
 		ADrone parent = view_as<ADrone>(this.GetParent())
 		if (parent.IsDrone)
 		{
@@ -494,6 +495,7 @@ methodmap ADroneWeapon < AComponent
 				}
 			}
 		}
+		*/
 	}
 }
 

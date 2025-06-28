@@ -258,7 +258,9 @@ stock void ClearSeats(ArrayList seats)
 				{
 					seat.AIOccupier.ClearAIParams();
 					delete seat.AIOccupier;
+					seat.AIOccupier = null;
 				}
+				seat.AIControlled = false;
 				seat.ClearComponents();
 				seat.Clear();
 				delete seat;

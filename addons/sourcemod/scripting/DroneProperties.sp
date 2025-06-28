@@ -983,10 +983,10 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 		sendEvent = false;
 	}
 
-	if (CastToClient(attacker).Get())
+	if (CastToClient(attacker).Valid())
 	{
 		ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClient(CastToClient(attacker)));
-		if (player.InDrone && player.GetDrone() == drone)
+		if (player && player.InDrone && player.GetDrone() == drone)
 		{
 			damage *= 0.25;
 			sendEvent = false;
@@ -1064,7 +1064,7 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 void SimulateSeat(FDroneSeat seat, ADrone drone)
 {
-	if (!seat.AIControlled)
+	if (seat.Occupier && !seat.AIControlled)
 	{
 		ADronePlayer client = seat.Occupier;
 
@@ -1193,9 +1193,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 			return;
 		}
 	}
-
-	// If no client, check for an AI Controller
-	if (seat.AIControlled)
+	else if (seat.AIControlled) // If no client, check for an AI Controller
 	{
 		FDroneAI ai = FDroneAIStatics.GetSeatController(seat);
 		if (ai)

@@ -945,6 +945,11 @@ bool DroneMovementTrace(int entity, int mask, ADrone drone)
 		return false;
 	}
 
+	if (ConstructObject(entity).Cast("obj_"))
+	{
+		return false;
+	}
+
 	return true;
 }
 

@@ -343,8 +343,6 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 		Call_Finish();
 		weapon.Destroy();
 	}
-
-	drone = null;
 }
 
 Action CmdDrone(int clientId, int args)
@@ -840,6 +838,7 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 	}
 
 	seat.Occupied = false;
+	seat.AIControlled = false;
 
 	return seat;
 }
