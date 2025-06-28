@@ -134,6 +134,12 @@ methodmap ADrone < AComponent
 		public set(float rate) { this.SetObjectPropFloat("Drone_MaxTurnRate", rate); }
 	}
 
+	property float DamageBonus // General damage bonus on this drone, defaults to 1.0
+	{
+		public get() { return this.GetObjectPropFloat("Drone_GeneralDamageBonus"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_GeneralDamageBonus", value); }
+	}
+
 	/*
 	* 	Drone Function
 	*/

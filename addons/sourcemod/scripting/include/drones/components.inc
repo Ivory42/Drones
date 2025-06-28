@@ -82,28 +82,28 @@ methodmap ADroneWeapon < AComponent
 	public FDroneWeaponExtras GetObjects()
 	{
 		FDroneWeaponExtras objects;
-		this.GetArray("Weapon_ObjProps", objects, sizeof objects);
+		this.GetArray("DroneWeapon.ObjProps", objects, sizeof objects);
 
 		return objects;
 	}
-	public void SetObjects(FDroneWeaponExtras objects) { this.SetArray("Weapon_ObjProps", objects, sizeof objects); }
+	public void SetObjects(FDroneWeaponExtras objects) { this.SetArray("DroneWeapon.ObjProps", objects, sizeof objects); }
 
 	// Weapon name used in the drone UI
-	public void GetDisplayName(char[] name, int size) { this.GetObjectPropString("Weapon_DisplayName", name, size); }
-	public void SetDisplayName(const char[] name) { this.SetObjectPropString("Weapon_DisplayName", name); }
+	public void GetDisplayName(char[] name, int size) { this.GetObjectPropString("DroneWeapon.DisplayName", name, size); }
+	public void SetDisplayName(const char[] name) { this.SetObjectPropString("DroneWeapon.DisplayName", name); }
 
 	// Weapon name used by other plugins
-	public void GetInternalName(char[] name, int size) { this.GetObjectPropString("Weapon_InternalName", name, size); }
-	public void SetInternalName(const char[] name) { this.SetObjectPropString("Weapon_InternalName", name); }
+	public void GetInternalName(char[] name, int size) { this.GetObjectPropString("DroneWeapon.InternalName", name, size); }
+	public void SetInternalName(const char[] name) { this.SetObjectPropString("DroneWeapon.InternalName", name); }
 
 	// Weapon fire sound
-	public void GetFireSound(char[] sound, int size) { this.GetObjectPropString("Weapon_FireSound", sound, size); }
-	public void SetFireSound(const char[] sound) { this.SetObjectPropString("Weapon_FireSound", sound); }
+	public void GetFireSound(char[] sound, int size) { this.GetObjectPropString("DroneWeapon.FireSound", sound, size); }
+	public void SetFireSound(const char[] sound) { this.SetObjectPropString("DroneWeapon.FireSound", sound); }
 
 	property ArrayList MuzzlePositions
 	{
-		public get() { return this.GetObjectProp("Weapon_MuzzlePositions"); }
-		public set(ArrayList list) { this.SetObjectProp("Weapon_MuzzlePositions", list); }
+		public get() { return this.GetObjectProp("DroneWeapon.MuzzlePositions"); }
+		public set(ArrayList list) { this.SetObjectProp("DroneWeapon.MuzzlePositions", list); }
 	}
 
 	property bool IsDroneWeapon
@@ -114,129 +114,135 @@ methodmap ADroneWeapon < AComponent
 
 	property FDroneSeat Seat // Seat controlling this weapon
 	{
-		public get() { return view_as<FDroneSeat>(this.GetObjectProp("Weapon_ControllingSeat")); }
-		public set(FDroneSeat seat) { this.SetObjectProp("Weapon_ControllingSeat", seat); }
+		public get() { return view_as<FDroneSeat>(this.GetObjectProp("DroneWeapon.ControllingSeat")); }
+		public set(FDroneSeat seat) { this.SetObjectProp("DroneWeapon.ControllingSeat", seat); }
 	}
 
 	property int Ammo // Ammo currently loaded
 	{
-		public get() { return this.GetObjectProp("Weapon_CurrentAmmo"); }
-		public set(int ammo) { this.SetObjectProp("Weapon_CurrentAmmo", ammo); }
+		public get() { return this.GetObjectProp("DroneWeapon.CurrentAmmo"); }
+		public set(int ammo) { this.SetObjectProp("DroneWeapon.CurrentAmmo", ammo); }
 	}
 
 	property int MaxAmmo // Max ammo loaded at once
 	{
-		public get() { return this.GetObjectProp("Weapon_MaxAmmo"); }
-		public set(int ammo) { this.SetObjectProp("Weapon_MaxAmmo", ammo); }
+		public get() { return this.GetObjectProp("DroneWeapon.MaxAmmo"); }
+		public set(int ammo) { this.SetObjectProp("DroneWeapon.MaxAmmo", ammo); }
 	}
 
 	property bool BottomlessAmmo // If true, this weapon never needs to reload
 	{
-		public get() { return this.GetObjectProp("Weapon_NoReload"); }
-		public set(bool value) { this.SetObjectProp("Weapon_NoReload", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.NoReload"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.NoReload", value); }
 	}
 
 	property bool AILeadTargets // If true, AI controllers will attempt to lead shots with targets, if applicable
 	{
-		public get() { return this.GetObjectProp("Weapon_AITargetPrediction"); }
-		public set(bool value) { this.SetObjectProp("Weapon_AITargetPrediction", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.AITargetPrediction"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.AITargetPrediction", value); }
 	}
 
 	property float FireRate // Weapon's firerate in rounds per second
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_RateOfFire"); }
-		public set(float rof) { this.SetObjectPropFloat("Weapon_RateOfFire", rof); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.RateOfFire"); }
+		public set(float rof) { this.SetObjectPropFloat("DroneWeapon.RateOfFire", rof); }
 	}
 
 	property float Damage // Damage dealt by this weapon
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_Damage"); }
-		public set(float damage) { this.SetObjectPropFloat("Weapon_Damage", damage); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.Damage"); }
+		public set(float damage) { this.SetObjectPropFloat("DroneWeapon.Damage", damage); }
+	}
+
+	property float BaseDamage // Base damage of this drone weapon, use this for modifiers
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.BaseDamage"); }
+		public set(float damage) { this.SetObjectPropFloat("DroneWeapon.BaseDamage", damage); }
 	}
 
 	property float NextPrimaryAttack // Next gametime value when this weapon can fire again
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_NextPrimaryAttackTime"); }
-		public set(float time) { this.SetObjectPropFloat("Weapon_NextPrimaryAttackTime", time); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.NextPrimaryAttackTime"); }
+		public set(float time) { this.SetObjectPropFloat("DroneWeapon.NextPrimaryAttackTime", time); }
 	}
 
 	property float Inaccuracy // Error in angle for this weapon upon consecutive attacks
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_SpreadError"); }
-		public set(float error) { this.SetObjectPropFloat("Weapon_SpreadError", error); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.SpreadError"); }
+		public set(float error) { this.SetObjectPropFloat("DroneWeapon.SpreadError", error); }
 	}
 
 	property float ReloadDelay // How long this weapon takes to reload
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_ReloadTime"); }
-		public set(float time) { this.SetObjectPropFloat("Weapon_ReloadTime", time); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.ReloadTime"); }
+		public set(float time) { this.SetObjectPropFloat("DroneWeapon.ReloadTime", time); }
 	}
 
 	property STimer ReloadTimer // Timer used for reloading
 	{
-		public get() { return view_as<STimer>(this.GetObjectProp("Weapon_ReloadTimer")); }
-		public set(STimer timer) { this.SetObjectProp("Weapon_ReloadTimer", timer); }
+		public get() { return view_as<STimer>(this.GetObjectProp("DroneWeapon.ReloadTimer")); }
+		public set(STimer timer) { this.SetObjectProp("DroneWeapon.ReloadTimer", timer); }
 	}
 
 	property EWeaponState State // Current state of this weapon
 	{
-		public get() { return view_as<EWeaponState>(this.GetObjectProp("Weapon_State")); }
-		public set(EWeaponState state) { this.SetObjectProp("Weapon_State", state); }
+		public get() { return view_as<EWeaponState>(this.GetObjectProp("DroneWeapon.State")); }
+		public set(EWeaponState state) { this.SetObjectProp("DroneWeapon.State", state); }
 	}
 
 	property EWeaponType Type // Weapon type. Determines the type of projectile (if applicable) fired by this weapon
 	{
-		public get() { return view_as<EWeaponType>(this.GetObjectProp("Weapon_Type")); }
-		public set(EWeaponType type) { this.SetObjectProp("Weapon_Type", type); }
+		public get() { return view_as<EWeaponType>(this.GetObjectProp("DroneWeapon.Type")); }
+		public set(EWeaponType type) { this.SetObjectProp("DroneWeapon.Type", type); }
 	}
 
 	property float TurnRate // How quickly this weapon rotates towards the player's view if using a model
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_TurnRate"); }
-		public set(float rate) { this.SetObjectPropFloat("Weapon_TurnRate", rate); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.TurnRate"); }
+		public set(float rate) { this.SetObjectPropFloat("DroneWeapon.TurnRate", rate); }
 	}
 
 	property int MuzzleIndex // Current muzzle index to use for next attack
 	{
-		public get() { return this.GetObjectProp("Weapon_MuzzleID"); }
-		public set(int value) { this.SetObjectProp("Weapon_MuzzleID", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.MuzzleID"); }
+		public set(int value) { this.SetObjectProp("DroneWeapon.MuzzleID", value); }
 	}
 
 	property float MaxPitch // Max pitch this weapon can aim at (relative to drone)
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_MaxPitchAngle"); }
-		public set(float pitch) { this.SetObjectPropFloat("Weapon_MaxPitchAngle", pitch); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxPitchAngle"); }
+		public set(float pitch) { this.SetObjectPropFloat("DroneWeapon.MaxPitchAngle", pitch); }
 	}
 
 	property float MaxYaw // Max yaw value this weapon can aim at (relative to drone)
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_MaxYawAngle"); }
-		public set(float yaw) { this.SetObjectPropFloat("Weapon_MaxYawAngle", yaw); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxYawAngle"); }
+		public set(float yaw) { this.SetObjectPropFloat("DroneWeapon.MaxYawAngle", yaw); }
 	}
 
 	property bool Fixed // If true, this weapon will not rotate with the player's view angles
 	{
-		public get() { return this.GetObjectProp("Weapon_FixedAngles"); }
-		public set(bool value) { this.SetObjectProp("Weapon_FixedAngles", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.FixedAngles"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.FixedAngles", value); }
 	}
 
 	// Whether or not this weapon looks for attachments on the parent instead of the weapon's model.
 	property bool UsesParent
 	{
-		public get() { return this.GetObjectProp("Weapon_HasNoModel"); }
-		public set(bool value) { this.SetObjectProp("Weapon_HasNoModel", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.HasNoModel"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.HasNoModel", value); }
 	}
 
 	property bool ComplexAngles // If true, this weapon's angles will be properly distributed between the mount and the weapon model
 	{
-		public get() { return this.GetObjectProp("Weapon_ComplexAngles"); }
-		public set(bool value) { this.SetObjectProp("Weapon_ComplexAngles", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.ComplexAngles"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.ComplexAngles", value); }
 	}
 
 	property int ProjPerShot // How many projectiles (or bullets) this weapon fires per attack
 	{
-		public get() { return this.GetObjectProp("Weapon_PerShot"); }
-		public set(int value) { this.SetObjectProp("Weapon_PerShot", value); }
+		public get() { return this.GetObjectProp("DroneWeapon.PerShot"); }
+		public set(int value) { this.SetObjectProp("DroneWeapon.PerShot", value); }
 	}
 
 	// Returns the receiver object for this weapon
@@ -503,13 +509,13 @@ methodmap ADroneProjectileWeapon < ADroneWeapon
 {
 	property float ProjectileSpeed // How fast a projectile from this weapon should be fired, if used
 	{
-		public get() { return this.GetObjectPropFloat("Weapon_ProjectileSpeed"); }
-		public set(float speed) { this.SetObjectPropFloat("Weapon_ProjectileSpeed", speed); }
+		public get() { return this.GetObjectPropFloat("DroneWeapon.ProjectileSpeed"); }
+		public set(float speed) { this.SetObjectPropFloat("DroneWeapon.ProjectileSpeed", speed); }
 	}
 	property EProjType ProjType // What type of projectile this weapon fires
 	{
-		public get() { return view_as<EProjType>(this.GetObjectPropFloat("Weapon_ProjectileType")); }
-		public set(EProjType type) { this.SetObjectProp("Weapon_ProjectileType", type); }
+		public get() { return view_as<EProjType>(this.GetObjectPropFloat("DroneWeapon.ProjectileType")); }
+		public set(EProjType type) { this.SetObjectProp("DroneWeapon.ProjectileType", type); }
 	}
 }
 
