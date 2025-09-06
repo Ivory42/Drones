@@ -80,6 +80,9 @@ enum struct FDroneAIParams
 	
 	float DetectionFOV;			// FOV for this drone to target enemies
 	float AimFOV;				// FOV for firing weapons
+
+	float AvoidanceCheckDelay;
+	bool AimTowardsMovement;
 	EBehaviorType Behavior;
 }
 
@@ -303,8 +306,40 @@ methodmap FDroneAI < StringMap
 	// Our current target. Can be friend or foe depending on our behavior
 	property APersistentObject CurrentTarget
 	{
-		public set(APersistentObject value) { this.SetValue("DroneAI_CurrentTargetEntity", value); }
-		public get() { return view_as<APersistentObject>(this.GetObject("DroneAI_CurrentTargetEntity")); }
+		public set(APersistentObject value)
+		{
+			FObject entity;
+			if (value)
+			{
+				entity = value.GetObject();
+			}
+			else
+			{
+				entity = GetWorld();
+			}
+
+			this.SetArray("DroneAI_CurrentTargetEntity", entity, sizeof FObject);
+		}
+		public get()
+		{
+			APersistentObject value = null;
+			FObject entity;
+			this.GetArray("DroneAI_CurrentTargetEntity", entity, sizeof FObject);
+			
+			if (entity.Valid())
+			{
+				if (entity.Get() > 0 && entity.Get() <= MaxClients)
+				{
+					value = view_as<APersistentObject>(FEntityStatics.GetClient(CastToClient(entity)));
+				}
+				else
+				{
+					value = view_as<APersistentObject>(FEntityStatics.GetEntity(entity));
+				}
+			}
+
+			return value;
+		}
 	}
 
 	// Next game time that we can check for new targets while in combat
@@ -545,6 +580,8 @@ methodmap FDroneAIStatics
 
 		params.DetectionFOV = 180.0;
 		params.AimFOV = 180.0;
+		params.AvoidanceCheckDelay = 0.0;
+		params.AimTowardsMovement = true;
 
 		return params;
 	}
@@ -596,6 +633,8 @@ methodmap FDroneAIStatics
 
 				params.AimFOV = kv.GetFloat("aim_fov", 180.0);
 				params.DetectionFOV = kv.GetFloat("detection_fov", 180.0);
+				params.AvoidanceCheckDelay = kv.GetFloat("avoidance_delay", 0.0);
+				params.AimTowardsMovement = view_as<bool>(kv.GetNum("aim_towards_movement", 1));
 			}
 			else
 			{

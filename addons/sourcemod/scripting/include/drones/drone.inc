@@ -13,6 +13,8 @@ enum struct FDroneComponents
 	FObject Camera; // Entity reference of the camera for this drone
 	FObject Model; // Visual model to use for this drone. Spawns as a dynamic prop attached to the drone's collision.
 
+	FObject Motor; // Phys_torque for physics movement
+
 	char ModelName[256];
 	char DestroyedModel[256]; 		// Optional model to use when drone is destroyed
 
@@ -21,6 +23,8 @@ enum struct FDroneComponents
 
 	FVector MinBounds;
 	FVector MaxBounds;
+
+	FComponentArray Attachments;
 
 	void GetModel(char[] model, int size)
 	{
@@ -56,6 +60,7 @@ methodmap ADrone < AComponent
 	public FRotator GetInputRotation() { return this.GetObjectPropRotator("Drone_InputRot"); }
 	public void SetInputRotation(FRotator rot) { this.SetObjectPropRotator("Drone_InputRot", rot); }
 	
+	// Returns the camera for the pilot seat of this drone
 	public FObject GetCamera() { return this.GetComponents().Camera; }
 
 	property bool IsDrone
@@ -102,6 +107,18 @@ methodmap ADrone < AComponent
 	{
 		public get() { return this.GetObjectProp("Drone_IsAlive"); }
 		public set(bool alive) { this.SetObjectProp("Drone_IsAlive", alive); }
+	}
+
+	property bool Stunned // Drone is currently stunned
+	{
+		public get() { return this.GetObjectProp("Drone_InStunState"); }
+		public set(bool value) { this.SetObjectProp("Drone_InStunState", value); }
+	}
+
+	property float StunnedUntilTime
+	{
+		public get() { return this.GetObjectPropFloat("Drone_StunnedUntilTime"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_StunnedUntilTime", value); }
 	}
 
 	property float MaxSpeed // Max speed this drone can move at
@@ -170,6 +187,12 @@ methodmap ADrone < AComponent
 		return false;
 	}
 
+	property bool CanDealSelfDamage // Allows drone to damage itself
+	{
+		public get() { return this.GetObjectProp("Drone_SelfDamageEnabled"); }
+		public set(bool value) { this.SetObjectProp("Drone_SelfDamageEnabled", value); }
+	}
+
 	property bool UsePlayerAngles // If true, this drone will rotate towards the pilot's view angles
 	{
 		public get() { return this.GetObjectProp("Drone_LockAngles"); }
@@ -236,10 +259,15 @@ methodmap ADrone < AComponent
 		if (components.Model.Valid())
 			components.Model.Kill();
 
+		if (components.Attachments)
+		{
+			components.Attachments.ClearComponents();
+			delete components.Attachments;
+		}
+
 		if (this.Seats)
 		{
 			ClearSeats(this.Seats);
-			delete this.Seats;
 		}
 
 		if (this.Weapons)

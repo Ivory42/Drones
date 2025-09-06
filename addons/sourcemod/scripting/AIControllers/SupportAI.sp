@@ -42,9 +42,19 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				ai.CurrentTarget = FindClosestTarget(ai, drone);
 			}
 			// Otherwise enter attack state if we can see our target. Support drones do not move towards their targets
-			else if (CanSeeTarget(ai, drone, target))
+			else
 			{
-				ChangeControllerState(ai, Controller_Attacking);
+				FClient client;
+				client = CastToClient(target.GetObject());
+				if (client.Valid() && !client.Alive())
+				{
+					ai.CurrentTarget = null;
+				}
+
+				if (CanSeeTarget(ai, drone, target))
+				{
+					ChangeControllerState(ai, Controller_Attacking);
+				}
 			}
 		}
 	}
@@ -104,6 +114,7 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 
 				FVector targPos;
 				targPos = target.GetPosition();
+				targPos.Z += 45.0;
 
 				if (weapon.AILeadTargets)
 				{
@@ -128,7 +139,7 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 					target = FindClosestTarget(ai, drone);
 				}
 
-				if (DroneInRange(ai, drone, target))
+				if (DroneInRange(ai, drone, target) && InFOV(drone, weapon, target, ai.GetControllerParams().AimFOV, false))
 				{
 					if (!ai.InAttack && weapon.State == WeaponState_Ready)
 					{
@@ -161,19 +172,27 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 
 		if (ai.InAttack)
 		{
-			OnDroneAIAttack(ai, weapon, drone, seat);
-			if (ai.EndFireTime <= -1.0)
+			if (!InFOV(drone, weapon, target, ai.GetControllerParams().AimFOV, false))
 			{
-				if (!target || !(weapon.State == WeaponState_Ready)) // We lose our target or our weapon is no longer ready
+				ai.InAttack = false;
+				ai.NextFireTime = GetGameTime() + params.BurstDelay;
+			}
+			else
+			{
+				OnDroneAIAttack(ai, weapon, drone, seat);
+				if (ai.EndFireTime <= -1.0)
+				{
+					if (!target || !(weapon.State == WeaponState_Ready)) // We lose our target or our weapon is no longer ready
+					{
+						ai.InAttack = false;
+						ai.NextFireTime = GetGameTime() + params.BurstDelay;
+					}
+				}
+				else if (ai.EndFireTime <= GetGameTime())
 				{
 					ai.InAttack = false;
 					ai.NextFireTime = GetGameTime() + params.BurstDelay;
 				}
-			}
-			else if (ai.EndFireTime <= GetGameTime())
-			{
-				ai.InAttack = false;
-				ai.NextFireTime = GetGameTime() + params.BurstDelay;
 			}
 		}
 	}

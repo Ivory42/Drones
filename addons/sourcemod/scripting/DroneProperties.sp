@@ -971,15 +971,27 @@ Action OnComponentDamaged(int entity, int &attacker, int &inflictor, float &dama
 Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float& damage, FWeapon weapon, int &damagetype)
 {
 	bool sendEvent = true;
+	Action action = Plugin_Continue;
 
 	if (!drone.Alive)
 	{
 		return Plugin_Stop;
 	}
 
+	damagetype |= DMG_PREVENT_PHYSICS_FORCE;
+	action = Plugin_Changed;
+
 	if (inflictor.Get() == drone.Get()) //significantly reduce damage if the drone damages itself
 	{
-		damage *= 0.25; //Should probably be a convar
+		if (drone.CanDealSelfDamage)
+		{
+			damage *= 0.25; //Should probably be a convar
+		}
+		else
+		{
+			damage = 0.0;
+		}
+		action = Plugin_Changed;
 		sendEvent = false;
 	}
 
@@ -988,8 +1000,16 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 		ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClient(CastToClient(attacker)));
 		if (player && player.InDrone && player.GetDrone() == drone)
 		{
-			damage *= 0.25;
+			if (drone.CanDealSelfDamage)
+			{
+				damage *= 0.25; //Should probably be a convar
+			}
+			else
+			{
+				damage = 0.0;
+			}
 			sendEvent = false;
+			action = Plugin_Changed;
 		}
 		else if (player.Team == drone.Team)
 		{
@@ -1013,6 +1033,7 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 	{
 		damage = forwardDamage;
 		damagetype = forwardDmgType;
+		action = Plugin_Changed;
 	}
 
 	if (sendEvent)
@@ -1021,12 +1042,53 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 	}
 
 	drone.Health -= RoundFloat(damage);
+	float healthpercent = float(drone.Health) / float(drone.MaxHealth);
+	UpdateDamageComponents(drone, healthpercent);
+
 	if (drone.Health <= 0)
 	{
 		KillDrone(drone, attacker, inflictor, damage, weapon);
 	}
 
-	return Plugin_Continue;
+	return action;
+}
+
+void UpdateDamageComponents(ADrone drone, float healthpercent)
+{
+	FComponentArray attachments = drone.GetComponents().Attachments;
+	if (attachments)
+	{
+		// find any damage components
+		for (int i = 0; i < attachments.Length; i++)
+		{
+			AComponent component = attachments.Get(i);
+			if (component)
+			{
+				if (IsEntityOfType(component, "DroneComponent.DamageComponent"))
+				{
+					float threshold = component.GetObjectPropFloat("DamageComponent.HealthThreshold");
+					bool active = component.GetObjectProp("DamageComponent.IsActive");
+					if (!active && healthpercent <= threshold)
+					{
+						if (IsEntityOfType(component, "DroneComponent.ParticleComponent"))
+						{
+							component.GetObject().Input("Start");
+						}
+						else if (IsEntityOfType(component, "DroneComponent.SparksComponent"))
+						{
+							component.GetObject().Input("ToggleSpark");
+						}
+						else
+						{
+							component.GetObject().Input("Toggle");
+						}
+
+						component.SetObjectProp("DamageComponent.IsActive", true);
+					}
+				}
+			}
+		}
+	}
 }
 
 void SendDamageEvent(ADrone drone, FObject attacker, float damage)
@@ -1064,7 +1126,7 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 
 void SimulateSeat(FDroneSeat seat, ADrone drone)
 {
-	if (seat.Occupier && !seat.AIControlled)
+	if (seat.Occupier && !seat.AIControlled && !drone.Stunned)
 	{
 		ADronePlayer client = seat.Occupier;
 
@@ -1220,15 +1282,71 @@ void FormatAmmoString(ADroneWeapon weapon, char[] buffer, int size)
 }
 
 // All passive actions for drones while idling
-void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed)
+void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy = false)
 {
-	// Clamp drone overall speed.
-	velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
-	velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
-	velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
+	if (!drone.Stunned)
+	{
+		// Clamp drone overall speed.
+		velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
+		velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
+		velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
 
-	// Drones will passively counteract gravity
-	velocity.Z += 12.0;
+		// Drones will passively counteract gravity
+		velocity.Z += 12.0;
 
-	TeleportEntity(drone.Get(), NULL_VECTOR, NULL_VECTOR, velocity.ToFloat());
+		/*
+		FVector normal;
+		if (velocity.Length() > 100.0 && CollisionImminent(drone, velocity, normal))
+		{
+			normal.Scale(velocity.Length());
+			velocity.Add(normal);
+		}
+		*/
+
+		if (!legacy && GetFeatureStatus(FeatureType_Native, "Phys_SetVelocity") == FeatureStatus_Available)
+		{
+			//PrintCenterTextAll("PHYS");
+			FVector angvel;
+			angvel = drone.GetPropVector(Prop_Data, "m_vecAngVelocity");
+			Phys_SetVelocity(drone.Get(), velocity.ToFloat(), angvel.ToFloat(), true);
+		}
+		else
+		{
+			//PrintCenterTextAll("DEFAULT");
+			TeleportEntity(drone.Get(), NULL_VECTOR, NULL_VECTOR, velocity.ToFloat());
+		}
+	}
+	else if (drone.StunnedUntilTime <= GetGameTime())
+	{
+		drone.Stunned = false;
+	}
 }
+
+/*
+bool CollisionImminent(ADrone drone, FVector velocity, FVector normal)
+{
+	FVector position, checkPos;
+	position = drone.GetPosition();
+	checkPos = velocity;
+	checkPos.Scale(0.01); // about 10ms ahead
+	checkPos.Add(position);
+
+	FVector mins, maxs;
+	mins = drone.GetComponents().MinBounds;
+	maxs = drone.GetComponents().MaxBounds;
+
+	//mins = ConstructVector(-20.0, -20.0, -20.0);
+	//maxs = ConstructVector(20.0, 20.0, 20.0);
+
+	FHullTrace trace = new FHullTrace(position, checkPos, mins, maxs, MASK_SHOT, DroneMovementTrace, drone);
+	if (trace.DidHit()) // There is something in our way, let's move backwards
+	{
+		delete trace;
+		normal = trace.GetNormalVector();
+		return true;
+	}
+	delete trace;
+
+	return false;
+}
+*/

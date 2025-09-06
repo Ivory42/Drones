@@ -242,7 +242,7 @@ public void CD2_OnDroneRemoved(ADrone drone, const char[] name)
 	}
 }
 
-public void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name)
+public Action CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name)
 {
 	AHunterChopper chopper = view_as<AHunterChopper>(drone);
 	if (chopper.IsChopper)
@@ -262,6 +262,8 @@ public void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, c
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 void KillEngine(AHunterChopper chopper)

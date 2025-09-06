@@ -36,7 +36,7 @@ methodmap FComponentArray < ArrayList
 {
 	public FComponentArray()
 	{
-		ArrayList array = new ArrayList();
+		ArrayList array = new ArrayList(64);
 		return view_as<FComponentArray>(array);
 	}
 	
@@ -332,6 +332,11 @@ methodmap ADroneWeapon < AComponent
 	 */
 	public bool CanFire(bool force = false)
 	{
+		if (this.Drone.Stunned)
+		{
+			return false;
+		}
+		
 		if (force) //ignore attack delay
 			return (this.Ammo != 0 && this.State == WeaponState_Ready);
 
@@ -663,6 +668,18 @@ methodmap FDroneSeat < StringMap
 			return time;
 		}
 		public set(float time) { this.SetValue("NextSwitchTime", time); }
+	}
+
+	public FObject GetCamera()
+	{
+		FObject camera;
+		this.GetArray("SeatCamera", camera, sizeof FObject);
+
+		return camera;
+	}
+	public void SetCamera(FObject camera)
+	{
+		this.SetArray("SeatCamera", camera, sizeof FObject);
 	}
 
 	// Returns the relative position of this seat on the drone

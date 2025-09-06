@@ -153,6 +153,10 @@ methodmap FDroneStatics
 	 * @param drone			Drone to enter
 	 */
 	public static native void PlayerExitDrone(AClient client, FDroneSeat seat, ADrone drone);
+
+	public static native void StunDrone(ADrone drone, float duration, bool override = false);
+
+	public static native bool PhysicsExtensionLoaded();
 }
 /**
  * Toggles view lock on the given drone. When disabled, the drone will NOT rotate to the angle the player is aiming.
@@ -428,9 +432,10 @@ forward void CD2_OnWeaponRemoved(ADroneWeapon weapon, const char[] name);
  * @param attacker			Entity that killed the drone, may be empty
  * @param damage			Damage amount that killed the drone
  * @param name				Internal name of the drone
- *
+ * 
+ * @return Plugin_Continue to trigger the deletion timer. Anything else overrides and you must manually delete the drone.
  */
-forward void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name);
+forward Action CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, const char[] name);
 
 /**
  * Forward called when a drone takes damage
@@ -442,7 +447,7 @@ forward void CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage, 
  *
  * @return Plugin_Changed to update damage and damagetype, otherwise continue normally
  */
-forward Action CD2_OnDroneDamaged(ADrone drone, FObject attacker, float &damage, int& damagetype);
+forward Action CD2_OnDroneTakeDamage(ADrone drone, FObject attacker, float &damage, int& damagetype);
 
 
 /**
@@ -543,6 +548,8 @@ stock EMoveType GetMoveType(const char[] movetype)
 		return MoveType_Hover;
 	else if (StrEqual(movetype, "drone_no_movement"))
 		return MoveType_None;
+	else if (StrEqual(movetype, "drone_physics"))
+		return MoveType_Physics;
 	else if (StrEqual(movetype, "drone_custom"))
 		return MoveType_Custom;
 
@@ -714,6 +721,11 @@ stock bool DroneWeaponTrace(int entity, int mask, ADrone drone)
 		if (hit.Cast("obj_"))
 		{
 			if (GetEntProp(entity, Prop_Send, "m_iTeamNum") == view_as<int>(drone.Team))
+			{
+				return false;
+			}
+
+			if (drone.GetObjectPropEnt("Drone.TargetComponent").Get() == hit.Get())
 			{
 				return false;
 			}

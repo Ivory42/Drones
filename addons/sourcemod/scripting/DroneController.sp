@@ -170,6 +170,10 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector v
 
 			drone.SetInputRotation(movementRot);
 		}
+		case MoveType_Physics:
+		{
+			ignorePitch = true;
+		}
 	}
 
 	//int droneId = drone.Get();
@@ -191,7 +195,7 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector v
 	{
 		switch (drone.MoveType)
 		{
-			case MoveType_Helo, MoveType_Hover:
+			case MoveType_Helo, MoveType_Hover, MoveType_Physics:
 			{
 				speeds.X += drone.Acceleration * axisValue;
 
@@ -251,6 +255,10 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector speeds, FVector vel
 				drone.SetInputRotation(movementRot);
 			}
 		}
+		case MoveType_Physics:
+		{
+			ignoreRoll = true;
+		}
 		case MoveType_Custom:
 		{
 			// Setup forwards to manually update input speeds
@@ -275,7 +283,7 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector speeds, FVector vel
 	{
 		switch (drone.MoveType)
 		{
-			case MoveType_Helo, MoveType_Hover:
+			case MoveType_Helo, MoveType_Hover, MoveType_Physics:
 			{
 				speeds.Y += drone.Acceleration * axisValue;
 
@@ -391,7 +399,7 @@ FRotator InterpRotation(FRotator current, FRotator target, float deltaTime, floa
 
 void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 {
-	if (!drone || !drone.Valid() || !drone.IsDrone)
+	if (!drone || !drone.Valid() || !drone.IsDrone || drone.MoveType == MoveType_Physics)
 		return;
 
 	FRotator currentAngle, playerAngles;
@@ -450,6 +458,17 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				}
 
 				drone.GetObject().SetAngles(currentAngle);
+
+				// Update our camera rotation
+				FObject camera;
+				camera = drone.GetCamera();
+				if (camera.Valid())
+				{
+					FRotator difference;
+					difference = SubtractRotators(desiredAngle, currentAngle);
+
+					camera.SetAngles(difference);
+				}
 			}
 			if (seat.HasWeapon())
 			{

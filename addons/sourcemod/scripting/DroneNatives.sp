@@ -11,6 +11,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FDroneStatics.ChangeAIState", Native_ChangeState);
 	CreateNative("FDroneStatics.PlayerEnterDrone", Native_PlayerEnterDrone);
 	CreateNative("FDroneStatics.PlayerExitDrone", Native_PlayerExitDrone);
+	CreateNative("FDroneStatics.StunDrone", Native_StunDrone);
+	CreateNative("FDroneStatics.PhysicsExtensionLoaded", Native_Extension);
 
 	return APLRes_Success;
 }
@@ -91,7 +93,7 @@ any Native_CreateDrone(Handle plugin, int args)
 	FTransform spawn;
 	GetNativeArray(2, spawn, sizeof FTransform);
 
-	ADrone drone = CreateDroneByName(GetWorld(), configName, spawn);
+	ADrone drone = CreateDroneByName(GetWorldAsClient(), configName, spawn);
 
 	return drone;
 }
@@ -103,7 +105,7 @@ any Native_SpawnDroneController(Handle plugin, int args)
 	FTransform spawn;
 	GetNativeArray(3, spawn, sizeof FTransform);
 
-	ADrone drone = CreateDroneByName(GetWorld(), configName, spawn);
+	ADrone drone = CreateDroneByName(GetWorldAsClient(), configName, spawn);
 
 	GetNativeString(2, controllerConf, sizeof controllerConf);
 	FDroneAIParams params;
@@ -183,4 +185,27 @@ int Native_PlayerExitDrone(Handle plugin, int args)
 	}
 
 	return 0;
+}
+
+int Native_StunDrone(Handle plugin, int args)
+{
+	ADrone drone = view_as<ADrone>(GetNativeCell(1));
+	float duration = GetNativeCell(2);
+	bool override = GetNativeCell(3);
+
+	float stunEndAt = GetGameTime() + duration;
+	if (!override && drone.Stunned) // if the drone is stunned, add to our duration
+	{
+		stunEndAt = drone.StunnedUntilTime + duration;
+	}
+
+	drone.Stunned = true;
+	drone.StunnedUntilTime = stunEndAt;
+
+	return 0;
+}
+
+any Native_Extension(Handle plugin, int args)
+{
+	return UsingVPhysics;
 }

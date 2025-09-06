@@ -349,6 +349,8 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 			case DroneProj_Sentry: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
 			case DroneProj_Grenade: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 			case DroneProj_Impact: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
+			case DroneProj_Orb: CreateOrb(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Laser: CreateLaser(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 		}
 	}
 }
@@ -492,7 +494,14 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 
 				direction.Normalize();
 				direction.Scale(100.0);
-				SDKHooks_TakeDamage(hitEnt.Get(), drone.Get(), attacker, weapon.Damage, DMG_BULLET, -1, direction.ToFloat(), trace.GetEndPosition().ToFloat(), false);
+
+				FObject inflictor; // If we have a building attached for replication/bot targeting, set that as the inflictor
+				inflictor = drone.GetObjectPropEnt("Drone.TargetComponent")
+				if (!inflictor.Valid())
+				{
+					inflictor = drone.GetObject();
+				}
+				SDKHooks_TakeDamage(hitEnt.Get(), inflictor.Get(), attacker, weapon.Damage, DMG_BULLET, -1, direction.ToFloat(), trace.GetEndPosition().ToFloat(), false);
 			}
 		}
 		end = trace.GetEndPosition();
@@ -550,6 +559,8 @@ void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjTyp
 			case DroneProj_Sentry: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
 			case DroneProj_Grenade: CreateGrenade(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 			case DroneProj_Impact: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
+			case DroneProj_Orb: CreateOrb(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Laser: CreateLaser(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 		}
 	}
 }
@@ -618,6 +629,47 @@ void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spaw
 	}
 }
 
+void CreateOrb(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+{
+	ABaseDroneProjectile orb = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity("tf_projectile_mechanicalarmorb", owner, "DroneComponents.DroneOrbEntity"));
+	if (orb)
+	{
+		orb.Damage = damage;
+		orb.Team = team;
+
+		FEntityStatics.FinishSpawningEntity(orb, spawn);
+		orb.WeaponLauncher = weapon;
+
+		orb.FireProjectile(direction, weapon.ProjectileSpeed);
+	}
+}
+
+void CreateLaser(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+{
+	ABaseDroneProjectile laser = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity("tf_projectile_energy_ring", owner, "DroneComponents.DroneEnergyRing"));
+	if (laser)
+	{
+		// damage has to be set later
+		laser.Team = team;
+
+		laser.SetPropEnt(Prop_Send, "m_hLauncher", ConstructObject(CastToClient(owner).GetSlot(0)));
+		laser.SetPropEnt(Prop_Send, "m_hOriginalLauncher", ConstructObject(CastToClient(owner).GetSlot(0)));
+
+		FEntityStatics.FinishSpawningEntity(laser, spawn);
+		laser.WeaponLauncher = weapon;
+		laser.SetObjectPropFloat("DroneEnergyRing.Damage", damage);
+
+		//SetEntityRenderMode(laser.Get(), RENDER_NORMAL);
+
+		//int particle = GetEffectIndex("drg_pomson_projectile");
+		//SetupParticleAttached(particle, laser.GetObject());
+
+		laser.FireProjectile(direction, weapon.ProjectileSpeed);
+
+		SDKHook(laser.Get(), SDKHook_Touch, OnLaserHit);
+	}
+}
+
 Action OnProjHit(int entity, int victim)
 {
 	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
@@ -628,7 +680,12 @@ Action OnProjHit(int entity, int victim)
 	client = CastToClient(hit);
 	if (!client.Valid()) // Not a client
 	{
-		if (victim == 0 || hit.Cast("prop_"))
+		if (victim == 0)
+		{
+			FEntityStatics.DestroyEntity(rocket);
+			return Plugin_Handled;
+		}
+		if (hit.Cast("prop_"))
 		{
 			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
 			FEntityStatics.DestroyEntity(rocket);
@@ -652,6 +709,41 @@ Action OnProjHit(int entity, int victim)
 		damage *= dmgMod;
 		SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
 		FEntityStatics.DestroyEntity(rocket);
+		return Plugin_Handled;
+	}
+}
+
+Action OnLaserHit(int entity, int victim)
+{
+	ABaseDroneProjectile laser = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
+	FObject hit;
+	FClient client;
+
+	float damage = laser.GetObjectPropFloat("DroneEnergyRing.Damage");
+	//PrintToChatAll("Damage = %.1f", damage);
+
+	hit = ConstructObject(victim);
+	client = CastToClient(hit);
+	if (!client.Valid()) // Not a client
+	{
+		if (victim == 0)
+		{
+			FEntityStatics.DestroyEntity(laser);
+			return Plugin_Handled;
+		}
+		if (hit.Cast("prop_") || hit.Cast("obj_"))
+		{
+			SDKHooks_TakeDamage(victim, entity, laser.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
+			FEntityStatics.DestroyEntity(laser);
+			return Plugin_Handled;
+		}
+
+		return Plugin_Continue;
+	}
+	else
+	{
+		SDKHooks_TakeDamage(victim, entity, laser.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
+		FEntityStatics.DestroyEntity(laser);
 		return Plugin_Handled;
 	}
 }
