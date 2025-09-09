@@ -1201,6 +1201,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 					float inputVal = 0.0;
 					FVector velocity, speeds;
 					speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
+					//GetSmoothedVelocity(drone, speeds);
 
 					bool zeroForward = false;
 
@@ -1246,8 +1247,9 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 
 					FRotator viewAngles;
 					viewAngles = client.GetEyeAngles();
-
+					
 					OnDroneAimChanged(viewAngles, seat, drone);
+
 					SimulateDrone(drone, velocity, maxSpeed);
 				}
 			}
@@ -1289,19 +1291,34 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 		// Clamp drone overall speed.
 		velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
 		velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
-		velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
 
-		// Drones will passively counteract gravity
-		velocity.Z += 12.0;
-
-		/*
-		FVector normal;
-		if (velocity.Length() > 100.0 && CollisionImminent(drone, velocity, normal))
+		// Drones will passively counteract gravity; hover drones will only do this when close to the ground
+		if (drone.MoveType == MoveType_Hover)
 		{
-			normal.Scale(velocity.Length());
-			velocity.Add(normal);
+			float distance = GetDistanceToGround(drone);
+			float maxheight = drone.HoverMaxHeight;
+
+			if (distance <= maxheight)
+			{
+				float minforce = 6.0;
+				float force = minforce;
+				float maxforce = drone.HoverIntensity;
+				float percentage = 1.0 - (distance / maxheight);
+				force = (percentage * (maxforce - minforce)) + minforce;
+				velocity.Z += force;
+			}
+			else
+			{
+				FVector curVel;
+				GetSmoothedVelocity(drone, curVel);
+				velocity.Z = curVel.Z;
+			}
 		}
-		*/
+		else
+		{
+			velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
+			velocity.Z += 12.0;
+		}
 
 		if (!legacy && GetFeatureStatus(FeatureType_Native, "Phys_SetVelocity") == FeatureStatus_Available)
 		{
@@ -1320,6 +1337,40 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 	{
 		drone.Stunned = false;
 	}
+}
+
+bool InclineTooSteep(ADrone drone)
+{
+	FRotator rotation;
+	rotation = drone.GetCurrentIncline();
+
+	if (rotation.Pitch >= drone.HoverMaxIncline || rotation.Roll >= drone.HoverMaxIncline)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+float GetDistanceToGround(ADrone drone)
+{
+	float distance = 1.0;
+	FVector start, end;
+	start = drone.GetPosition();
+	end = start;
+	end.Z -= 3000.0;
+
+	FVector mins, maxs;
+	mins = drone.GetComponents().MinBounds;
+	maxs = drone.GetComponents().MaxBounds;
+	mins.Z = 0.0;
+	FHullTrace trace = new FHullTrace(start, end, mins, maxs, MASK_SHOT_HULL, DroneMovementTrace, drone);
+	end = trace.GetEndPosition();
+	delete trace;
+
+	distance = start.DistanceTo(end);
+
+	return distance;
 }
 
 /*

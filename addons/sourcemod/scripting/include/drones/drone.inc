@@ -13,7 +13,8 @@ enum struct FDroneComponents
 	FObject Camera; // Entity reference of the camera for this drone
 	FObject Model; // Visual model to use for this drone. Spawns as a dynamic prop attached to the drone's collision.
 
-	FObject Motor; // Phys_torque for physics movement
+	FObject Motor; // Phys_torque for physics movement or phys_thruster for hover
+	FObject SideMotor; // thruster for hover movement
 
 	char ModelName[256];
 	char DestroyedModel[256]; 		// Optional model to use when drone is destroyed
@@ -216,6 +217,48 @@ methodmap ADrone < AComponent
 		public get() { return this.GetObjectProp("Drone_HeloUseWorldVertical"); }
 		public set(bool value) { this.SetObjectProp("Drone_HeloUseWorldVertical", value); }
 	}
+
+	property float HoverMaxHeight // Hover drones max hover height
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverMaxHoverHeight"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverMaxHoverHeight", value); }
+	}
+
+	property float HoverIntensity // Hover drones hover force
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverForceIntensity"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverForceIntensity", value); }
+	}
+
+	property float HoverForwardIK // Distance forward to check for changes in ground elevation
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverForwardIK"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverForwardIK", value); }
+	}
+	property float HoverBackwardIK // Distance backward to check for changes in ground elevation
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverBackwardIK"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverBackwardIK", value); }
+	}
+	property float HoverRightIK // Distance right to check for changes in ground elevation
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverRightIK"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverRightIK", value); }
+	}
+	property float HoverLeftIK // Distance left to check for changes in ground elevation
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverLeftIK"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverLeftIK", value); }
+	}
+
+	property float HoverMaxIncline // Max incline this drone can traverse
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HoverMaxIncline"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HoverMaxIncline", value); }
+	}
+
+	public void SetCurrentIncline(FRotator value) { this.SetObjectPropRotator("Drone_HoverCurrentIncline", value); }
+	public FRotator GetCurrentIncline() { return this.GetObjectPropRotator("Drone_HoverCurrentIncline"); }
 
 	property TFTeam Team
 	{

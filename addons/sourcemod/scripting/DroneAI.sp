@@ -1133,6 +1133,16 @@ bool DroneMovementTrace(int entity, int mask, ADrone drone)
 		return false;
 	}
 
+	if (ConstructObject(entity).Cast("tf_dropped_weapon"))
+	{
+		return false;
+	}
+
+	if (ConstructObject(entity).Cast("tf_ammo_pack"))
+	{
+		return false;
+	}
+
 	return true;
 }
 

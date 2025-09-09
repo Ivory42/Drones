@@ -402,6 +402,14 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 	if (!drone || !drone.Valid() || !drone.IsDrone || drone.MoveType == MoveType_Physics)
 		return;
 
+	if (drone.MoveType == MoveType_Hover)
+	{
+		float distance = GetDistanceToGround(drone);
+		if (distance > drone.HoverMaxHeight * 1.5)
+		{
+			return;
+		}
+	}
 	FRotator currentAngle, playerAngles;
 	currentAngle = drone.GetAngles();
 
@@ -427,12 +435,24 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 
 					drone.SetInputRotation(movementRot);
 
-					if (!drone.HeloChangePitch)
-						desiredAngle.Pitch = movementRot.Pitch;
+					if (drone.MoveType == MoveType_Hover)
+					{
+						desiredAngle.Roll = currentAngle.Roll;
+					}
+					else
+					{
+						desiredAngle.Roll = movementRot.Roll;
+					}
 
-					desiredAngle.Roll = movementRot.Roll;
+					if (!drone.HeloChangePitch || drone.MoveType == MoveType_Hover) // hover never changes pitch based on player angles
+						desiredAngle.Pitch = movementRot.Pitch;
+					
+					if (drone.MoveType == MoveType_Hover)
+					{
+						NormalizeAngles(desiredAngle);
+						AdjustHoverDroneAngles(drone, desiredAngle);
+					}
 				}
-				
 				currentAngle = InterpRotation(currentAngle, desiredAngle, GetGameFrameTime(), drone.TurnRate);
 
 				// For flying based drones we want to adjust the roll based on how much we are turning
@@ -456,8 +476,10 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 
 					currentAngle.Roll = drone.RollValue;
 				}
-
-				drone.GetObject().SetAngles(currentAngle);
+				
+				FVector velocity;
+				GetSmoothedVelocity(drone, velocity);
+				TeleportEntity(drone.Get(), NULL_VECTOR, currentAngle.ToFloat(), velocity.ToFloat());
 
 				// Update our camera rotation
 				FObject camera;
@@ -465,7 +487,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				if (camera.Valid())
 				{
 					FRotator difference;
-					difference = SubtractRotators(desiredAngle, currentAngle);
+					difference = SubtractRotators(playerAngles, currentAngle);
 
 					camera.SetAngles(difference);
 				}
@@ -482,6 +504,97 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				UpdateDroneWeaponAngles(currentAngle, playerAngles, drone.GetAngles(), seat.ActiveWeapon); // Update any controlled weapons
 			}
 		}
+	}
+}
+
+void AdjustHoverDroneAngles(ADrone drone, FRotator currentAngle)
+{
+	float distance = GetDistanceToGround(drone);
+	float maxDistance = drone.HoverMaxHeight * 1.8;
+	if (distance <= maxDistance)
+	{
+		// Perform an "IK" for this drone
+		FVector mins, maxs;
+		mins = ConstructVector(-1.0 * drone.HoverBackwardIK, -1.0 * drone.HoverLeftIK, 0.0);
+		maxs = ConstructVector(drone.HoverForwardIK, drone.HoverRightIK, 20.0);
+
+		FVector testmins, testmaxs;
+		testmins = mins;
+		testmaxs = maxs;
+
+		FRotator absAngle;
+		absAngle.Yaw = currentAngle.Yaw;
+
+		FVector start, end, offset;
+		offset.X = maxs.X / 2.0;
+		start = FMath.OffsetVector(drone.GetPosition(), absAngle, offset);
+		end = start;
+		end.Z -= maxDistance;
+
+		// Test each side of the drone
+		// X-axis first
+		FVector positions[4];
+		testmins.X = 0.0;
+		testmaxs.X = maxs.X / 2.0;
+		FHullTrace trace = new FHullTrace(start, end, testmins, testmaxs, MASK_SHOT_HULL, DroneMovementTrace, drone);
+		//trace.DebugTrace(0.1);
+		positions[0] = trace.GetEndPosition();
+		delete trace;
+
+		offset.X = mins.X / 2.0;
+		start = FMath.OffsetVector(drone.GetPosition(), absAngle, offset);
+		end = start;
+		end.Z -= maxDistance;
+
+		testmins = mins;
+		testmaxs = maxs;
+		testmaxs.X = 0.0;
+		testmins.X = mins.X / 2.0;
+		trace = new FHullTrace(start, end, testmins, testmaxs, MASK_SHOT_HULL, DroneMovementTrace, drone);
+		//trace.DebugTrace(0.1);
+		positions[1] = trace.GetEndPosition();
+		delete trace;
+
+		// Now Y-axis
+		offset.X = 0.0;
+		offset.Y = maxs.Y / 2.0;
+		start = FMath.OffsetVector(drone.GetPosition(), absAngle, offset);
+		end = start;
+		end.Z -= maxDistance;
+
+		testmins = mins;
+		testmaxs = maxs;
+		testmins.Y = 0.0;
+		testmaxs.Y = maxs.Y / 2.0;
+		trace = new FHullTrace(start, end, testmins, testmaxs, MASK_SHOT_HULL, DroneMovementTrace, drone);
+		//trace.DebugTrace(0.1);
+		positions[2] = trace.GetEndPosition();
+		delete trace;
+
+		offset.Y = mins.Y / 2.0;
+		start = FMath.OffsetVector(drone.GetPosition(), absAngle, offset);
+		end = start;
+		end.Z -= maxDistance;
+
+		testmins = mins;
+		testmaxs = maxs;
+		testmaxs.Y = 0.0;
+		testmins.Y = mins.Y / 2.0;
+		trace = new FHullTrace(start, end, testmins, testmaxs, MASK_SHOT_HULL, DroneMovementTrace, drone);
+		//trace.DebugTrace(0.1);
+		positions[3] = trace.GetEndPosition();
+		delete trace;
+
+		// now that we have our horizontal positions, lets get the angle between the two and that will be our adjustment
+		FRotator adjustX, adjustY;
+		adjustX = Vector_GetAngles(Vector_MakeFromPoints(positions[1], positions[0]));
+		NormalizeAngles(adjustX);
+
+		adjustY = Vector_GetAngles(Vector_MakeFromPoints(positions[2], positions[3]));
+		currentAngle.Pitch = adjustX.Pitch;
+		currentAngle.Roll = adjustY.Pitch;
+		drone.SetCurrentIncline(currentAngle);
+		//PrintCenterTextAll("Angle = %.1f | New Angle = %.1f", adjustX.Pitch, currentAngle.Pitch);
 	}
 }
 
@@ -553,5 +666,16 @@ void CycleNextWeapon(FDroneSeat seat)
 				seat.ActiveWeapon = view_as<ADroneWeapon>(seat.Weapons.Get(index));
 			}
 		}
+	}
+}
+
+void GetSmoothedVelocity(ADrone drone, FVector velocity)
+{
+	if (SmoothedVel)
+	{
+		float vel[3];
+		SDKCall(SmoothedVel, drone.Get(), vel);
+
+		velocity.Set(vel);
 	}
 }

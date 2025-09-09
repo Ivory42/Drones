@@ -27,6 +27,8 @@ GlobalForward FindTossAngle;
 
 ConVar DebugAI;
 
+Handle SmoothedVel;
+
 bool UsingVPhysics = false;
 
 #include "DroneProperties.sp"
@@ -76,6 +78,15 @@ public void OnPluginStart()
 	DroneEnteredValid = new GlobalForward("CD2_CanPlayerEnterDrone", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 
 	DebugAI = CreateConVar("CD2_DebugAI", "0", "Enables debugging of AI movement and pathing", _, true, 0.0, true, 1.0);
+
+	GameData data = LoadGameConfigFile("smoothedvelocity");
+	if (data)
+	{
+		StartPrepSDKCall(SDKCall_Entity);
+		PrepSDKCall_SetFromConf(data, SDKConf_Virtual, "GetSmoothedVelocity");
+		PrepSDKCall_SetReturnInfo(SDKType_Vector, SDKPass_ByValue);
+		SmoothedVel = EndPrepSDKCall();
+	}
 }
 
 Action CmdKillDrones(int clientId, int args)
@@ -793,15 +804,29 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	config.GetString("movetype", movetype, sizeof movetype);
 	drone.MoveType = GetMoveType(movetype);
 
-	if (drone.MoveType == MoveType_Helo)
+	switch (drone.MoveType)
 	{
-		drone.HeloChangePitch = view_as<bool>(config.GetNum("helo_changepitch", 0));
-		drone.HeloChangeRoll = view_as<bool>(config.GetNum("helo_changeroll", 1));
-		drone.HeloVerticalAxis = view_as<bool>(config.GetNum("helo_uservertical", 0));
-	}
-	else if (drone.MoveType == MoveType_Physics)
-	{
-		SetupPhysicsConstraints(drone, config, components, dronetag);
+		case MoveType_Helo:
+		{
+			drone.HeloChangePitch = view_as<bool>(config.GetNum("helo_changepitch", 0));
+			drone.HeloChangeRoll = view_as<bool>(config.GetNum("helo_changeroll", 1));
+			drone.HeloVerticalAxis = view_as<bool>(config.GetNum("helo_uservertical", 0));
+		}
+		case MoveType_Hover:
+		{
+			SetupThrusters(drone, config, components, dronetag);
+			drone.HoverMaxHeight = config.GetFloat("hover_maxhoverheight", 70.0);
+			drone.HoverIntensity = config.GetFloat("hover_hoverforce", 200.0);
+			drone.HoverForwardIK = config.GetFloat("hover_forwardik");
+			drone.HoverBackwardIK = config.GetFloat("hover_backwardik");
+			drone.HoverRightIK = config.GetFloat("hover_rightik");
+			drone.HoverLeftIK = config.GetFloat("hover_leftik");
+			drone.HoverMaxIncline = config.GetFloat("hover_maxincline");
+		}
+		case MoveType_Physics:
+		{
+			SetupPhysicsTorque(drone, config, components, dronetag);
+		}
 	}
 
 	CreateAttachments(drone, config, components);
@@ -834,7 +859,47 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	drone.SetComponents(components);
 }
 
-void SetupPhysicsConstraints(ADrone drone, KeyValues config, FDroneComponents components, const char[] dronetag)
+void SetupThrusters(ADrone drone, KeyValues config, FDroneComponents components, const char[] dronetag)
+{
+	FObject motor, side;
+	motor = FGameplayStatics.CreateObjectDeferred("phys_thruster");
+
+	//float speed = drone.MaxSpeed;
+	float force = config.GetFloat("engine_force", 5000.0);
+	//PrintToChatAll("Spawning physics drone with speed: %.1f and force: %.1f", speed, force);
+
+	// Ignore Position (32) | Apply force (2) | Orient Locally (8)
+	int flags = 32 + 2 + 8;
+	
+	motor.SetKeyValueInt("Flags", flags);
+	motor.SetKeyValueVector("origin", drone.GetPosition());
+	motor.SetKeyValue("attach1", dronetag);
+	motor.SetKeyValueFloat("force", force);
+	//torque.SetKeyValueFloat("speed", speed);
+
+	FTransform spawn;
+	spawn = ConstructTransform(drone.GetPosition(), drone.GetAngles());
+	FGameplayStatics.FinishSpawn(motor, spawn);
+	motor.SetParent(drone.GetObject());
+
+	components.Motor = motor;
+
+	// Now side movement
+	side = FGameplayStatics.CreateObjectDeferred("phys_thruster");
+	
+	side.SetKeyValueInt("Flags", flags);
+	side.SetKeyValueVector("origin", drone.GetPosition());
+	side.SetKeyValue("attach1", dronetag);
+	side.SetKeyValueFloat("force", force);
+
+	spawn.Rotation.Yaw += 90.0;
+	FGameplayStatics.FinishSpawn(side, spawn);
+	side.SetParent(drone.GetObject());
+
+	components.SideMotor = side;
+}
+
+void SetupPhysicsTorque(ADrone drone, KeyValues config, FDroneComponents components, const char[] dronetag)
 {
 	FObject torque;
 	torque = FGameplayStatics.CreateObjectDeferred("phys_torque");
@@ -874,6 +939,10 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 			if (StrEqual(type, "drone_light"))
 			{
 				attachment = CreateDroneLight(drone, config, attachpos);
+			}
+			else if (StrEqual(type, "drone_trail"))
+			{
+				attachment = CreateDroneTrail(drone, config, attachpos);
 			}
 			else if (StrEqual(type, "drone_damage_smoke"))
 			{
@@ -1082,6 +1151,54 @@ AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachp
 		if (hidden)
 		{
 			component.GetObject().Input("HideSprite");
+		}
+	}
+
+	return component;
+}
+
+AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachpos)
+{
+	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("env_spritetrail"));
+	if (component)
+	{
+		FEntityStatics.SetValidationProperty(component, "DroneComponent.TrailComponent");
+
+		char texture[64], life[32], start[32], end[32];
+		config.GetString("material", texture, sizeof texture);
+		config.GetString("lifetime", life, sizeof life);
+		config.GetString("start_width", start, sizeof start);
+		config.GetString("end_width", end, sizeof end);
+		PrecacheModel(texture);
+		component.SetKeyValue("spritename", texture);
+		component.SetKeyValueInt("renderamt", config.GetNum("brightness"));
+		component.SetKeyValue("rendermode", "1");
+		component.SetKeyValue("lifetime", life);
+		component.SetKeyValue("startwidth", start);
+		component.SetKeyValue("endwidth", end);
+
+		char color[64];
+		config.GetString("color", color, sizeof color, "255 255 255");
+		component.SetKeyValue("rendercolor", color);
+
+		FTransform spawn;
+		spawn.Position = drone.GetPosition();
+		FEntityStatics.FinishSpawningEntity(component, spawn);
+
+		component.Drone = drone;
+
+		component.GetObject().SetParent(drone.GetObject());
+		SetVariantString(attachpos);
+		component.GetObject().Input("SetParentAttachment");
+
+		bool hidden = view_as<bool>(config.GetNum("hidden", 0));
+		if (hidden)
+		{
+			component.GetObject().Input("HideSprite");
+		}
+		else
+		{
+			component.GetObject().Input("ShowSprite");
 		}
 	}
 
