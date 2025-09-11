@@ -145,18 +145,16 @@ void OnDroneAIAttack(FDroneAI ai, ADroneWeapon weapon, ADrone drone, FDroneSeat 
 	}
 }
 
-void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector velocity, float maxSpeed, bool stall)
+void OnDroneMoveForward(ADrone drone, float axisValue, FVector input)
 {
-	FRotator direction;
+	FRotator angles;
+	angles = drone.GetAngles();
 	bool ignorePitch = false;
 
 	FRotator movementRot;
 	movementRot = drone.GetInputRotation();
 
-	// Need to make this a variable within the drone possibly
 	static const float MaxPitchAngle = 25.0;
-
-	direction = drone.GetAngles();
 
 	switch (drone.MoveType)
 	{
@@ -166,7 +164,6 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector v
 			float pitch = MaxPitchAngle * axisValue;
 
 			movementRot.Pitch = pitch;
-			//movementRot = FMath.InterpRotatorTo(movementRot, desiredRot, GetGameFrameTime(), 8.0);
 
 			drone.SetInputRotation(movementRot);
 		}
@@ -176,190 +173,78 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector speeds, FVector v
 		}
 	}
 
-	//int droneId = drone.Get();
+	float acceleration = drone.Acceleration * axisValue;
 
-	if (stall)
-	{
-		// Slow to a stop
-		float minimum = drone.MoveType == MoveType_Fly ? 200.0 : 0.0;
-		if (speeds.X > minimum)
-		{
-			speeds.X -= drone.Acceleration;
-		}
-		else if (speeds.X < minimum)
-		{
-			speeds.X += drone.Acceleration;
-		}
-	}
-	else
-	{
-		switch (drone.MoveType)
-		{
-			case MoveType_Helo, MoveType_Hover, MoveType_Physics:
-			{
-				speeds.X += drone.Acceleration * axisValue;
-
-				speeds.X = FMath.ClampFloat(speeds.X, maxSpeed * -1.0, maxSpeed);
-			}
-			case MoveType_Fly:
-			{
-				speeds.X += drone.Acceleration * axisValue;
-				speeds.X = FMath.ClampFloat(speeds.X, 200.0, maxSpeed); // TODO - setup minimum speed for flying drones
-			}
-			case MoveType_Custom:
-			{
-				// Setup forwards to manually update input speeds
-			}
-		}
-	}
-
-	// Now update our velocity
-	FVector inputVel;
-
+	FVector direction;
 	if (ignorePitch)
 	{
-		direction.Pitch = 0.0; // null pitch value for helo drones
+		angles.Pitch = 0.0; // null pitch value for helo drones
 	}
-	inputVel = direction.GetForwardVector();
 
-	inputVel.Scale(speeds.X);
-	velocity.Add(inputVel);
+	direction = angles.GetForwardVector();
+	direction.Normalize();
+	direction.Scale(acceleration);
+	input.Add(direction);
 }
 
-void OnDroneMoveRight(ADrone drone, float axisValue, FVector speeds, FVector velocity, float maxSpeed, bool stall)
+void OnDroneMoveRight(ADrone drone, float axisValue, FVector input)
 {
-	FRotator direction;
-	bool ignoreRoll = false;
-
-	FRotator movementRot;
-	movementRot = drone.GetInputRotation();
-
-	// Need to make this a variable within the drone possibly
-	static const float MaxRollAngle = 25.0;
-
-	direction = drone.GetAngles();
-
-	switch (drone.MoveType)
+	if (drone.MoveType == MoveType_Helo || drone.MoveType == MoveType_Hover) // flying drones cannot move right/left
 	{
-		case MoveType_Helo:
-		{
-			ignoreRoll = true;
+		FRotator angles;
+		angles = drone.GetAngles();
+		bool ignoreRoll = false;
 
-			if (drone.HeloChangeRoll)
-			{
-				float roll = MaxRollAngle * axisValue;
+		FRotator movementRot;
+		movementRot = drone.GetInputRotation();
 
-				movementRot.Roll = roll;
-				//movementRot = FMath.InterpRotatorTo(movementRot, desiredRot, GetGameFrameTime(), 8.0);
+		static const float MaxRollAngle = 25.0;
 
-				drone.SetInputRotation(movementRot);
-			}
-		}
-		case MoveType_Physics:
-		{
-			ignoreRoll = true;
-		}
-		case MoveType_Custom:
-		{
-			// Setup forwards to manually update input speeds
-		}
-	}
-
-	//int droneId = drone.Get();
-
-	if (stall)
-	{
-		// Slow to a stop
-		if (speeds.Y > 0.0)
-		{
-			speeds.Y -= drone.Acceleration;
-		}
-		else if (speeds.Y < 0.0)
-		{
-			speeds.Y += drone.Acceleration;
-		}
-	}
-	else
-	{
-		switch (drone.MoveType)
-		{
-			case MoveType_Helo, MoveType_Hover, MoveType_Physics:
-			{
-				speeds.Y += drone.Acceleration * axisValue;
-
-				speeds.Y = FMath.ClampFloat(speeds.Y, maxSpeed * -1.0, maxSpeed);
-			}
-			case MoveType_Custom:
-			{
-				// Setup forwards to manually update input speeds
-			}
-		}
-	}
-
-	// Now update our velocity
-	FVector inputVel;
-
-	if (ignoreRoll)
-	{
-		direction.Roll = 0.0; // null roll value
-	}
-	inputVel = direction.GetRightVector();
-
-	inputVel.Scale(speeds.Y);
-	velocity.Add(inputVel);
-}
-
-void OnDroneMoveUp(ADrone drone, float axisValue, FVector speeds, FVector velocity, float maxSpeed, bool stall)
-{
-	FRotator direction;
-
-	direction = drone.GetAngles();
-
-	//int droneId = drone.Get();
-
-	if (stall)
-	{
-		// Slow to a stop
-		if (speeds.Z > 0.0)
-		{
-			speeds.Z -= drone.Acceleration;
-		}
-		else if (speeds.Z < 0.0)
-		{
-			speeds.Z += drone.Acceleration;
-		}
-	}
-	else
-	{
 		switch (drone.MoveType)
 		{
 			case MoveType_Helo:
 			{
-				speeds.Z += drone.Acceleration * axisValue;
+				ignoreRoll = true;
+				float roll = MaxRollAngle * axisValue;
 
-				speeds.Z = FMath.ClampFloat(speeds.Z, maxSpeed * -1.0, maxSpeed);
+				movementRot.Roll = roll;
+
+				drone.SetInputRotation(movementRot);
 			}
-			case MoveType_Custom:
+			case MoveType_Physics:
 			{
-				// Setup forwards to manually update input speeds
+				ignoreRoll = true;
 			}
 		}
+
+		float acceleration = drone.Acceleration * axisValue;
+
+		FVector direction;
+		if (ignoreRoll)
+		{
+			angles.Roll = 0.0;
+		}
+
+		direction = angles.GetRightVector();
+		direction.Normalize();
+		direction.Scale(acceleration);
+		input.Add(direction);
 	}
+}
 
-	// Now update our velocity
-	FVector inputVel;
-
-	if (drone.HeloVerticalAxis)
+void OnDroneMoveUp(ADrone drone, float axisValue, FVector input)
+{
+	if (drone.MoveType == MoveType_Helo)
 	{
-		inputVel = ConstructVector(0.0, 0.0, 1.0);
-	}
-	else
-	{
-		inputVel = direction.GetUpVector();
-	}
+		FVector direction;
+		direction = drone.GetAngles().GetUpVector();
 
-	inputVel.Scale(speeds.Z);
-	velocity.Add(inputVel);
+		float acceleration = drone.Acceleration * axisValue;
+
+		direction.Normalize();
+		direction.Scale(acceleration);
+		input.Add(direction);
+	}
 }
 
 

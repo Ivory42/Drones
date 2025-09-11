@@ -1200,50 +1200,41 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 
 					float inputVal = 0.0;
 					FVector velocity, speeds;
-					speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
-					//GetSmoothedVelocity(drone, speeds);
-
-					bool zeroForward = false;
+					//speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
+					GetSmoothedVelocity(drone, velocity);
 
 					// Forward and backward
 					if (buttons & IN_FORWARD)
 						inputVal = 1.0;
 					else if (buttons & IN_BACK) // Forward takes priority
 						inputVal = -1.0;
-					else
-						zeroForward = true;
 
-					OnDroneMoveForward(drone, inputVal, speeds, velocity, maxSpeed, zeroForward);
+					OnDroneMoveForward(drone, inputVal, speeds);
 
 					inputVal = 0.0;
-
-					bool zeroRight = false;
 
 					// Left and right
 					if (buttons & IN_MOVERIGHT)
 						inputVal = 1.0;
 					else if (buttons & IN_MOVELEFT) // Right takes priority
 						inputVal = -1.0;
-					else
-						zeroRight = true;
 
-					OnDroneMoveRight(drone, inputVal, speeds, velocity, maxSpeed, zeroRight);
+					OnDroneMoveRight(drone, inputVal, speeds);
 
 					inputVal = 0.0;
 
-					bool zeroUp = false;
 					// Up and down
 					if (buttons & IN_JUMP)
 						inputVal = 1.0;
 					else if (buttons & IN_DUCK)
 						inputVal = -1.0;
-					else
-						zeroUp = true;
 
-					OnDroneMoveUp(drone, inputVal, speeds, velocity, maxSpeed, zeroUp);
-
-					drone.SetInputVelocity(speeds);
-					//PrintCenterTextAll("Drone Vel: %.1f, %.1f, %.1f", velocity.X, velocity.Y, velocity.Z);
+					OnDroneMoveUp(drone, inputVal, speeds);
+					
+					if (velocity.Length() < maxSpeed)
+					{
+						velocity.Add(speeds);
+					}
 
 					FRotator viewAngles;
 					viewAngles = client.GetEyeAngles();
@@ -1289,8 +1280,24 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 	if (!drone.Stunned)
 	{
 		// Clamp drone overall speed.
-		velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
-		velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
+		//velocity.X = FMath.ClampFloat(velocity.X, -1.0 * maxSpeed, maxSpeed);
+		//velocity.Y = FMath.ClampFloat(velocity.Y, -1.0 * maxSpeed, maxSpeed);
+
+		// Passive braking
+		float braking = drone.Deceleration;
+		velocity.Scale(braking);
+
+		FVector xyvel;
+		xyvel = velocity;
+		xyvel.Z = 0.0;
+		if (xyvel.Length() >= maxSpeed)
+		{
+			float xyspeed = xyvel.Length();
+			float mod = maxSpeed / xyspeed;
+			xyvel.Scale(mod);
+			velocity.X = xyvel.X;
+			velocity.Y = xyvel.Y;
+		}
 
 		// Drones will passively counteract gravity; hover drones will only do this when close to the ground
 		if (drone.MoveType == MoveType_Hover)
@@ -1300,7 +1307,7 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 
 			if (distance <= maxheight)
 			{
-				float minforce = 6.0;
+				float minforce = 0.5;
 				float force = minforce;
 				float maxforce = drone.HoverIntensity;
 				float percentage = 1.0 - (distance / maxheight);
@@ -1316,7 +1323,7 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 		}
 		else
 		{
-			velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
+			//velocity.Z = FMath.ClampFloat(velocity.Z, -1.0 * maxSpeed, maxSpeed);
 			velocity.Z += 12.0;
 		}
 
@@ -1339,6 +1346,7 @@ void SimulateDrone(ADrone drone, FVector velocity, float maxSpeed, bool legacy =
 	}
 }
 
+/*
 bool InclineTooSteep(ADrone drone)
 {
 	FRotator rotation;
@@ -1351,6 +1359,7 @@ bool InclineTooSteep(ADrone drone)
 
 	return false;
 }
+*/
 
 float GetDistanceToGround(ADrone drone)
 {
