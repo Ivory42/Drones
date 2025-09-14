@@ -823,14 +823,20 @@ bool FilterDrone(int entity, int mask, int exclude)
 Action OnDroneOverlap(int droneId, int otherId)
 {
 	// Push players away to prevent them from getting stuck
-	FObject drone;
+	FObject droneEnt;
 	FClient client;
 
-	drone = ConstructObject(droneId);
+	droneEnt = ConstructObject(droneId);
 	client = ConstructClient(otherId);
 
-	if (client.Valid())
+	ADrone drone = view_as<ADrone>(FEntityStatics.GetEntity(droneEnt));
+	if (drone && GetPilotSeat(drone).Occupied && client.Valid())
 	{
+		if (drone.Team == view_as<TFTeam>(client.GetTeam()))
+		{
+			return Plugin_Continue;
+		}
+
 		FVector clientPos, dronePos, pushDir;
 		clientPos = client.GetPosition();
 		clientPos.Z += 60.0;
