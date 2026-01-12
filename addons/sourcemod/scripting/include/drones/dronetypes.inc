@@ -25,8 +25,10 @@ enum EProjType
 
 	DroneProj_Laser, // Pomson projectile
 
-	// Bombs
-	DroneProj_Bomb, // Default bomb projectile - detonates on a fuse timer that is activated upon being spawned
+	DroneProj_Cannon, // Loose cannon
+
+	// Bombs - non functional
+	DroneProj_Bomb = 100, // Default bomb projectile - detonates on a fuse timer that is activated upon being spawned
 
 	DroneProj_BombDelayed, // Fuse timer starts after touching a surface
 
@@ -45,6 +47,8 @@ enum EMoveType
 	MoveType_None, // Drone cannot move. Use this to make turret drones. "drone_no_movement"
 
 	MoveType_Physics, // Acts as a physics prop normally would. Similar to rollermines.
+
+	MoveType_Physics_NoMovement, // Physics Prop that cannot move. Useful for turrets that can still be knocked around
 
 	MoveType_Custom // Custom movetype if defining logic in a sub plugin. Defined in configs as "drone_custom"
 };

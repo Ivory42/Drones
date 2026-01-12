@@ -1030,8 +1030,10 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 
 	Call_PushCell(drone);
 	Call_PushArray(attacker, sizeof FObject);
+	Call_PushArray(inflictor, sizeof FObject);
 	Call_PushFloatRef(forwardDamage);
 	Call_PushCellRef(forwardDmgType);
+	Call_PushCell(weapon.Get());
 
 	Call_Finish(result);
 
@@ -1201,53 +1203,56 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 						buttons &= ~IN_ATTACK2;
 					}
 
-					// Drone movement - If we have a speed override set, utilize this instead of our max speed
-					float maxSpeed = drone.SpeedOverride > 0.0 ? drone.SpeedOverride : drone.MaxSpeed;
-
-					float inputVal = 0.0;
-					FVector velocity, speeds;
-					//speeds = drone.GetInputVelocity(); // velocity being invoked by the pilot; input speeds in each direction
-					GetSmoothedVelocity(drone, velocity);
-
-					// Forward and backward
-					if (buttons & IN_FORWARD)
-						inputVal = 1.0;
-					else if (buttons & IN_BACK) // Forward takes priority
-						inputVal = -1.0;
-
-					OnDroneMoveForward(drone, inputVal, speeds);
-
-					inputVal = 0.0;
-
-					// Left and right
-					if (buttons & IN_MOVERIGHT)
-						inputVal = 1.0;
-					else if (buttons & IN_MOVELEFT) // Right takes priority
-						inputVal = -1.0;
-
-					OnDroneMoveRight(drone, inputVal, speeds);
-
-					inputVal = 0.0;
-
-					// Up and down
-					if (buttons & IN_JUMP)
-						inputVal = 1.0;
-					else if (buttons & IN_DUCK)
-						inputVal = -1.0;
-
-					OnDroneMoveUp(drone, inputVal, speeds);
-					
-					if (velocity.Length() < maxSpeed)
+					if (drone.MoveType != MoveType_Physics_NoMovement)
 					{
-						velocity.Add(speeds);
+
+						// Drone movement - If we have a speed override set, utilize this instead of our max speed
+						float maxSpeed = drone.SpeedOverride > 0.0 ? drone.SpeedOverride : drone.MaxSpeed;
+
+						float inputVal = 0.0;
+						FVector velocity, speeds;
+						GetSmoothedVelocity(drone, velocity);
+
+						// Forward and backward
+						if (buttons & IN_FORWARD)
+							inputVal = 1.0;
+						else if (buttons & IN_BACK) // Forward takes priority
+							inputVal = -1.0;
+
+						OnDroneMoveForward(drone, inputVal, speeds);
+
+						inputVal = 0.0;
+
+						// Left and right
+						if (buttons & IN_MOVERIGHT)
+							inputVal = 1.0;
+						else if (buttons & IN_MOVELEFT) // Right takes priority
+							inputVal = -1.0;
+
+						OnDroneMoveRight(drone, inputVal, speeds);
+
+						inputVal = 0.0;
+
+						// Up and down
+						if (buttons & IN_JUMP)
+							inputVal = 1.0;
+						else if (buttons & IN_DUCK)
+							inputVal = -1.0;
+
+						OnDroneMoveUp(drone, inputVal, speeds);
+						
+						if (velocity.Length() < maxSpeed)
+						{
+							velocity.Add(speeds);
+						}
+
+						FRotator viewAngles;
+						viewAngles = client.GetEyeAngles();
+						
+						OnDroneAimChanged(viewAngles, seat, drone);
+
+						SimulateDrone(drone, velocity, maxSpeed);
 					}
-
-					FRotator viewAngles;
-					viewAngles = client.GetEyeAngles();
-					
-					OnDroneAimChanged(viewAngles, seat, drone);
-
-					SimulateDrone(drone, velocity, maxSpeed);
 				}
 			}
 
@@ -1259,6 +1264,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 		FDroneAI ai = FDroneAIStatics.GetSeatController(seat);
 		if (ai)
 		{
+			//PrintToConsoleAll("Simulate seat %x with controller %x", seat, ai);
 			SimulateController(ai, seat, drone);
 		}
 	}

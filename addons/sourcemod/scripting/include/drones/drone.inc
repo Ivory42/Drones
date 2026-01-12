@@ -33,6 +33,13 @@ enum struct FDroneComponents
 	}
 }
 
+enum struct FDroneFireParams
+{
+	FVector Start;
+	FVector End;
+	FRotator Angle;
+}
+
 methodmap ADrone < AComponent
 {
 	public FDroneComponents GetComponents()

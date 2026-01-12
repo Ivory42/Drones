@@ -52,6 +52,10 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		SetVariantString(attachment);
 		weapon.GetObject().Input("SetParentAttachment");
 
+		FVector modeloffset;
+		modeloffset = Vector_GetFromKV(kv, "weapon_offset");
+		TeleportEntity(weapon.Get(), modeloffset.ToFloat());
+
 		SDKHook(weapon.Get(), SDKHook_OnTakeDamage, OnComponentDamaged);
 
 		weapon.Ammo = kv.GetNum("ammo_loaded", -1);
@@ -72,6 +76,10 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.Fixed = view_as<bool>(kv.GetNum("fixed"));
 		weapon.ProjPerShot = kv.GetNum("bullets_per_shot", 1);
 		weapon.AILeadTargets = view_as<bool>(kv.GetNum("ai_predict_targets", 0));
+
+		FRotator defangle;
+		defangle = Rotator_GetFromKV(kv, "default_angle");
+		weapon.SetDefaultAngle(defangle);
 
 		if (weapon.Type == WeaponType_Projectile)
 		{
@@ -239,8 +247,13 @@ void SetStringValues(ADroneWeapon weapon, KeyValues kv)
 void DroneFireGun(ADrone drone, ADroneWeapon weapon, ADronePlayer player)
 {
 	FVector start, end;
-	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, player.GetEyeAngles());
+	FDroneSeat seat = weapon.Seat;
+
+	FDroneFireParams params;
+	params = GetDroneFireParams(drone, weapon, player.GetEyeAngles(), seat);
+
+	start = params.Start;
+	end = params.End;
 
 	// Now fire our bullets
 	int bullets = weapon.ProjPerShot;
@@ -314,8 +327,14 @@ bool FilterIgnoreAll(int entity, int mask, any data)
 void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, ADronePlayer player)
 {
 	FVector start, end;
-	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, player.GetEyeAngles());
+	FDroneSeat seat = weapon.Seat;
+
+	FDroneFireParams params;
+	params = GetDroneFireParams(drone, weapon, player.GetEyeAngles(), seat);
+
+	start = params.Start;
+	end = params.End;
+
 
 	// Now fire our projectiles
 	int projectiles = weapon.ProjPerShot;
@@ -348,6 +367,7 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 			case DroneProj_Energy: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
 			case DroneProj_Sentry: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
 			case DroneProj_Grenade: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Cannon: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, true);
 			case DroneProj_Impact: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
 			case DroneProj_Orb: CreateOrb(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 			case DroneProj_Laser: CreateLaser(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
@@ -449,8 +469,12 @@ void DestroyWeapon(FDroneWeapon weapon, FDrone drone)
 void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 {
 	FVector start, end;
-	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+	FDroneSeat seat = weapon.Seat;
+	FDroneFireParams params;
+	params = GetDroneFireParams(drone, weapon, ai.GetViewAngle(), seat);
+
+	start = params.Start;
+	end = params.End;
 
 	// Now fire our bullets
 	int bullets = weapon.ProjPerShot;
@@ -514,8 +538,12 @@ void DroneAIFireGun(ADrone drone, ADroneWeapon weapon, FDroneAI ai)
 void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, FDroneAI ai)
 {
 	FVector start, end;
-	start = GetCameraOffset(drone);
-	end = GetDroneAimPosition(drone, ai.GetViewAngle());
+	FDroneSeat seat = weapon.Seat;
+	FDroneFireParams params;
+	params = GetDroneFireParams(drone, weapon, ai.GetViewAngle(), seat);
+
+	start = params.Start;
+	end = params.End;
 
 	// Now fire our projectiles
 	int projectiles = weapon.ProjPerShot;
@@ -558,6 +586,7 @@ void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjTyp
 			case DroneProj_Energy: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
 			case DroneProj_Sentry: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
 			case DroneProj_Grenade: CreateGrenade(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Cannon: CreateGrenade(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, true);
 			case DroneProj_Impact: CreateRocket(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
 			case DroneProj_Orb: CreateOrb(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
 			case DroneProj_Laser: CreateLaser(weapon, owner, spawn, weapon.Damage, view_as<int>(drone.Team), angle);
@@ -569,6 +598,13 @@ void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjTyp
 FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 {
 	FTransform muzzle;
+	muzzle.Position = weapon.GetPosition();
+	muzzle.Rotation = weapon.GetAngles();
+	muzzle.Rotation.Yaw = weapon.GetMount().GetAngles().Yaw;
+
+	muzzle.Position = FMath.OffsetVector(muzzle.Position, muzzle.Rotation, weapon.GetObjects().ProjOffset);
+	return muzzle.Position;
+	/*
 	muzzle.Position = drone.GetPosition();
 	muzzle.Position.Add(weapon.GetMount().GetRelativePosition());
 	muzzle.Position.Add(weapon.GetRelativePosition());
@@ -589,6 +625,7 @@ FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 	offset.Z = 0.0;
 	muzzle.Position = FMath.OffsetVector(muzzle.Position, difference, offset);
 	return muzzle.Position;
+	*/
 }
 
 void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false)
@@ -612,7 +649,7 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 	}
 }
 
-void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, bool cannon = false)
 {
 	ADroneGrenade grenade = view_as<ADroneGrenade>(FEntityStatics.CreateEntity("tf_projectile_pipe", owner, "DroneComponents.DroneGrenadeEntity"));
 	if (grenade)
@@ -624,6 +661,11 @@ void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spaw
 
 		FEntityStatics.FinishSpawningEntity(grenade, spawn);
 		grenade.WeaponLauncher = weapon;
+
+		if (cannon) // loose cannon
+		{
+			grenade.SetProp(Prop_Send, "m_iType", 3);
+		}
 
 		grenade.FireProjectile(direction, weapon.ProjectileSpeed);
 	}
@@ -763,11 +805,46 @@ bool WeaponFiresGrenades(ADroneWeapon weapon)
 	if (weapon.Type == WeaponType_Projectile)
 	{
 		ADroneProjectileWeapon projLauncher = view_as<ADroneProjectileWeapon>(weapon);
-		if (projLauncher.ProjType == DroneProj_Bomb || projLauncher.ProjType == DroneProj_Grenade)
+		switch (projLauncher.ProjType)
 		{
-			return true;
+			case DroneProj_Bomb, DroneProj_Cannon, DroneProj_Grenade: return true;
 		}
 	}
 
 	return false;
+}
+
+FDroneFireParams GetDroneFireParams(ADrone drone, ADroneWeapon weapon, FRotator desiredAngle, FDroneSeat seat = null)
+{
+	FDroneFireParams params;
+
+	// Add angle constraints
+	FRotator weaponDefAngle, angleAdd;
+	weaponDefAngle = weapon.GetDefaultAngle();
+	angleAdd = weaponDefAngle;
+	angleAdd.Pitch += drone.GetAngles().Pitch;
+	angleAdd.Yaw += drone.GetAngles().Yaw;
+	
+	if (weapon.MaxPitch > 0.0)
+	{
+		float maxpitch = angleAdd.Pitch + weapon.MaxPitch;
+		desiredAngle.Pitch = FMath.ClampFloat(desiredAngle.Pitch, -maxpitch, maxpitch);
+	}
+	if (weapon.MaxYaw > 0.0)
+	{
+		float maxyaw = angleAdd.Yaw + weapon.MaxYaw;
+		desiredAngle.Yaw = FMath.ClampFloat(desiredAngle.Yaw, -maxyaw, maxyaw);
+	}
+
+	if (seat)
+	{
+		params.Start = seat.GetCameraOffset();
+	}
+	else
+	{
+		params.Start = GetCameraOffset(drone);
+	}
+	params.End = GetDroneAimPosition(drone, desiredAngle, seat);
+
+	return params;
 }

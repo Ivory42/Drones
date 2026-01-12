@@ -284,7 +284,7 @@ FRotator InterpRotation(FRotator current, FRotator target, float deltaTime, floa
 
 void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 {
-	if (!drone || !drone.Valid() || !drone.IsDrone || drone.MoveType == MoveType_Physics)
+	if (!drone || !drone.Valid() || !drone.IsDrone || drone.MoveType == MoveType_Physics || drone.MoveType == MoveType_Physics_NoMovement)
 		return;
 
 	if (drone.MoveType == MoveType_Hover)
@@ -301,6 +301,17 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 	playerAngles = desiredAngle;
 
 	//int droneId = drone.Get();
+
+	// Update our camera rotation
+	FObject camera;
+	camera = seat.GetCamera();
+	if (camera.Valid())
+	{
+		FRotator difference;
+		difference = SubtractRotators(playerAngles, currentAngle);
+
+		camera.SetAngles(difference);
+	}
 
 	switch (seat.Type)
 	{
@@ -324,7 +335,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 					{
 						desiredAngle.Roll = currentAngle.Roll;
 					}
-					else
+					else if (drone.HeloChangeRoll)
 					{
 						desiredAngle.Roll = movementRot.Roll;
 					}
@@ -365,17 +376,6 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				FVector velocity;
 				GetSmoothedVelocity(drone, velocity);
 				TeleportEntity(drone.Get(), NULL_VECTOR, currentAngle.ToFloat(), velocity.ToFloat());
-
-				// Update our camera rotation
-				FObject camera;
-				camera = drone.GetCamera();
-				if (camera.Valid())
-				{
-					FRotator difference;
-					difference = SubtractRotators(playerAngles, currentAngle);
-
-					camera.SetAngles(difference);
-				}
 			}
 			if (seat.HasWeapon())
 			{

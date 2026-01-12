@@ -118,12 +118,12 @@ public Action CD2_OnWeaponFire(ADrone drone, ADronePlayer gunner, ADroneWeapon w
 				FDroneAI controller = FDroneAIStatics.GetSeatController(seat);
 				if (controller)
 				{
-					aimPos = GetDroneAimPosition(drone, controller.GetViewAngle(), medigun.BeamRange);
+					aimPos = GetDroneAimPosition(drone, controller.GetViewAngle(), seat, medigun.BeamRange);
 				}
 			}
 			else
 			{
-				aimPos = GetDroneAimPosition(drone, gunner.GetEyeAngles(), medigun.BeamRange);
+				aimPos = GetDroneAimPosition(drone, gunner.GetEyeAngles(), seat, medigun.BeamRange);
 			}
 
 			FRayTraceSingle trace = new FRayTraceSingle(weapon.GetPosition(), aimPos, MASK_SHOT, DroneWeaponTrace, drone);

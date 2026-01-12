@@ -167,7 +167,7 @@ int Native_PlayerEnterDrone(Handle plugin, int args)
 
 	if (!seat.Occupied && !seat.AIControlled)
 	{
-		PlayerEnterVehicle(client, drone);
+		PlayerEnterVehicle(client, drone, seat);
 	}
 
 	return 0;

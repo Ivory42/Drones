@@ -245,6 +245,15 @@ methodmap ADroneWeapon < AComponent
 		public set(int value) { this.SetObjectProp("DroneWeapon.PerShot", value); }
 	}
 
+	public FRotator GetDefaultAngle()
+	{
+		return this.GetObjectPropRotator("DroneWeapon.DefaultAngles");
+	}
+	public void SetDefaultAngle(FRotator angle)
+	{
+		this.SetObjectPropRotator("DroneWeapon.DefaultAngles", angle);
+	}
+
 	// Returns the receiver object for this weapon
 	public FObject GetReceiver()
 	{
@@ -298,9 +307,9 @@ methodmap ADroneWeapon < AComponent
 		{
 			PrecacheSound(firesound);
 			if (this.Valid()) // Need to change this check
-				EmitSoundToAll(firesound, this.Get()); //emit from weapon if physical entity exists
+				EmitSoundToAll(firesound, this.Get(), SNDCHAN_AUTO, 90); //emit from weapon if physical entity exists
 			else
-				EmitSoundToAll(firesound, this.GetParent().Get()); //otherwise just emit from the drone
+				EmitSoundToAll(firesound, this.GetParent().Get(), SNDCHAN_AUTO, 90); //otherwise just emit from the drone
 		}
 	}
 	
@@ -692,12 +701,32 @@ methodmap FDroneSeat < StringMap
 	}
 	public void SetSeatPosition(FVector position) { this.SetArray("SeatAttachPoint", position, sizeof FVector); }
 
+	public FVector GetCameraOffset()
+	{
+		FVector offset;
+		this.GetArray("CameraOffset", offset, sizeof FVector);
+
+		return offset;
+	}
+	public void SetCameraOffset(FVector offset)
+	{
+		this.SetArray("CameraOffset", offset, sizeof FVector);
+	}
+
 	// Returns true if this seat has an active weapon
 	public bool HasWeapon()
 	{
 		if (this.Type == Seat_Passenger) // Passenger seats have no weapons
 			return false;
-
+		
+		if (this.ActiveWeapon)
+		{
+			//PrintToConsoleAll("%x has weapon %x", this, this.ActiveWeapon);
+		}
+		else
+		{
+			//PrintToConsoleAll("%x has no weapons!", this);
+		}
 		return (this.ActiveWeapon != null);
 	}
 
@@ -706,6 +735,10 @@ methodmap FDroneSeat < StringMap
 		if (this.AIControlled && this.AIOccupier)
 		{
 			delete this.AIOccupier;
+		}
+		if (this.GetCamera().Valid())
+		{
+			this.GetCamera().Kill();
 		}
 	}
 }

@@ -375,7 +375,7 @@ forward void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSea
  * @param client			Player entering the drone
  * @param seat				Seat being entered
  * 
- * @return Plugin_Handled to allow entering. Otherwise cannot enter.
+ * @return Plugin_Continue to allow entering. Otherwise cannot enter.
  */
 forward Action CD2_CanPlayerEnterDrone(ADrone drone, ADronePlayer client, FDroneSeat seat);
 
@@ -444,10 +444,11 @@ forward Action CD2_OnDroneDestroyed(ADrone drone, FObject attacker, float damage
  * @param attacker			Entity that damaged the drone, may be empty.
  * @param damage			Damage amount for the drone to receive
  * @param damagetype		Damage bits of the damgae dealt
+ * @param weaponId			Weapon entity dealing damage
  *
  * @return Plugin_Changed to update damage and damagetype, otherwise continue normally
  */
-forward Action CD2_OnDroneTakeDamage(ADrone drone, FObject attacker, float &damage, int& damagetype);
+forward Action CD2_OnDroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float &damage, int& damagetype, int weaponId);
 
 
 /**
@@ -550,6 +551,8 @@ stock EMoveType GetMoveType(const char[] movetype)
 		return MoveType_None;
 	else if (StrEqual(movetype, "drone_physics"))
 		return MoveType_Physics;
+	else if (StrEqual(movetype, "drone_physics_nomovement"))
+		return MoveType_Physics_NoMovement;
 	else if (StrEqual(movetype, "drone_custom"))
 		return MoveType_Custom;
 
@@ -623,10 +626,6 @@ Action KillBullet(Handle timer, int reference)
 
 	if (entity.Valid())
 	{
-		if (entity.Cast("prop_physics") || entity.Cast("prop_physics_multiplayer") || entity.Cast("prop_dynamic"))
-		{
-			PrintToChatAll("Bullet entity mismatched to %d", entity.Get());
-		}
 		entity.Kill();
 	}
 
@@ -654,16 +653,26 @@ stock FDroneSeat GetPilotSeat(ADrone drone)
 }
 
 // Gets the position the drone is aiming at, starting from the camera position
-stock FVector GetDroneAimPosition(ADrone drone, FRotator rotation, float range = 8000.0)
+stock FVector GetDroneAimPosition(ADrone drone, FRotator rotation, FDroneSeat seat = null, float range = 8000.0)
 {
 	FVector start, direction, end;
-	start = GetCameraOffset(drone);
+	if (seat)
+	{
+		start = seat.GetCameraOffset();
+		start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), start);
+		//PrintToChatAll("Offset: %.1f, %.1f, %.1f", start.X, start.Y, start.Z);
+	}
+	else
+	{
+		start = GetCameraOffset(drone);
+	}
 
 	direction = rotation.GetForwardVector();
 	direction.Scale(range);
 	direction.Add(start);
 
 	FRayTraceSingle trace = new FRayTraceSingle(start, direction, MASK_SHOT, DroneWeaponTrace, drone);
+	//trace.DebugTrace();
 	end = trace.GetEndPosition(); // Surface we are aiming at
 	delete trace;
 

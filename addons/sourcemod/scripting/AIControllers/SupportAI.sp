@@ -22,7 +22,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 				moveTick = true;
 			}
 			// First we check to see if we have a target, then move to them if they are too far
-			SimulateSupportFollow(support, drone, moveTick);
+			SimulateSupportFollow(support, drone, moveTick, seat);
 			if (!support.FollowTarget)
 			{
 				SimulateIdleNoFollow(support, drone, moveTick);
@@ -39,7 +39,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 			// Search for a target
 			if (!target)
 			{
-				ai.CurrentTarget = FindClosestTarget(ai, drone);
+				ai.CurrentTarget = FindClosestTarget(ai, drone, seat);
 			}
 			// Otherwise enter attack state if we can see our target. Support drones do not move towards their targets
 			else
@@ -51,7 +51,7 @@ void Support_SimulateIdle(FDroneAI ai, FDroneSeat seat, ADrone drone, bool think
 					ai.CurrentTarget = null;
 				}
 
-				if (CanSeeTarget(ai, drone, target))
+				if (CanSeeTarget(ai, drone, target, seat))
 				{
 					ChangeControllerState(ai, Controller_Attacking);
 				}
@@ -106,8 +106,8 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 				moveTick = true;
 			}
 
-			SimulateSupportFollow(support, drone, moveTick);
-			if (target && CanSeeTarget(support, drone, target))
+			SimulateSupportFollow(support, drone, moveTick, seat);
+			if (target && CanSeeTarget(support, drone, target, seat))
 			{
 				FRotator angleTowardsEnemy;
 				FVector vecTowardsEnemy;
@@ -136,10 +136,10 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 				if (ai.NextCombatCheckTime <= GetGameTime())
 				{
 					ai.NextCombatCheckTime = GetGameTime() + params.CombatTime;
-					target = FindClosestTarget(ai, drone);
+					target = FindClosestTarget(ai, drone, seat);
 				}
 
-				if (DroneInRange(ai, drone, target) && InFOV(drone, weapon, target, ai.GetControllerParams().AimFOV, false))
+				if (DroneInRange(ai, drone, target) && InFOV(ai, drone, weapon, target, ai.GetControllerParams().AimFOV, false))
 				{
 					if (!ai.InAttack && weapon.State == WeaponState_Ready)
 					{
@@ -172,7 +172,13 @@ void Support_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADroneWe
 
 		if (ai.InAttack)
 		{
-			if (!InFOV(drone, weapon, target, ai.GetControllerParams().AimFOV, false))
+			if (!target) // lost our target
+			{
+				ai.InAttack = false;
+				ChangeControllerState(ai, Controller_Idle);
+				ai.NextFireTime = GetGameTime() + params.BurstDelay;
+			}
+			else if (!InFOV(ai, drone, weapon, target, ai.GetControllerParams().AimFOV, false))
 			{
 				ai.InAttack = false;
 				ai.NextFireTime = GetGameTime() + params.BurstDelay;
@@ -283,13 +289,13 @@ void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDrone
 			support.FollowTarget = null;
 		}
 
-		if (support.FollowTarget && CanSeeTarget(support, drone, support.FollowTarget))
+		if (support.FollowTarget && CanSeeTarget(support, drone, support.FollowTarget, seat))
 		{
 			ChangeControllerState(ai, Controller_Idle); // We can see our target once again, go back to idle
 		}
 		else if (!support.FollowTarget) // Look for a new target while seeking
 		{
-			support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, false, true))
+			support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, seat, false, true))
 			if (support.FollowTarget)
 			{
 				ChangeControllerState(ai, Controller_Idle); // If we have no target and find a new target, immediately stop seeking
@@ -298,7 +304,7 @@ void Support_SimulatePursuing(FDroneAI ai, FDroneSeat seat, ADrone drone, FDrone
 	}
 }
 
-void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
+void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick, FDroneSeat seat)
 {
 	if (support.Stationary)
 	{
@@ -313,13 +319,13 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 			if (support.Owner && follow != support.Owner)
 			{
 				// Look if we can see our owner, if we can, move to them instead
-				if (CanSeeTarget(support, drone, support.Owner))
+				if (CanSeeTarget(support, drone, support.Owner, seat))
 				{
 					support.FollowTarget = support.Owner;
 				}
 			}
 		}
-		if (CanSeeTarget(support, drone, follow))
+		if (CanSeeTarget(support, drone, follow, seat))
 		{
 			// If we are too far from our target, move anyway. Otherwise, only move when we can
 			//PrintCenterTextAll("Drone distance = %.1f\nSupport Range = %.1f", follow.GetPosition().DistanceTo(drone.GetPosition()), support.SupportRange);
@@ -354,6 +360,6 @@ void SimulateSupportFollow(FSupportAI support, ADrone drone, bool moveTick)
 	}
 	else
 	{
-		support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, false, true)); // Follow teammates
+		support.FollowTarget = view_as<AClient>(FindClosestTarget(support, drone, seat, false, true)); // Follow teammates
 	}
 }

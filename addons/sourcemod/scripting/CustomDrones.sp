@@ -8,6 +8,7 @@
 GlobalForward DroneCreated;
 GlobalForward DroneEntered;
 GlobalForward DroneEnteredValid;
+GlobalForward DroneExitedValid;
 GlobalForward DroneExited;
 GlobalForward DroneRemoved;
 GlobalForward DroneDestroyed;
@@ -59,6 +60,7 @@ public void OnPluginStart()
 	DroneCreatedWeapon = new GlobalForward("CD2_OnWeaponCreated", ET_Ignore, Param_Any, Param_Any, Param_String, Param_Any); //drone, weapon, weapon plugin, config
 	DroneWeaponRemoved = new GlobalForward("CD2_OnWeaponRemoved", ET_Ignore, Param_Any, Param_String); //weapon, weaponname
 	DroneEntered = new GlobalForward("CD2_OnPlayerEnterDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone, client, seat, plugin, config
+	DroneExitedValid = new GlobalForward("CD2_CanPlayerExitDrone", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
 	DroneExited = new GlobalForward("CD2_OnPlayerExitDrone", ET_Ignore, Param_Any, Param_Any, Param_Any); //drone struct, client, seat, plugin, config
 	DroneRemoved = new GlobalForward("CD2_OnDroneRemoved", ET_Ignore, Param_Cell, Param_String); //drone, plugin
 	//DroneChangeWeapon = CreateGlobalForward("CD2_OnWeaponChanged", ET_Hook, Param_Cell, Param_Cell, Param_Any, Param_Cell, Param_String); //drone, owner, weapon, slot, plugin
@@ -66,7 +68,7 @@ public void OnPluginStart()
 	DroneAttack = new GlobalForward("CD2_OnWeaponFire", ET_Hook, Param_Any, Param_Any, Param_Any, Param_Any, Param_CellByRef, Param_String); //drone, gunner, weapon, ammo used, weapon name
 	DroneAIEnter = new GlobalForward("CD2_OnAIControlDrone", ET_Ignore, Param_Any, Param_Any, Param_Any);
 
-	DroneDamaged = new GlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_FloatByRef, Param_CellByRef);
+	DroneDamaged = new GlobalForward("CD2_OnDroneTakeDamage", ET_Hook, Param_Any, Param_Array, Param_Array, Param_FloatByRef, Param_CellByRef, Param_Cell);
 
 	DroneAIFindTarget = new GlobalForward("CD2_OnAIFindTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
 	DroneAITargetValid = new GlobalForward("CD2_OnAIValidateTarget", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
@@ -237,7 +239,7 @@ Action OnPlayerDeath(Event event, const char[] name, bool dBroad)
 
 		if (drone && drone.Valid())
 		{
-			PlayerExitVehicle(client, GetPlayerSeat(client, drone), drone);
+			PlayerExitVehicle(client, GetPlayerSeat(client, drone), drone, false);
 			//KillDrone(drone, drone.GetObject(), attacker, 0.0, drone.GetObject());
 			//ResetClientView(client);
 		}
@@ -708,6 +710,7 @@ void OnDroneTick(APersistentObject entity)
 					FDroneSeat seat = drone.Seats.Get(i);
 					if (seat && seat.Valid())
 					{
+						//PrintToConsoleAll("Seat = %x", seat);
 						SimulateSeat(seat, drone);
 					}
 				}
@@ -959,6 +962,10 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 			else if (StrEqual(type, "drone_damage_sparks"))
 			{
 				attachment = CreateDroneSparks(drone, config, attachpos);
+			}
+			else if (StrEqual(type, "drone_critical_point"))
+			{
+				
 			}
 
 			if (attachment)
@@ -1274,16 +1281,54 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 		}
 		else // Otherwise let's get the weapons allowed for this seat
 		{
-			//char indices[MAXWEAPONS+1][8];
-			//ExplodeString(weapons, ";", indices, sizeof indices, sizeof indices[]);
+			int totalweapons = drone.Weapons.Length;
+			char wepIndex[32][32];
+			ExplodeString(weapons, ";", wepIndex, sizeof wepIndex, sizeof wepIndex[]);
 
-			//for (int i = 1; i <= MaxWeapons; i++)
-			//	seat.WeaponIndex[i] = StringToInt(indices[i]);
+			ADroneWeapon weapon = null;
+			int index = -1;
+			seat.Weapons = new FComponentArray();
+			for (int i = 0; i < totalweapons; i++)
+			{
+				StringToIntEx(wepIndex[i], index);
+				if (strlen(wepIndex[i]) > 0 && index > -1)
+				{
+					weapon = drone.Weapons.Get(index);
+					if (weapon)
+					{
+						//PrintToChatAll("Adding weapon %x to seat %x", weapon, seat);
+						seat.Weapons.Push(weapon);
+						weapon.Seat = seat;
+					}
+				}
+			}
 		}
 
 		seat.ActiveWeaponIndex = 0;
 		seat.ActiveWeapon = seat.Weapons.Get(0); // Set active weapon to first index
 	}
+
+	// Setup seat camera
+	FVector cameraOffset;
+	if (seat.Type == Seat_Pilot) // Pilot seat uses the main drone camera
+	{
+		seat.SetCamera(drone.GetCamera());
+		cameraOffset = ConstructVector(drone.CameraDistance, 0.0, drone.CameraHeight);
+	}
+	else
+	{
+		FDroneComponents seatComps;
+		cameraOffset = Vector_GetFromKV(kv, "camera_offset");
+		CreateDroneCamera(drone, cameraOffset, seatComps);
+
+		seat.SetCamera(seatComps.Camera);
+	}
+	//PrintToChatAll("Camera Offset: %.1f, %.1f, %.1f", cameraOffset.X, cameraOffset.Y, cameraOffset.Z);
+	seat.SetCameraOffset(cameraOffset);
+
+	FVector seatpos;
+	seatpos = Vector_GetFromKV(kv, "seat_position");
+	seat.SetSeatPosition(seatpos);
 
 	seat.Occupied = false;
 	seat.AIControlled = false;
@@ -1300,22 +1345,35 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
  */
 void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, FWeapon weapon)
 {
-	ADronePlayer pilot = drone.Pilot;
-
 	if (!drone.Alive)
 	{
 		return;
 	}
 
-	if (pilot && pilot.Valid())
+	char name[64];
+	drone.GetInternalName(name, sizeof name);
+
+	Action action = Plugin_Continue;
+	Call_StartForward(DroneDestroyed);
+
+	Call_PushCell(drone);
+	Call_PushArray(attacker, sizeof FObject);
+	Call_PushFloat(damage);
+	Call_PushString(name);
+	
+	Call_Finish(action);
+
+	for (int i = 0; i < drone.Seats.Length; i++)
 	{
-		PlayerExitVehicle(pilot, GetPilotSeat(drone), drone, false);
-		TF2_RegeneratePlayer(pilot.Get());
-		SDKHooks_TakeDamage(pilot.Get(), inflictor.Get(), attacker.Get(), 900.0);
+		FDroneSeat seat = drone.Seats.Get(i);
+		if (seat && seat.Occupied && seat.Occupier)
+		{
+			PlayerExitVehicle(seat.Occupier, seat, drone, false);
+			TF2_RegeneratePlayer(seat.Occupier.Get());
+			SDKHooks_TakeDamage(seat.Occupier.Get(), inflictor.Get(), attacker.Get(), 900.0);
 
-		RequestFrame(RemoveLingeringWeapons); // Weapons seem to get created upon resupplying and not given to the player
-
-		// Need to loop through all seats and eject any other players
+			RequestFrame(RemoveLingeringWeapons); // Weapons seem to get created upon resupplying and not given to the player
+		}
 	}
 
 	if (weapon.Valid() && attacker.Valid() && inflictor.Valid())
@@ -1331,19 +1389,6 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 	FTransform spawn;
 	spawn.Position = drone.GetPosition();
 	CreateExplosion(0.0, 0.0, GetWorld(), drone.GetComponents().ExplodeParticle, drone.GetComponents().ExplodeSound, spawn);
-
-	char name[64];
-	drone.GetInternalName(name, sizeof name);
-
-	Action action = Plugin_Continue;
-	Call_StartForward(DroneDestroyed);
-
-	Call_PushCell(drone);
-	Call_PushArray(attacker, sizeof FObject);
-	Call_PushFloat(damage);
-	Call_PushString(name);
-	
-	Call_Finish(action);
 
 	if (action == Plugin_Continue)
 	{
@@ -1378,13 +1423,16 @@ Action DroneExplodeTimer(Handle timer, ADrone drone)
 void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool resupply = true)
 {
 	player.InDrone = false;
-	if (drone && resupply)
+	if (drone)
 	{
 		drone.Pilot = null;
-		seat = GetPilotSeat(drone);
 		seat.Occupier = null;
 		seat.Occupied = false;
-		drone.Team = TFTeam_Unassigned;
+
+		if (seat.Type == Seat_Pilot)
+		{
+			drone.Team = TFTeam_Unassigned;
+		}
 	}
 	//seat.Occupied = false;
 	//seat.Occupier = null;
@@ -1430,16 +1478,22 @@ Action ResetPlayerHealth(Handle timer, ADronePlayer player)
 	return Plugin_Continue;
 }
 
-// Returns the seat the player is in. Only returns the pilot seat as of now.
+// Returns the seat the player is in.
 FDroneSeat GetPlayerSeat(ADronePlayer player, ADrone drone)
 {
 	if (drone.Seats && drone.Seats.Length)
 	{
-		return drone.Seats.Get(0); // Only looking for pilot seat for now
-	}
-
-	if (player)
-	{
+		for (int i = 0; i < drone.Seats.Length; i++)
+		{
+			FDroneSeat seat = drone.Seats.Get(i);
+			if (seat && seat.Occupied && seat.Occupier)
+			{
+				if (seat.Occupier == player)
+				{
+					return seat;
+				}
+			}
+		}
 	}
 
 	return null;
@@ -1466,18 +1520,30 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 	{
 		if(client.Valid() && client.Alive())
 		{
-			if (!player.InDrone && PlayerAimingAtDrone(player, drone))
+			FDroneSeat nearestSeat = null;
+			if (!player.InDrone && PlayerAimingAtDrone(player, drone, nearestSeat))
 			{
-				if (!GetPilotSeat(drone).Occupied)
+				if (!nearestSeat.Occupied)
 				{
-					PlayerEnterVehicle(player, drone);
+					PlayerEnterVehicle(player, drone, nearestSeat);
 				}
 				return Plugin_Handled;
 			}
 			else if (player.InDrone)
 			{
 				drone = player.GetDrone();
-				PlayerExitVehicle(player, GetPilotSeat(drone), drone);
+				Action action = Plugin_Continue;
+				Call_StartForward(DroneExitedValid);
+				Call_PushCell(drone);
+				Call_PushCell(player);
+				Call_PushCell(GetPlayerSeat(player, drone));
+
+				Call_Finish(action);
+
+				if (action == Plugin_Continue)
+				{
+					PlayerExitVehicle(player, GetPlayerSeat(player, drone), drone);
+				}
 				return Plugin_Handled;
 			}
 		}
@@ -1486,18 +1552,18 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 	return Plugin_Continue;
 }
 
-void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
+void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
 {
 	Action action = Plugin_Continue;
 	Call_StartForward(DroneEnteredValid);
 
-	Call_PushCell(player);
 	Call_PushCell(drone);
-	Call_PushCell(GetPilotSeat(drone));
+	Call_PushCell(player);
+	Call_PushCell(seat);
 
 	Call_Finish(action);
 
-	if (action != Plugin_Continue)
+	if (action > Plugin_Continue)
 	{
 		return;
 	}
@@ -1508,15 +1574,15 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 	drone.Team = player.Team;
 	
 	// Temp
-	GetPilotSeat(drone).Occupier = player;
-	GetPilotSeat(drone).Occupied = true;
-	GetPilotSeat(drone).AIControlled = false;
+	seat.Occupier = player;
+	seat.Occupied = true;
+	seat.AIControlled = false;
 
 	SetEntityRenderMode(player.Get(), RENDER_NONE);
 	RemoveWearables(player);
 	TF2_RemoveAllWeapons(player.Get());
 
-	SetClientViewEntity(player.Get(), drone.GetCamera().Get());
+	SetClientViewEntity(player.Get(), seat.GetCamera().Get());
 
 	SDKHook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
 
@@ -1524,12 +1590,12 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone)
 
 	Call_PushCell(drone);
 	Call_PushCell(player);
-	Call_PushCell(GetPilotSeat(drone));
+	Call_PushCell(seat);
 
 	Call_Finish();
 }
 
-bool PlayerAimingAtDrone(AClient client, ADrone &currentDrone)
+bool PlayerAimingAtDrone(AClient client, ADrone& currentDrone, FDroneSeat& currentSeat)
 {
 	FVector startPos, endPos;
 	startPos = client.GetEyePosition();
@@ -1548,8 +1614,31 @@ bool PlayerAimingAtDrone(AClient client, ADrone &currentDrone)
 		ADrone drone = view_as<ADrone>(FEntityStatics.GetEntity(trace.GetHitEntity()));
 		if (drone && drone.IsDrone && drone.Seats)
 		{
-			currentDrone = drone;
-			return true;
+			// Check if we are close enough to a seat
+			FRotator droneAngle;
+			FVector seatPos, dronePos;
+			droneAngle = drone.GetAngles();
+			dronePos = drone.GetPosition();
+			for (int i = 0; i < drone.Seats.Length; i++)
+			{
+				FDroneSeat seat = drone.Seats.Get(i);
+				if (seat && !seat.Occupied)
+				{
+					seatPos = seat.GetSeatPosition();
+					seatPos = FMath.OffsetVector(dronePos, droneAngle, seatPos);
+
+					if (seatPos.DistanceTo(startPos) <= 100.0)
+					{
+						currentSeat = seat;
+						break;
+					}
+				}
+			}
+			if (currentSeat) // we found a nearby seat
+			{
+				currentDrone = drone;
+				return true;
+			}
 		}
 	}
 
