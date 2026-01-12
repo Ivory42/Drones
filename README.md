@@ -4,6 +4,12 @@
 
 This rewrite completely changes everything about the codebase with several QoL changes. Setting up basic drones can now be done without any other plugins; weapons now have native functionality and do not need to be handled in sub-plugins anymore. A new `WeaponType_Custom` specification has been added to have weapons function as they did before.
 
+### This plugin requires another library/plugin of mine (objectmanager) which is not entirely finished. I have included the compiled plugin with the release, and I plan to have a separate repository for it once it's in a better state.
+
+## Video demonstration
+
+[![[TF2] Drone/Vehicle Showcase](https://img.youtube.com/vi/171LxhfiWN8/0.jpg)](https://www.youtube.com/watch?v=171LxhfiWN8 "[TF2] Drone/Vehicle Showcase")
+
 Spawnable drones that can be piloted by players. Example HL2 Hunter Chopper config/plugin provided. Drone plugins are placed under `plugins/drones/`.
 
 ## Commands
@@ -42,7 +48,7 @@ Spawnable drones that can be piloted by players. Example HL2 Hunter Chopper conf
 ### Physics Based (WIP)
   - Drones utilize a `phys_thruster` for movement
 
-## Developers
+## Developers (The following is outdated; updated info can be found in the referenced include)
 This plugin comes with several forwards and natives to use with other plugins. Refer to `scripting/include/customdrones.inc` for more detailed explanations.
 
 ### Natives (Outdated)
@@ -65,10 +71,10 @@ This plugin comes with several forwards and natives to use with other plugins. R
 
 
 ## Known Issues
-  - Players may not properly die when the piloted drone is destroyed
+  - Players may not properly die when the piloted drone is destroyed, and will resupply with no items
   - Using a kill bind while in a drone forces you to respawn
 
 
-## Planned Featurs
+## Planned Features
   - Native support abilities (healing, ammo regeneration, etc)
   - Multiple seats on drones for passengers and additional weapons
