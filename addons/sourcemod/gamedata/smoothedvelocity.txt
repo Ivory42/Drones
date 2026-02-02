@@ -1,0 +1,15 @@
+"Games"
+{
+	"tf"
+	{
+		"Offsets"
+		{
+			"GetSmoothedVelocity"
+			{
+				"linux"    	"147"
+				"mac"    	"147"
+				"windows"       "146"
+			}
+		}
+	}
+}
