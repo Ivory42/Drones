@@ -1715,6 +1715,7 @@ bool PlayerAimingAtDrone(AClient client, ADrone& currentDrone, FDroneSeat& curre
 			}
 		}
 	}
+	delete trace;
 
 	return false;
 }
