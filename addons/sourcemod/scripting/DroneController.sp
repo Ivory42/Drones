@@ -505,6 +505,9 @@ void UpdateDroneWeaponAngles(FRotator current, FRotator desired, FRotator droneA
 	difference = SubtractRotators(desired, droneAngle);
 
 	newAngle = FMath.InterpRotatorTo(current, difference, GetGameFrameTime(), weapon.TurnRate);
+	newAngle.Roll = 0.0;
+
+	NormalizeAngles(newAngle);
 
 	// Let's determine how to use this new angle
 	if (weapon.ComplexAngles)
@@ -527,6 +530,20 @@ void UpdateDroneWeaponAngles(FRotator current, FRotator desired, FRotator droneA
 	}
 	else if (weapon.GetReceiver().Valid()) // Otherswise apply all angles onto the receiver
 		weapon.GetReceiver().SetAngles(newAngle);
+
+	FRotator relative;
+	relative = weapon.GetPropRotator(Prop_Send, "m_angRotation");
+
+	if (weapon.MaxYaw >= 0.0 || weapon.MinYaw >= 0.0)
+	{
+		relative.Yaw = FMath.ClampFloat(relative.Yaw, -weapon.MinYaw, weapon.MaxYaw);	
+	}
+	if (weapon.MaxPitch >= 0.0 || weapon.MinPitch >= 0.0)
+	{
+		relative.Pitch = FMath.ClampFloat(relative.Pitch, -weapon.MaxPitch, weapon.MinPitch);
+	}
+
+	weapon.GetReceiver().SetPropRotator(Prop_Send, "m_angRotation", relative);
 	
 }
 

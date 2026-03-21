@@ -208,16 +208,54 @@ methodmap ADroneWeapon < AComponent
 		public set(int value) { this.SetObjectProp("DroneWeapon.MuzzleID", value); }
 	}
 
+	property bool Disabled
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.Disabled"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.Disabled", value); }
+	}
+
 	property float MaxPitch // Max pitch this weapon can aim at (relative to drone)
 	{
 		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxPitchAngle"); }
 		public set(float pitch) { this.SetObjectPropFloat("DroneWeapon.MaxPitchAngle", pitch); }
+	}
+	property float MinPitch // Min pitch this weapon can aim at (relative to drone)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MinPitchAngle"); }
+		public set(float pitch) { this.SetObjectPropFloat("DroneWeapon.MinPitchAngle", pitch); }
+	}
+
+	property float MaxFirePitch // Max pitch this weapon can fire at (relative to weapon)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxPitchFireAngle"); }
+		public set(float pitch) { this.SetObjectPropFloat("DroneWeapon.MaxPitchFireAngle", pitch); }
+	}
+	property float MinFirePitch // Min pitch this weapon can fire at (relative to weapon)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MinPitchFireAngle"); }
+		public set(float pitch) { this.SetObjectPropFloat("DroneWeapon.MinPitchFireAngle", pitch); }
 	}
 
 	property float MaxYaw // Max yaw value this weapon can aim at (relative to drone)
 	{
 		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxYawAngle"); }
 		public set(float yaw) { this.SetObjectPropFloat("DroneWeapon.MaxYawAngle", yaw); }
+	}
+	property float MinYaw // Min yaw value this weapon can aim at (relative to drone)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MinYawAngle"); }
+		public set(float yaw) { this.SetObjectPropFloat("DroneWeapon.MinYawAngle", yaw); }
+	}
+
+	property float MaxFireYaw // Max yaw value this weapon can fire at (relative to weapon)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MaxYawFireAngle"); }
+		public set(float yaw) { this.SetObjectPropFloat("DroneWeapon.MaxYawFireAngle", yaw); }
+	}
+	property float MinFireYaw // Min yaw value this weapon can fire at (relative to weapon)
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.MinYawFireAngle"); }
+		public set(float yaw) { this.SetObjectPropFloat("DroneWeapon.MinYawFireAngle", yaw); }
 	}
 
 	property bool Fixed // If true, this weapon will not rotate with the player's view angles
@@ -312,6 +350,16 @@ methodmap ADroneWeapon < AComponent
 				EmitSoundToAll(firesound, this.GetParent().Get(), SNDCHAN_AUTO, 90); //otherwise just emit from the drone
 		}
 	}
+
+	public void DisableWeapon()
+	{
+		this.Disabled = true;
+	}
+
+	public void EnableWeapon()
+	{
+		this.Disabled = false;
+	}
 	
 	// Weapon tick event. Only used in core weapons plugin, do not call manually.
 	public void Simulate()
@@ -341,7 +389,7 @@ methodmap ADroneWeapon < AComponent
 	 */
 	public bool CanFire(bool force = false)
 	{
-		if (this.Drone.Stunned)
+		if (this.Drone.Stunned || this.Disabled)
 		{
 			return false;
 		}

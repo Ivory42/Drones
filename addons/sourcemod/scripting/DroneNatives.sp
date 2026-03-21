@@ -12,6 +12,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FDroneStatics.PlayerEnterDrone", Native_PlayerEnterDrone);
 	CreateNative("FDroneStatics.PlayerExitDrone", Native_PlayerExitDrone);
 	CreateNative("FDroneStatics.StunDrone", Native_StunDrone);
+	CreateNative("FDroneStatics.ToggleDroneInput", Native_DisableInput);
 	CreateNative("FDroneStatics.PhysicsExtensionLoaded", Native_Extension);
 
 	return APLRes_Success;
@@ -147,6 +148,8 @@ void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
 
 			controller.ControlledSeat = seat;
 			controller.Drone = drone;
+
+			UpdateDroneComponentColors(drone);
 		}
 
 		Call_StartForward(DroneAIEnter);
@@ -201,6 +204,29 @@ int Native_StunDrone(Handle plugin, int args)
 
 	drone.Stunned = true;
 	drone.StunnedUntilTime = stunEndAt;
+
+	return 0;
+}
+
+any Native_DisableInput(Handle plugin, int args)
+{
+	ADrone drone = view_as<ADrone>(GetNativeCell(1));
+	char input[32];
+	GetNativeString(2, input, sizeof input);
+	bool toggle = GetNativeCell(3);
+
+	if (StrContains(input, "right") != -1)
+	{
+		drone.DisableRightMovement = toggle;
+	}
+	else if (StrContains(input, "forward") != -1)
+	{
+		drone.DisableForwardMovement = toggle;
+	}
+	else if (StrContains(input, "up") != -1)
+	{
+		drone.DisableUpMovement = toggle;
+	}
 
 	return 0;
 }

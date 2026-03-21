@@ -1128,6 +1128,40 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 	if (client.Valid())
 	{
 		client.Inputs = buttons;
+
+		ADrone drone = null;
+		FDroneSeat seat = null;
+
+		if (PlayerAimingAtDrone(client, drone, seat))
+		{
+			client.SetObjectProp("DroneClient.LookingAtDrone", true);
+			char seattype[32];
+			switch (seat.Type)
+			{
+				case Seat_Pilot: FormatEx(seattype, sizeof seattype, "Pilot");
+				case Seat_Gunner: FormatEx(seattype, sizeof seattype, "Gunner");
+				case Seat_Passenger: FormatEx(seattype, sizeof seattype, "Passenger");
+			}
+
+			char dronename[64];
+			drone.GetDisplayName(dronename, sizeof dronename);
+
+			char message[128];
+			FormatEx(message, sizeof message, "Press '%s' to enter %s seat of %s", "%inspect%", seattype, dronename);
+			if (client.GetObjectProp("DroneClient.UsingMinHud"))
+			{
+
+			}
+			else
+			{
+				FGameplayStatics.WriteGameText(client.GetClient(), message);
+			}
+		}
+		else if (client.GetObjectProp("DroneClient.LookingAtDrone") && client.GetObjectProp("DroneClient.UsingMinHud"))
+		{
+			client.SetObjectProp("DroneClient.LookingAtDrone", false);
+			PrintCenterText(client.Get(), " ");
+		}
 	}
 	return Plugin_Continue;
 }
@@ -1214,32 +1248,50 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 						GetSmoothedVelocity(drone, velocity);
 
 						// Forward and backward
-						if (buttons & IN_FORWARD)
-							inputVal = 1.0;
-						else if (buttons & IN_BACK) // Forward takes priority
-							inputVal = -1.0;
+						if (!drone.DisableForwardMovement)
+						{
+							if (buttons & IN_FORWARD)
+								inputVal = 1.0;
+							else if (buttons & IN_BACK) // Forward takes priority
+								inputVal = -1.0;
 
-						OnDroneMoveForward(drone, inputVal, speeds);
+							if (drone.MoveType == MoveType_Fly) // Flying drones cannot fly below a specified speed
+							{
+								float minspeed = drone.MinSpeed;
+								if (velocity.Length() <= minspeed)
+								{
+									inputVal = 1.0;
+								}
+							}
+
+							OnDroneMoveForward(drone, inputVal, speeds);
+						}
 
 						inputVal = 0.0;
 
-						// Left and right
-						if (buttons & IN_MOVERIGHT)
-							inputVal = 1.0;
-						else if (buttons & IN_MOVELEFT) // Right takes priority
-							inputVal = -1.0;
+						if (!drone.DisableRightMovement)
+						{
+							// Left and right
+							if (buttons & IN_MOVERIGHT)
+								inputVal = 1.0;
+							else if (buttons & IN_MOVELEFT) // Right takes priority
+								inputVal = -1.0;
 
-						OnDroneMoveRight(drone, inputVal, speeds);
+							OnDroneMoveRight(drone, inputVal, speeds);
+						}
 
 						inputVal = 0.0;
 
-						// Up and down
-						if (buttons & IN_JUMP)
-							inputVal = 1.0;
-						else if (buttons & IN_DUCK)
-							inputVal = -1.0;
+						if (!drone.DisableUpMovement)
+						{
+							// Up and down
+							if (buttons & IN_JUMP)
+								inputVal = 1.0;
+							else if (buttons & IN_DUCK)
+								inputVal = -1.0;
 
-						OnDroneMoveUp(drone, inputVal, speeds);
+							OnDroneMoveUp(drone, inputVal, speeds);
+						}
 						
 						if (velocity.Length() < maxSpeed)
 						{

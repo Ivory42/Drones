@@ -36,11 +36,22 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		{
 			components.Parent = drone;
 		}
-		components.ProjOffset = Vector_GetFromKV(kv, "proj_offset");
+
+		bool muzzlesUseOffset = false;
+		char muzzleoffsets[64];
+		kv.GetString("proj_offset", muzzleoffsets, sizeof muzzleoffsets);
+		if (StrContains(muzzleoffsets, ";") == -1)
+		{
+			components.ProjOffset = Vector_GetFromKV(kv, "proj_offset");
+		}
 
 		char attachment[64], muzzle[64];
 		kv.GetString("attachment", attachment, sizeof attachment);
 		kv.GetString("muzzle", muzzle, sizeof muzzle);
+		if (strlen(muzzle) == 0)
+		{
+			muzzlesUseOffset = true
+		}
 		FormatEx(components.MuzzleAttachment, sizeof FDroneWeaponExtras::MuzzleAttachment, muzzle);
 
 		FTransform spawn;
@@ -71,8 +82,14 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.ReloadTimer = new STimer(weapon.ReloadDelay, false, false, false, -weapon.ReloadDelay);
 		weapon.State = WeaponState_Ready;
 		weapon.TurnRate = kv.GetFloat("turn_rate");
-		weapon.MaxPitch = kv.GetFloat("max_pitch");
-		weapon.MaxYaw = kv.GetFloat("max_yaw");
+		weapon.MaxPitch = kv.GetFloat("max_pitch", -1.0);
+		weapon.MinPitch = kv.GetFloat("min_pitch", -1.0);
+		weapon.MaxYaw = kv.GetFloat("max_yaw", -1.0);
+		weapon.MinYaw = kv.GetFloat("min_yaw", -1.0);
+		weapon.MaxFirePitch = kv.GetFloat("max_firepitch", -1.0);
+		weapon.MinFirePitch = kv.GetFloat("min_firepitch", -1.0);
+		weapon.MaxFireYaw = kv.GetFloat("max_fireyaw", -1.0);
+		weapon.MinFireYaw = kv.GetFloat("min_fireyaw", -1.0);
 		weapon.Fixed = view_as<bool>(kv.GetNum("fixed"));
 		weapon.ProjPerShot = kv.GetNum("bullets_per_shot", 1);
 		weapon.AILeadTargets = view_as<bool>(kv.GetNum("ai_predict_targets", 0));
@@ -89,7 +106,7 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 
 		weapon.SetObjects(components);
 
-		SetupAttachments(weapon);
+		SetupAttachments(weapon, muzzleoffsets, muzzlesUseOffset);
 
 		char pluginName[64];
 		weapon.GetInternalName(pluginName, sizeof pluginName);
@@ -145,26 +162,55 @@ bool SetupMount(KeyValues kv, ADrone drone, FDroneWeaponExtras components)
 	return false;
 }
 
-void SetupAttachments(ADroneWeapon weapon)
+void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useOffsets)
 {
 	weapon.MuzzlePositions = new ArrayList();
 
 	FObject muzzle;
-	int length = weapon.GetMuzzleCount();
+	char muzzles[64][32];
+	int length = 0;
+	if (!useOffsets)
+	{
+		length = weapon.GetMuzzleCount();
+	}
+	else
+	{
+		length = ExplodeString(muzzleoffsets, ";", muzzles, sizeof muzzles, sizeof muzzles[]);
+	}
 
 	//char name[64];
 	//weapon.GetDisplayName(name, sizeof name);
 	//PrintToChatAll("Muzzle count on weapon %s found: %d", name, length);
 
 	FTransform attach;
+	FVector offset;
 	if (length > 1)
 	{
 		for (int i = 0; i < length; i++)
 		{
-			if (weapon.GetMuzzleTransform(attach))
+			if (!useOffsets)
+			{
+				if (weapon.GetMuzzleTransform(attach))
+				{
+					muzzle = FGameplayStatics.CreateObject("info_target");
+					muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
+				}
+			}
+			else
 			{
 				muzzle = FGameplayStatics.CreateObject("info_target");
+				char vec[3][64];
+				ExplodeString(muzzles[i], " ", vec, sizeof vec, sizeof vec[]);
+				offset.X = StringToFloat(vec[0]);
+				offset.Y = StringToFloat(vec[1]);
+				offset.Z = StringToFloat(vec[2]);
+
+				attach.Position = FMath.OffsetVector(weapon.GetParent().GetPosition(), weapon.GetParent().GetAngles(), offset);
 				muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
+			}
+
+			if (muzzle.Valid())
+			{
 				if (weapon.UsesParent)
 				{
 					muzzle.SetParent(weapon.GetParent().GetObject());
@@ -645,8 +691,16 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 		{
 			SDKHook(rocket.Get(), SDKHook_ShouldCollide, OnRocketOverlap);
 			SDKHook(rocket.Get(), SDKHook_Touch, OnProjHit);
+			ReskinRocket(rocket);
 		}
 	}
+}
+
+void ReskinRocket(ABaseDroneProjectile rocket)
+{
+	rocket.GetObject().SetModel("models/weapons/w_models/w_baseball.mdl");
+	FEntityStatics.SetValidationProperty(rocket, "DroneRocket.ImpactRocket");
+	rocket.SetPropFloat(Prop_Send, "m_flModelScale", 0.1);
 }
 
 void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, bool cannon = false)
@@ -727,18 +781,14 @@ Action OnProjHit(int entity, int victim)
 			FEntityStatics.DestroyEntity(rocket);
 			return Plugin_Handled;
 		}
-		if (hit.Cast("prop_"))
+		if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
 		{
-			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
-			FEntityStatics.DestroyEntity(rocket);
-			return Plugin_Handled;
-		}
-
-		if (hit.Cast("obj_"))
-		{
-			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
-			FEntityStatics.DestroyEntity(rocket);
-			return Plugin_Handled;
+			if (hit.Cast("prop_") || hit.Cast("func_") || hit.Cast("obj_"))
+			{
+				SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
+				FEntityStatics.DestroyEntity(rocket);
+				return Plugin_Handled;
+			}
 		}
 
 		return Plugin_Continue;
@@ -819,22 +869,35 @@ FDroneFireParams GetDroneFireParams(ADrone drone, ADroneWeapon weapon, FRotator 
 	FDroneFireParams params;
 
 	// Add angle constraints
-	FRotator weaponDefAngle, angleAdd;
-	weaponDefAngle = weapon.GetDefaultAngle();
-	angleAdd = weaponDefAngle;
-	angleAdd.Pitch += drone.GetAngles().Pitch;
-	angleAdd.Yaw += drone.GetAngles().Yaw;
+	FRotator weaponAngle;
+	if (weapon.Fixed)
+	{
+		weaponAngle = drone.GetAngles();
+	}
+	else
+	{
+		weaponAngle = weapon.GetAngles();
+	}
 	
-	if (weapon.MaxPitch > 0.0)
+	if (weapon.MaxFirePitch >= 0.0 || weapon.MinFirePitch >= 0.0)
 	{
-		float maxpitch = angleAdd.Pitch + weapon.MaxPitch;
-		desiredAngle.Pitch = FMath.ClampFloat(desiredAngle.Pitch, -maxpitch, maxpitch);
+		float maxpitch = weaponAngle.Pitch - weapon.MaxFirePitch;
+		float minpitch = weaponAngle.Pitch + weapon.MinFirePitch;
+
+		desiredAngle.Pitch = FMath.ClampFloat(desiredAngle.Pitch, maxpitch, minpitch);
 	}
-	if (weapon.MaxYaw > 0.0)
+	if (weapon.MaxFireYaw >= 0.0 || weapon.MinFireYaw >= 0.0)
 	{
-		float maxyaw = angleAdd.Yaw + weapon.MaxYaw;
-		desiredAngle.Yaw = FMath.ClampFloat(desiredAngle.Yaw, -maxyaw, maxyaw);
+		float maxyaw = weaponAngle.Yaw + weapon.MaxFireYaw;
+		float minyaw = weaponAngle.Yaw - weapon.MinFireYaw;
+		//PrintToChatAll("Weapon Yaw: %.1f\nAim Yaw: %.1f\nMax Yaw: %.1f\nMin Yaw: %.1f", weaponAngle.Yaw, desiredAngle.Yaw, maxyaw, minyaw);
+		desiredAngle.Yaw = FMath.ClampFloat(desiredAngle.Yaw, minyaw, maxyaw);
+		//NormalizeAngles(desiredAngle);
+
+		//PrintToChatAll("Clamped Yaw: %.1f", desiredAngle.Yaw);
 	}
+
+	NormalizeAngles(desiredAngle);
 
 	if (seat)
 	{

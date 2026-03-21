@@ -797,6 +797,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 
 	drone.MaxHealth = config.GetNum("health", 100);
 	drone.MaxSpeed = config.GetFloat("speed", 300.0);
+	drone.MinSpeed = config.GetFloat("minspeed", 200.0);
 	drone.Acceleration = config.GetFloat("acceleration", 1.25);
 	drone.Deceleration = config.GetFloat("deceleration", 8.0);
 	drone.NoHud = view_as<bool>(config.GetNum("nohud", false));
@@ -1140,6 +1141,11 @@ AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachp
 
 		char color[64];
 		config.GetString("color", color, sizeof color, "255 255 255");
+		if (StrEqual(color, "team"))
+		{
+			FormatEx(color, sizeof color, "255 255 255");
+			component.SetObjectProp("DroneComponent.UseTeamColors", true);
+		}
 		component.SetKeyValue("rendercolor", color);
 
 		//PrintToChatAll("{\n   Material = %s\n   scale = %.1f\n   renderamt = %d\n   color = %s\n   attach = %s\n}", texture, config.GetFloat("size"), config.GetNum("brightness"), color, attachpos);
@@ -1157,6 +1163,7 @@ AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachp
 		bool hidden = view_as<bool>(config.GetNum("hidden", 0));
 		if (hidden)
 		{
+			component.SetObjectProp("DroneComponent.ActivateUponEntry", view_as<bool>(config.GetNum("visibility_by_status")));
 			component.GetObject().Input("HideSprite");
 		}
 	}
@@ -1186,6 +1193,11 @@ AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachp
 
 		char color[64];
 		config.GetString("color", color, sizeof color, "255 255 255");
+		if (StrEqual(color, "team"))
+		{
+			FormatEx(color, sizeof color, "255 255 255");
+			component.SetObjectProp("DroneComponent.UseTeamColors", true);
+		}
 		component.SetKeyValue("rendercolor", color);
 
 		FTransform spawn;
@@ -1201,6 +1213,7 @@ AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachp
 		bool hidden = view_as<bool>(config.GetNum("hidden", 0));
 		if (hidden)
 		{
+			component.SetObjectProp("DroneComponent.ActivateUponEntry", view_as<bool>(config.GetNum("visible_by_status")));
 			component.GetObject().Input("HideSprite");
 		}
 		else
@@ -1368,9 +1381,12 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 		FDroneSeat seat = drone.Seats.Get(i);
 		if (seat && seat.Occupied && seat.Occupier)
 		{
+			FClient occupier;
+			occupier = seat.Occupier.GetClient();
 			PlayerExitVehicle(seat.Occupier, seat, drone, false);
-			TF2_RegeneratePlayer(seat.Occupier.Get());
-			SDKHooks_TakeDamage(seat.Occupier.Get(), inflictor.Get(), attacker.Get(), 900.0);
+			TF2_RegeneratePlayer(occupier.Get());
+			SDKHooks_TakeDamage(occupier.Get(), inflictor.Get(), attacker.Get(), 250.0);
+			//ForcePlayerSuicide(occupier.Get());
 
 			RequestFrame(RemoveLingeringWeapons); // Weapons seem to get created upon resupplying and not given to the player
 		}
@@ -1440,6 +1456,11 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 	SetEntityRenderMode(player.Get(), RENDER_NORMAL);
 	player.ExitingHealth = player.GetClient().GetHealth();
 
+	SetVariantInt(0);
+	player.GetObject().Input("SetForcedTauntCam");
+
+	DisableDroneComponentVisuals(drone);
+
 	if (resupply)
 	{
 		CreateTimer(0.1, ResetPlayerHealth, player, TIMER_FLAG_NO_MAPCHANGE);
@@ -1456,10 +1477,6 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 	Call_PushCell(seat);
 
 	Call_Finish();
-
-	if (seat)
-	{
-	}
 }
 
 Action ResetPlayerHealth(Handle timer, ADronePlayer player)
@@ -1572,6 +1589,11 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
 	player.Drone = drone;
 	drone.Pilot = player;
 	drone.Team = player.Team;
+
+	UpdateDroneComponentColors(drone);
+
+	SetVariantInt(1);
+	player.GetObject().Input("SetForcedTauntCam");
 	
 	// Temp
 	seat.Occupier = player;
@@ -1593,6 +1615,58 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
 	Call_PushCell(seat);
 
 	Call_Finish();
+}
+
+void UpdateDroneComponentColors(ADrone drone)
+{
+	char color[32];
+	switch (drone.Team)
+	{
+		case TFTeam_Red: FormatEx(color, sizeof color, "255 0 0");
+		case TFTeam_Blue: FormatEx(color, sizeof color, "5 125 255");
+		default: FormatEx(color, sizeof color, "255 100 150"); // pink for neutral/no team
+	}
+
+	FComponentArray components = drone.GetComponents().Attachments;
+	if (components)
+	{
+		for (int i = 0; i < components.Length; i++)
+		{
+			AComponent component = components.Get(i);
+			if (component)
+			{
+				if (component.GetObjectProp("DroneComponent.UseTeamColors"))
+				{
+					SetVariantString(color);
+					component.GetObject().Input("Color");
+				}
+
+				if (component.GetObjectProp("DroneComponent.ActivateUponEntry"))
+				{
+					component.GetObject().Input("ShowSprite");
+				}
+			}
+		}
+	}
+}
+
+void DisableDroneComponentVisuals(ADrone drone)
+{
+	FComponentArray components = drone.GetComponents().Attachments;
+	if (components)
+	{
+		for (int i = 0; i < components.Length; i++)
+		{
+			AComponent component = components.Get(i);
+			if (component)
+			{
+				if (component.GetObjectProp("DroneComponent.ActivateUponEntry"))
+				{
+					component.GetObject().Input("HideSprite");
+				}
+			}
+		}
+	}
 }
 
 bool PlayerAimingAtDrone(AClient client, ADrone& currentDrone, FDroneSeat& currentSeat)

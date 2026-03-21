@@ -156,6 +156,15 @@ methodmap FDroneStatics
 
 	public static native void StunDrone(ADrone drone, float duration, bool override = false);
 
+	/**
+	 * Disables the given input for the specified drone
+	 * 
+	 * @param drone		Drone to disable inputs on
+	 * @param input		Input string to disable (forward, right, up)
+	 * @param disable	If true, disables input, enabled otherwise
+	 */
+	public static native void ToggleDroneInput(ADrone drone, const char[] input, bool disable);
+
 	public static native bool PhysicsExtensionLoaded();
 }
 /**

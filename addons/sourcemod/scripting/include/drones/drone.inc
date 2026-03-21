@@ -135,6 +135,30 @@ methodmap ADrone < AComponent
 		public set(float speed) { this.SetObjectPropFloat("Drone_MaxMoveSpeed", speed); }
 	}
 
+	property float MinSpeed // Minimum speed for this drone, if applicable
+	{
+		public get() { return this.GetObjectPropFloat("Drone_MinMoveSpeed"); }
+		public set(float speed) { this.SetObjectPropFloat("Drone_MinMoveSpeed", speed); }
+	}
+
+	property bool DisableForwardMovement
+	{
+		public get() { return this.GetObjectProp("Drone_DisableForward"); }
+		public set(bool value) { this.SetObjectProp("Drone_DisableForward", value); }
+	}
+
+	property bool DisableRightMovement
+	{
+		public get() { return this.GetObjectProp("Drone_DisableRight"); }
+		public set(bool value) { this.SetObjectProp("Drone_DisableRight", value); }
+	}
+
+	property bool DisableUpMovement
+	{
+		public get() { return this.GetObjectProp("Drone_DisableUp"); }
+		public set(bool value) { this.SetObjectProp("Drone_DisableUp", value); }
+	}
+
 	property float SpeedOverride // Overrides max speed when non-zero
 	{
 		public get() { return this.GetObjectPropFloat("Drone_MaxMoveSpeedOverride"); }
