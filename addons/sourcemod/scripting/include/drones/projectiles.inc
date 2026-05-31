@@ -64,6 +64,8 @@ methodmap ABaseDroneProjectile < ABaseEntity
 			{
 				return this.GetObject().GetProp(Prop_Send, "m_iTeamNum");
 			}
+
+			return -1;
 		}
 	}
 
@@ -110,6 +112,8 @@ methodmap ABaseDroneProjectile < ABaseEntity
 		{
 			return this.WeaponLauncher.Drone;
 		}
+
+		return null;
 	}
 
 	/*
