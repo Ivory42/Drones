@@ -130,14 +130,6 @@ public void CD2_OnDroneCreated(ADrone drone, const char[] name, KeyValues config
 		AHunterChopper chopper = view_as<AHunterChopper>(drone);
 		chopper.IsChopper = true;
 
-		char sound[64];
-		config.GetString("engine_sound", sound, sizeof sound, "misc/null.wav");
-		if (strlen(sound) > 3)
-		{
-			PrecacheSound(sound);
-			chopper.SetEngineSound(sound);
-		}
-
 		SetEntityRenderFx(drone.Get(), RENDERFX_FADE_FAST);
 
 		char modelname[256];
@@ -202,10 +194,6 @@ public void CD2_OnPlayerEnterDrone(ADrone drone, ADronePlayer player, FDroneSeat
 				SetVariantString("idle");
 				model.Input("SetAnimation");
 			}
-
-			char sound[64];
-			chopper.GetEngineSound(sound, sizeof sound);
-			EmitSoundToAll(sound, drone.Get(), SNDCHAN_AUTO, 80);
 		}
 	}
 }
@@ -225,10 +213,6 @@ public void CD2_OnAIControlDrone(ADrone drone, FDroneAI ai, FDroneSeat seat)
 				SetVariantString("idle");
 				model.Input("SetAnimation");
 			}
-
-			char sound[64];
-			chopper.GetEngineSound(sound, sizeof sound);
-			EmitSoundToAll(sound, drone.Get(), SNDCHAN_AUTO, 80);
 		}
 	}
 }
@@ -270,11 +254,6 @@ void KillEngine(AHunterChopper chopper)
 {
 	FObject model;
 	model = chopper.GetModelEntity();
-
-	char sound[64];
-	chopper.GetEngineSound(sound, sizeof sound);
-
-	StopSound(chopper.Get(), SNDCHAN_AUTO, sound);
 
 	if (model.Valid())
 	{

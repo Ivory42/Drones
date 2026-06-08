@@ -154,7 +154,26 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector input)
 	FRotator movementRot;
 	movementRot = drone.GetInputRotation();
 
-	static const float MaxPitchAngle = 25.0;
+	float MaxPitchAngle = drone.MaxPitch;
+
+	// Prop rotations
+	FComponentArray components = drone.GetComponents().Attachments;
+	for (int i = 0; i < components.Length; i++)
+	{
+		AComponent component = components.Get(i);
+		if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+		{
+			if (component.GetObjectProp("DroneProp.PitchWithMovement"))
+			{
+				FRotator rotation;
+				rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
+
+				float maxpitch = component.GetObjectProp("DroneProp.MaxPitch");
+				rotation.Pitch = maxpitch * axisValue;
+				component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+			}
+		}
+	}
 
 	switch (drone.MoveType)
 	{
@@ -198,7 +217,26 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector input)
 		FRotator movementRot;
 		movementRot = drone.GetInputRotation();
 
-		static const float MaxRollAngle = 25.0;
+		float MaxRollAngle = drone.MaxRoll;
+
+		// Prop rotations
+		FComponentArray components = drone.GetComponents().Attachments;
+		for (int i = 0; i < components.Length; i++)
+		{
+			AComponent component = components.Get(i);
+			if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+			{
+				if (component.GetObjectProp("DroneProp.RollWithMovement"))
+				{
+					FRotator rotation;
+					rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
+					float maxroll = component.GetObjectProp("DroneProp.MaxRoll");
+					rotation.Roll = maxroll * axisValue;
+
+					component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+				}
+			}
+		}
 
 		switch (drone.MoveType)
 		{
@@ -307,6 +345,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 	camera = seat.GetCamera();
 	if (camera.Valid())
 	{
+		//PrintCenterTextAll("Camera valid");
 		FRotator difference;
 		difference = SubtractRotators(playerAngles, currentAngle);
 
@@ -351,17 +390,24 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				}
 				currentAngle = InterpRotation(currentAngle, desiredAngle, GetGameFrameTime(), drone.TurnRate);
 
+				// Find our turn rate for calculations
+				drone.LastFrameYaw = drone.CurrentFrameYaw; // Set last yaw frame to previous frame
+				drone.CurrentFrameYaw = currentAngle.Yaw; // Update current yaw
+
+				float turnRate = AngleDifference(currentAngle, desiredAngle);
+				float diff = drone.LastFrameYaw - drone.CurrentFrameYaw;
+				bool positive = (diff > 0);
+				if (FloatAbs(turnRate) < 0.2)
+				{
+					drone.SetObjectProp("Drone.NoTurnInput", true);
+				}
+				//PrintCenterTextAll("Turn Rate: %.1f\n%s\nCur: %.1f\nPrev: %.1f\nDiff: %.1f", turnRate, positive ? "right" : "left", drone.CurrentFrameYaw, drone.LastFrameYaw, diff);
+
+				CalculatePropTurnAngles(turnRate, positive, drone);
+
 				// For flying based drones we want to adjust the roll based on how much we are turning
 				if (drone.MoveType == MoveType_Fly)
 				{
-					drone.LastFrameYaw = drone.CurrentFrameYaw; // Set last yaw frame to previous frame
-					drone.CurrentFrameYaw = currentAngle.Yaw; // Update current yaw
-
-					float turnRate = AngleDifference(currentAngle, desiredAngle);
-					float diff = drone.LastFrameYaw - drone.CurrentFrameYaw;
-					bool positive = (diff > 0);
-					//PrintCenterTextAll("Turn Rate: %.1f\n%s\nCur: %.1f\nPrev: %.1f\n%.1f", turnRate, positive ? "right" : "left", drone.CurrentFrameYaw, drone.LastFrameYaw, diff);
-
 					if (FloatAbs(turnRate) >= 0.2 && FloatAbs(diff) <= 80.0)
 					{
 						if (positive)
@@ -376,6 +422,7 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 				FVector velocity;
 				GetSmoothedVelocity(drone, velocity);
 				TeleportEntity(drone.Get(), NULL_VECTOR, currentAngle.ToFloat(), velocity.ToFloat());
+				UpdatePropRotations(currentAngle, drone.GetAngles(), drone);
 			}
 			if (seat.HasWeapon())
 			{
@@ -387,6 +434,85 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 			if (seat.HasWeapon())
 			{
 				UpdateDroneWeaponAngles(currentAngle, playerAngles, drone.GetAngles(), seat.ActiveWeapon); // Update any controlled weapons
+			}
+		}
+	}
+}
+
+void CalculatePropTurnAngles(float turn, bool rightTurn, ADrone drone)
+{
+	FComponentArray components = drone.GetComponents().Attachments;
+	for (int i = 0; i < components.Length; i++)
+	{
+		AComponent component = components.Get(i);
+		if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+		{
+			if (component.GetObjectProp("DroneProp.PitchWithMovement"))
+			{
+				float factor = turn / 180.0; // get our turn rate between 0 and 1
+				bool invert = component.GetObjectProp("DroneProp.PitchTurnInverted");
+
+				// Determine which direction this component should pitch when turning
+				// When turning right, inverted will pitch negative
+				// When turning left, non-inverted will pitch negative
+				if (rightTurn)
+				{
+					if (invert)
+					{
+						factor *= -1.0;
+					}
+				}
+				else if (!invert)
+				{
+					factor *= -1.0;
+				}
+
+				FRotator rotation;
+				rotation = component.GetObjectPropRotator("DroneProp.TurnRotation");
+				rotation.Pitch = component.GetObjectPropFloat("DroneProp.MaxPitch") * factor;
+
+				component.SetObjectPropRotator("DroneProp.TurnRotation", rotation);
+			}
+		}
+	}
+}
+
+void UpdatePropRotations(FRotator current, FRotator droneAngle, ADrone drone)
+{
+	// Prop rotations
+	FComponentArray components = drone.GetComponents().Attachments;
+	for (int i = 0; i < components.Length; i++)
+	{
+		AComponent component = components.Get(i);
+		if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+		{
+			if (component.GetObjectProp("DroneProp.PitchWithMovement") || component.GetObjectProp("DroneProp.RollWithMovement"))
+			{
+				FRotator moveRot, turnRot, targetrot;
+				moveRot = component.GetObjectPropRotator("DroneProp.MovementRotation");
+				turnRot = component.GetObjectPropRotator("DroneProp.TurnRotation");
+				float speed = component.GetObjectPropFloat("DroneProp.TurnSpeed");
+
+				targetrot.Pitch = FMath.ClampFloat(moveRot.Pitch + turnRot.Pitch, -90.0, 90.0);
+				
+				FRotator rotation;
+				rotation = component.GetPropRotator(Prop_Data, "m_angRotation");
+				current = rotation;
+
+				FRotator difference, newAngle;
+				difference = SubtractRotators(targetrot, droneAngle);
+				difference.Yaw = 0.0;
+				difference.Roll = 0.0;
+
+				newAngle = FMath.InterpRotatorTo(current, difference, GetGameFrameTime(), speed);
+				NormalizeAngles(newAngle);
+				newAngle.Yaw = 0.0;
+				newAngle.Roll = 0.0;
+
+				//PrintCenterTextAll("Current: {%.2f, %.2f, %.2f}\nTarget: {%.2f, %.2f, %.2f}\nInterp: {%.2f, %.2f, %.2f}", current.Pitch,
+					//current.Yaw, current.Roll, difference.Pitch, difference.Yaw, difference.Roll, newAngle.Pitch, newAngle.Yaw, newAngle.Roll);
+
+				component.GetObject().SetAngles(newAngle);
 			}
 		}
 	}

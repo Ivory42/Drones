@@ -410,6 +410,7 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 		switch (projectile)
 		{
 			case DroneProj_Rocket: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+			case DroneProj_MiniRocket: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", false, true);
 			case DroneProj_Energy: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
 			case DroneProj_Sentry: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
 			case DroneProj_Grenade: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
@@ -643,6 +644,7 @@ void DroneAIFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjTyp
 // Not a perfect solution, but gets an approximate location of where this muzzle SHOULD be. Getting the world position of an entity in a multi-parented hierarchy doesn't seem to work, so doing this instead.
 FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 {
+	#pragma unused drone
 	FTransform muzzle;
 	muzzle.Position = weapon.GetPosition();
 	muzzle.Rotation = weapon.GetAngles();
@@ -674,7 +676,7 @@ FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 	*/
 }
 
-void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false)
+void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false, bool mini = false)
 {
 	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity(classname, owner, "DroneComponents.DroneRocketEntity"));
 	if (rocket)
@@ -686,6 +688,34 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 		rocket.WeaponLauncher = weapon;
 
 		rocket.FireProjectile(direction, weapon.ProjectileSpeed);
+
+		if (mini)
+		{
+			int modelindex = PrecacheModel("models/items/ar2_grenade.mdl");
+			for (int i = 0; i < 4; i++)
+			{
+				rocket.SetProp(Prop_Send, "m_nModelIndexOverrides", modelindex, i);
+			}
+			//rocket.AttachParticle("rockettrail_airstrike", ConstructVector());
+			FObject trail;
+			trail = FGameplayStatics.CreateObjectDeferred("env_spritetrail");
+
+			PrecacheModel("materials/sprites/spotlight.vmt");
+			trail.SetKeyValue("spritename", "materials/sprites/spotlight.vmt");
+			trail.SetKeyValueInt("renderamt", 255);
+			trail.SetKeyValue("rendermode", "1");
+			trail.SetKeyValue("lifetime", "1.0");
+			trail.SetKeyValue("startwidth", "5.0");
+			trail.SetKeyValue("endwidth", "2.0");
+			trail.SetKeyValue("rendercolor", "255 255 255");
+
+			//spawn.Position = rocket.GetPosition();
+			FGameplayStatics.FinishSpawn(trail, spawn);
+
+			trail.SetParent(rocket.GetObject());
+			rocket.SetObjectPropEnt("MiniRocket.Trail", trail);
+			SDKHook(rocket.Get(), SDKHook_Touch, OnMiniRocketHit);
+		}
 
 		if (impact)
 		{
@@ -803,6 +833,26 @@ Action OnProjHit(int entity, int victim)
 		FEntityStatics.DestroyEntity(rocket);
 		return Plugin_Handled;
 	}
+}
+
+Action OnMiniRocketHit(int entity, int victim)
+{
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
+	FObject hit;
+
+	hit = ConstructObject(victim);
+	if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
+	{
+		FObject trail;
+		trail = rocket.GetObjectPropEnt("MiniRocket.Trail");
+		if (trail.Valid())
+		{
+			trail.Input("ClearParent");
+			trail.KillOnDelay(5.0);
+		}
+	}
+
+	return Plugin_Continue;
 }
 
 Action OnLaserHit(int entity, int victim)

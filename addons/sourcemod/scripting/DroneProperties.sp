@@ -1132,29 +1132,32 @@ public Action OnPlayerRunCmd(int clientId, int& buttons)
 		ADrone drone = null;
 		FDroneSeat seat = null;
 
-		if (PlayerAimingAtDrone(client, drone, seat))
+		if (!client.InDrone && PlayerAimingAtDrone(client, drone, seat))
 		{
-			client.SetObjectProp("DroneClient.LookingAtDrone", true);
-			char seattype[32];
-			switch (seat.Type)
+			if (drone.Alive)
 			{
-				case Seat_Pilot: FormatEx(seattype, sizeof seattype, "Pilot");
-				case Seat_Gunner: FormatEx(seattype, sizeof seattype, "Gunner");
-				case Seat_Passenger: FormatEx(seattype, sizeof seattype, "Passenger");
-			}
+				client.SetObjectProp("DroneClient.LookingAtDrone", true);
+				char seattype[32];
+				switch (seat.Type)
+				{
+					case Seat_Pilot: FormatEx(seattype, sizeof seattype, "Pilot");
+					case Seat_Gunner: FormatEx(seattype, sizeof seattype, "Gunner");
+					case Seat_Passenger: FormatEx(seattype, sizeof seattype, "Passenger");
+				}
 
-			char dronename[64];
-			drone.GetDisplayName(dronename, sizeof dronename);
+				char dronename[64];
+				drone.GetDisplayName(dronename, sizeof dronename);
 
-			char message[128];
-			FormatEx(message, sizeof message, "Press '%s' to enter %s seat of %s", "%inspect%", seattype, dronename);
-			if (client.GetObjectProp("DroneClient.UsingMinHud"))
-			{
+				char message[128];
+				FormatEx(message, sizeof message, "Press '%s' to enter %s seat of %s", "%inspect%", seattype, dronename);
+				if (client.GetObjectProp("DroneClient.UsingMinHud"))
+				{
 
-			}
-			else
-			{
-				FGameplayStatics.WriteGameText(client.GetClient(), message);
+				}
+				else
+				{
+					FGameplayStatics.WriteGameText(client.GetClient(), message);
+				}
 			}
 		}
 		else if (client.GetObjectProp("DroneClient.LookingAtDrone") && client.GetObjectProp("DroneClient.UsingMinHud"))
@@ -1204,6 +1207,9 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 
 			TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, {0.0, 0.0, 0.0});
 
+			FRotator viewAngles;
+			viewAngles = client.GetEyeAngles();
+
 			switch (seat.Type)
 			{
 				case Seat_Gunner: // handling weapons for this seat
@@ -1218,9 +1224,6 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 						CycleNextWeapon(seat);
 						buttons &= ~IN_ATTACK2;
 					}
-
-					FRotator viewAngles;
-					viewAngles = client.GetEyeAngles();
 
 					OnDroneAimChanged(viewAngles, seat, drone);
 				}
@@ -1297,14 +1300,15 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 						{
 							velocity.Add(speeds);
 						}
-
-						FRotator viewAngles;
-						viewAngles = client.GetEyeAngles();
 						
 						OnDroneAimChanged(viewAngles, seat, drone);
 
 						SimulateDrone(drone, velocity, maxSpeed);
 					}
+				}
+				case Seat_Passenger:
+				{
+					OnDroneAimChanged(viewAngles, seat, drone);
 				}
 			}
 

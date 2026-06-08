@@ -149,7 +149,11 @@ void ControlDrone(ADrone drone, FDroneSeat seat, FDroneAI controller)
 			controller.ControlledSeat = seat;
 			controller.Drone = drone;
 
-			UpdateDroneComponentColors(drone);
+			if (seat.Type == Seat_Pilot)
+			{
+				UpdateDroneComponentColors(drone);
+				StartEngine(drone);
+			}
 		}
 
 		Call_StartForward(DroneAIEnter);

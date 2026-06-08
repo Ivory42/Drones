@@ -44,7 +44,7 @@ public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones 2",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for Team Fortress 2",
-	version 		= 	"2.1.0"
+	version 		= 	"2.3.0"
 };
 
 public void OnPluginStart()
@@ -373,6 +373,8 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 	ADrone drone = CastToDrone(entity);
 	if (drone && drone.IsDrone)
 	{
+		StopEngine(drone);
+
 		//drone.Clear();
 		char name[64];
 		drone.GetInternalName(name, sizeof name);
@@ -700,6 +702,15 @@ void OnDroneTick(APersistentObject entity)
 	if (drone && drone.IsDrone && drone.Alive)
 	{
 		CheckDroneInMap(drone);
+		if (drone.GetComponents().Attachments)
+		{
+			FComponentArray attachments = drone.GetComponents().Attachments;
+			for (int i = 0; i < attachments.Length; i++)
+			{
+				AComponent attachment = attachments.Get(i);
+				DroneAttachmentTick(attachment, drone);
+			}
+		}
 		if (drone.Seats)
 		{
 			int seats = drone.Seats.Length;
@@ -715,6 +726,48 @@ void OnDroneTick(APersistentObject entity)
 					}
 				}
 			}
+		}
+	}
+}
+
+void DroneAttachmentTick(AComponent attachment, ADrone drone)
+{
+	char name[64];
+	attachment.GetObjectPropString("DroneComponent.CompType", name, sizeof name);
+	if (StrEqual(name, "prop_rotors"))
+	{
+		float maxspeed = attachment.GetObjectPropFloat("DroneProp.RotorSpinSpeed");
+		float factor = attachment.GetObjectPropFloat("DroneProp.RotorSpinSpeedFactor");
+		bool shouldRotate = false;
+		float increment = 0.008;
+		if (drone.EngineOn)
+		{
+			shouldRotate = true;
+			factor = FMath.ClampFloat(factor + increment, 0.0, 1.0);
+		}
+		else if (factor > 0.01)
+		{
+			shouldRotate = true;
+			factor = FMath.ClampFloat(factor - increment, 0.0, 1.0);
+		}
+
+		attachment.SetObjectPropFloat("DroneProp.RotorSpinSpeedFactor", factor);
+
+		if (shouldRotate)
+		{
+			float speed = maxspeed * factor;
+
+			FRotator rotation, target;
+			rotation = attachment.GetPropRotator(Prop_Data, "m_angRotation");
+			target = rotation;
+			target.Yaw += 180.0;
+
+			rotation = FMath.InterpRotatorTo(rotation, target, GetGameFrameTime(), speed);
+			NormalizeAngles(rotation);
+			rotation.Roll = 0.0;
+			rotation.Pitch = 0.0;
+
+			attachment.GetObject().SetAngles(rotation);
 		}
 	}
 }
@@ -773,8 +826,16 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	config.GetString("model", components.ModelName, sizeof FDroneComponents::ModelName);
 	config.GetString("destroyed_model", components.DestroyedModel, sizeof FDroneComponents::DestroyedModel);
 	config.GetString("plugin", pluginName, sizeof pluginName);
+	
+	char enginesound[64];
+	config.GetString("engine_sound", enginesound, sizeof enginesound);
+	if (strlen(enginesound) > 3)
+	{
+		PrecacheSound(enginesound);
+		drone.SetObjectPropString("Drone.EngineSound", enginesound);
+	}
 
-	config.GetString("explode_particle", components.ExplodeParticle, sizeof FDroneComponents::ExplodeParticle, "ExplosionCore_MidAir");
+	config.GetString("explode_particle", components.ExplodeParticle, sizeof FDroneComponents::ExplodeParticle, "hightower_explosion");
 	config.GetString("explode_sound", components.ExplodeSound, sizeof FDroneComponents::ExplodeSound, "weapons/explode1.wav");
 
 	char dronetag[64];
@@ -787,7 +848,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	if (GetFeatureStatus(FeatureType_Native, "Phys_SetMass") == FeatureStatus_Available)
 	{
 		//PrintToChatAll("Set mass");
-		Phys_SetMass(drone.Get(), 1000.0);
+		Phys_SetMass(drone.Get(), config.GetFloat("mass", 4000.0));
 	}
 
 	FEntityStatics.EnableEntityTick(drone, OnDroneTick, 0.0);
@@ -803,6 +864,8 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	drone.NoHud = view_as<bool>(config.GetNum("nohud", false));
 	//drone.SpeedOverride = 0.0;
 	drone.TurnRate = config.GetFloat("turn_rate", 1.0);
+	drone.MaxPitch = config.GetFloat("max_pitch", 25.0);
+	drone.MaxRoll = config.GetFloat("max_roll", 25.0);
 
 	char movetype[64];
 	config.GetString("movetype", movetype, sizeof movetype);
@@ -845,7 +908,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 	cameraOffset = ConstructVector(drone.CameraDistance, 0.0, drone.CameraHeight);
 
 	// This will eventually be changed on a per seat basis
-	CreateDroneCamera(drone, cameraOffset, components);
+	CreateDroneCamera(drone, cameraOffset, components, ConstructRotator());
 
 	if (drone.GetObject().HasProp(Prop_Data, "m_takedamage"))
 	{
@@ -929,7 +992,7 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 	{
 		components.Attachments = new FComponentArray();
 
-		char component[64], type[64], attachpos[64];
+		char component[64], type[64], attachpos[64], parentname[64];
 
 		config.GotoFirstSubKey();
 		do
@@ -939,30 +1002,35 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 
 			config.GetString("type", type, sizeof type);
 			config.GetString("attachment", attachpos, sizeof attachpos);
+			config.GetString("parent", parentname, sizeof parentname);
 			AComponent attachment = null;
 			if (StrEqual(type, "drone_light"))
 			{
-				attachment = CreateDroneLight(drone, config, attachpos);
+				attachment = CreateDroneLight(drone, config);
 			}
 			else if (StrEqual(type, "drone_trail"))
 			{
-				attachment = CreateDroneTrail(drone, config, attachpos);
+				attachment = CreateDroneTrail(drone, config);
 			}
 			else if (StrEqual(type, "drone_damage_smoke"))
 			{
-				attachment = CreateDroneSmoke(drone, config, attachpos);
+				attachment = CreateDroneSmoke(drone, config);
 			}
 			else if (StrEqual(type, "drone_damage_particle"))
 			{
-				attachment = CreateDroneParticle(drone, config, attachpos);
+				attachment = CreateDroneParticle(drone, config);
 			}
 			else if (StrEqual(type, "drone_particle"))
 			{
-				attachment = CreateDroneParticle(drone, config, attachpos, false);
+				attachment = CreateDroneParticle(drone, config, false);
 			}
 			else if (StrEqual(type, "drone_damage_sparks"))
 			{
-				attachment = CreateDroneSparks(drone, config, attachpos);
+				attachment = CreateDroneSparks(drone, config);
+			}
+			else if (StrContains(type, "prop") == 0) // starts with prop, these will all be prop_dynamic
+			{
+				attachment = CreatePropAttachment(drone, config, type);
 			}
 			else if (StrEqual(type, "drone_critical_point"))
 			{
@@ -971,6 +1039,19 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 
 			if (attachment)
 			{
+				ABaseEntity parent = drone;
+				if (strlen(parentname) > 0)
+				{
+					AComponent attachParent = GetAttachmentByName(components.Attachments, parentname);
+					if (attachParent)
+					{
+						parent = attachParent;
+						attachment.SetObjectPropEnt("DroneComponent.ParentEntity", parent.GetObject());
+					}
+				}
+				attachment.GetObject().SetParent(parent.GetObject());
+				SetVariantString(attachpos);
+				attachment.GetObject().Input("SetParentAttachment");
 				FVector offset;
 				offset = Vector_GetFromKV(config, "offset");
 				TeleportEntity(attachment.Get(), offset.ToFloat());
@@ -985,7 +1066,7 @@ void CreateAttachments(ADrone drone, KeyValues config, FDroneComponents componen
 	}
 }
 
-AComponent CreateDroneSmoke(ADrone drone, KeyValues config, const char[] attachpos, bool damage = true)
+AComponent CreateDroneSmoke(ADrone drone, KeyValues config, bool damage = true)
 {
 	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("env_smokestack"));
 	if (component)
@@ -1024,10 +1105,6 @@ AComponent CreateDroneSmoke(ADrone drone, KeyValues config, const char[] attachp
 
 		component.Drone = drone;
 
-		component.GetObject().SetParent(drone.GetObject());
-		SetVariantString(attachpos);
-		component.GetObject().Input("SetParentAttachment");
-
 		if (damage)
 		{
 			component.SetObjectPropFloat("DamageComponent.HealthThreshold", config.GetFloat("health_threshold"));
@@ -1039,7 +1116,7 @@ AComponent CreateDroneSmoke(ADrone drone, KeyValues config, const char[] attachp
 	return component;
 }
 
-AComponent CreateDroneParticle(ADrone drone, KeyValues config, const char[] attachpos, bool damage = true)
+AComponent CreateDroneParticle(ADrone drone, KeyValues config, bool damage = true)
 {
 	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("info_particle_system"));
 	if (component)
@@ -1063,10 +1140,6 @@ AComponent CreateDroneParticle(ADrone drone, KeyValues config, const char[] atta
 
 		component.Drone = drone;
 
-		component.GetObject().SetParent(drone.GetObject());
-		SetVariantString(attachpos);
-		component.GetObject().Input("SetParentAttachment");
-
 		if (damage)
 		{
 			component.SetObjectPropFloat("DamageComponent.HealthThreshold", config.GetFloat("health_threshold"));
@@ -1078,7 +1151,7 @@ AComponent CreateDroneParticle(ADrone drone, KeyValues config, const char[] atta
 	return component;
 }
 
-AComponent CreateDroneSparks(ADrone drone, KeyValues config, const char[] attachpos)
+AComponent CreateDroneSparks(ADrone drone, KeyValues config)
 {
 	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("env_spark"));
 	if (component)
@@ -1109,10 +1182,6 @@ AComponent CreateDroneSparks(ADrone drone, KeyValues config, const char[] attach
 
 		component.Drone = drone;
 
-		component.GetObject().SetParent(drone.GetObject());
-		SetVariantString(attachpos);
-		component.GetObject().Input("SetParentAttachment");
-
 		component.SetObjectPropFloat("DamageComponent.HealthThreshold", config.GetFloat("health_threshold"));
 		component.SetObjectProp("DamageComponent.IsActive", !hidden);
 		FEntityStatics.SetValidationProperty(component, "DroneComponent.DamageComponent");
@@ -1121,7 +1190,7 @@ AComponent CreateDroneSparks(ADrone drone, KeyValues config, const char[] attach
 	return component;
 }
 
-AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachpos)
+AComponent CreateDroneLight(ADrone drone, KeyValues config)
 {
 	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("env_sprite"));
 	if (component)
@@ -1156,10 +1225,6 @@ AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachp
 
 		component.Drone = drone;
 
-		component.GetObject().SetParent(drone.GetObject());
-		SetVariantString(attachpos);
-		component.GetObject().Input("SetParentAttachment");
-
 		bool hidden = view_as<bool>(config.GetNum("hidden", 0));
 		if (hidden)
 		{
@@ -1171,7 +1236,7 @@ AComponent CreateDroneLight(ADrone drone, KeyValues config, const char[] attachp
 	return component;
 }
 
-AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachpos)
+AComponent CreateDroneTrail(ADrone drone, KeyValues config)
 {
 	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("env_spritetrail"));
 	if (component)
@@ -1206,14 +1271,10 @@ AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachp
 
 		component.Drone = drone;
 
-		component.GetObject().SetParent(drone.GetObject());
-		SetVariantString(attachpos);
-		component.GetObject().Input("SetParentAttachment");
-
 		bool hidden = view_as<bool>(config.GetNum("hidden", 0));
 		if (hidden)
 		{
-			component.SetObjectProp("DroneComponent.ActivateUponEntry", view_as<bool>(config.GetNum("visible_by_status")));
+			component.SetObjectProp("DroneComponent.ActivateUponEntry", view_as<bool>(config.GetNum("visibility_by_status")));
 			component.GetObject().Input("HideSprite");
 		}
 		else
@@ -1223,6 +1284,79 @@ AComponent CreateDroneTrail(ADrone drone, KeyValues config, const char[] attachp
 	}
 
 	return component;
+}
+
+AComponent CreatePropAttachment(ADrone drone, KeyValues config, const char[] type)
+{
+	AComponent component = view_as<AComponent>(FEntityStatics.CreateEntity("prop_dynamic_override"));
+	if (component)
+	{
+		FEntityStatics.SetValidationProperty(component, "DroneComponent.DronePropAttachment");
+		char model[64];
+		config.GetString("model", model, sizeof model);
+
+		if (strlen(model) > 3)
+		{
+			PrecacheModel(model);
+			component.SetModel(model);
+		}
+
+		float maxpitch = config.GetFloat("pitch_with_movement", 0.0);
+		if (maxpitch > 0.0)
+		{
+			component.SetObjectProp("DroneProp.PitchWithMovement", true);
+			component.SetObjectPropFloat("DroneProp.MaxPitch", maxpitch);
+			component.SetObjectProp("DroneProp.PitchTurnInverted", config.GetNum("invert_turn_pitch", 0));
+			component.SetObjectPropFloat("DroneProp.TurnSpeed", config.GetFloat("rot_speed", 350.0));
+		}
+
+		float maxroll = config.GetFloat("roll_with_movement", 0.0);
+		if (maxroll > 0.0)
+		{
+			component.SetObjectProp("DroneProp.RollWithMovement", true);
+			component.SetObjectPropFloat("DroneProp.MaxRoll", maxroll);
+			component.SetObjectPropFloat("DroneProp.TurnSpeed", config.GetFloat("rot_speed", 350.0));
+		}
+
+		FTransform spawn;
+		spawn.Position = drone.GetPosition();
+		FEntityStatics.FinishSpawningEntity(component, spawn);
+
+		component.Drone = drone;
+
+		if (StrEqual(type, "prop_rotors"))
+		{
+			float spin = config.GetFloat("rotation_speed", 100.0);
+			component.SetObjectPropFloat("DroneProp.RotorSpinSpeed", spin);
+		}
+
+		component.SetObjectProp("DroneProp.IsDestructible", config.GetNum("destructible"));
+		component.MaxHealth = config.GetNum("health");
+		component.Health = component.MaxHealth;
+
+		component.SetObjectProp("DroneProp.DestroyOnDeath", config.GetNum("destroy_on_death"));
+		component.SetObjectProp("DroneProp.TakeDamage", config.GetNum("take_damage"));
+		component.Modifier = config.GetFloat("damage_mod", 1.0);
+	}
+
+	return component;
+}
+
+AComponent GetAttachmentByName(FComponentArray attachments, const char[] name)
+{
+	for (int i = 0; i < attachments.Length; i++)
+	{
+		AComponent component = attachments.Get(i);
+		char compName[64];
+		component.GetObject().GetTargetName(compName, sizeof compName);
+
+		if (StrEqual(name, compName))
+		{
+			return component;
+		}
+	}
+
+	return null;
 }
 
 /*
@@ -1244,18 +1378,20 @@ void CreateDroneTeleporter(ADrone drone)
 }
 */
 
-void CreateDroneCamera(ADrone drone, FVector cameraOffset, FDroneComponents components)
+void CreateDroneCamera(ADrone drone, FVector cameraOffset, FDroneComponents components, FRotator seatRot)
 {
 	FObject camera;
 	camera = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
 
-	camera.SetKeyValue("model", "models/empty.mdl");
+	camera.SetKeyValue("model", "models/empty.mdl"); 
+	// PrintToChatAll("CreateDroneCamera::Camera Offset: %.1f, %.1f, %.1f", cameraOffset.X, cameraOffset.Y, cameraOffset.Z);
 
 	FTransform spawn;
 	spawn.Position = drone.GetPosition();
 	spawn.Rotation = drone.GetAngles();
 
 	spawn.Position = FMath.OffsetVector(spawn.Position, spawn.Rotation, cameraOffset);
+	spawn.Rotation = seatRot;
 
 	FGameplayStatics.FinishSpawn(camera, spawn);
 
@@ -1332,16 +1468,38 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 	{
 		FDroneComponents seatComps;
 		cameraOffset = Vector_GetFromKV(kv, "camera_offset");
-		CreateDroneCamera(drone, cameraOffset, seatComps);
+		FRotator rotation;
+		rotation = Rotator_GetFromKV(kv, "seat_rotation");
+		// PrintToChatAll("Camera Offset: %.1f, %.1f, %.1f | Camera = %d", cameraOffset.X, cameraOffset.Y, cameraOffset.Z, seat.GetCamera().Get());
+		CreateDroneCamera(drone, cameraOffset, seatComps, rotation);
 
 		seat.SetCamera(seatComps.Camera);
 	}
-	//PrintToChatAll("Camera Offset: %.1f, %.1f, %.1f", cameraOffset.X, cameraOffset.Y, cameraOffset.Z);
 	seat.SetCameraOffset(cameraOffset);
+
+	// Player visibility
+	char animation[64];
+	kv.GetString("seat_animation", animation, sizeof animation);
+	if (strlen(animation) > 0)
+	{
+		seat.UsePlayerModel = true;
+		seat.SetPlayerAnim(animation);
+	}
+
+	char attachpoint[64];
+	kv.GetString("seat_attach", attachpoint, sizeof attachpoint);
+	seat.SetAttachPoint(attachpoint);
+	FTransform attach;
+	GetAttachmentTransform(drone.GetObject(), attachpoint, attach);
 
 	FVector seatpos;
 	seatpos = Vector_GetFromKV(kv, "seat_position");
+	seatpos.Add(attach.Position);
 	seat.SetSeatPosition(seatpos);
+
+	FRotator rot;
+	rot = Rotator_GetFromKV(kv, "seat_rotation");
+	seat.SetSeatRotation(rot);
 
 	seat.Occupied = false;
 	seat.AIControlled = false;
@@ -1363,8 +1521,12 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 		return;
 	}
 
+	RemoveDestructibleParts(drone);
+
 	char name[64];
 	drone.GetInternalName(name, sizeof name);
+
+	StopEngine(drone);
 
 	Action action = Plugin_Continue;
 	Call_StartForward(DroneDestroyed);
@@ -1408,7 +1570,7 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 
 	if (action == Plugin_Continue)
 	{
-		CreateTimer(3.0, DroneExplodeTimer, drone, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(30.0, DroneExplodeTimer, drone, TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
 
@@ -1426,6 +1588,55 @@ void RemoveLingeringWeapons()
 	}
 }
 
+void RemoveDestructibleParts(ADrone drone)
+{
+	// ExplosionCore_MidAir
+	FComponentArray components;
+	components = drone.GetComponents().Attachments;
+	
+	if (components)
+	{
+		for (int i = components.Length - 1; i >= 0; i--)
+		{
+			AComponent component = components.Get(i);
+			if (component.GetObjectProp("DroneProp.DestroyOnDeath"))
+			{
+				char modelname[64];
+				component.GetPropString(Prop_Data, "m_ModelName", modelname, sizeof modelname);
+				FTransform spawn;
+				spawn.Position = component.GetPosition();
+				spawn.Rotation = component.GetAngles();
+
+				FObject parent;
+				parent = component.GetObjectPropEnt("DroneComponent.ParentEntity");
+				char targetname[64];
+				component.GetObject().GetTargetName(targetname, sizeof targetname);
+				if (parent.Valid())
+				{
+					FVector parentPos;
+					parentPos = parent.GetPosition();
+					spawn.Position = component.GetRelativePosition();
+					// PrintToChatAll("%s Position: %.1f, %.1f, %.1f", targetname, spawn.Position.X, spawn.Position.Y, spawn.Position.Z);
+					// PrintToChatAll("%s parent position: %.1f, %.1f, %.1f", targetname, parentPos.X, parentPos.Y, parentPos.Z);
+					spawn.Position.Add(parentPos);
+				}
+
+				FEntityStatics.DestroyEntity(component);
+
+				FObject debris;
+				debris = FGameplayStatics.CreateObjectDeferred("prop_physics_multiplayer");
+				debris.SetModel(modelname);
+
+				CreateParticleSystem("ExplosionCore_MidAir", spawn.Position, spawn.Rotation, 5.0);
+
+				FGameplayStatics.FinishSpawn(debris, spawn);
+
+				debris.KillOnDelay(30.0);
+			}
+		}
+	}
+}
+
 /******************
 * Helper Functions
 ******************/
@@ -1436,22 +1647,86 @@ Action DroneExplodeTimer(Handle timer, ADrone drone)
 	return Plugin_Continue;
 }
 
+void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
+{
+	Action action = Plugin_Continue;
+	Call_StartForward(DroneEnteredValid);
+
+	Call_PushCell(drone);
+	Call_PushCell(player);
+	Call_PushCell(seat);
+
+	Call_Finish(action);
+
+	if (action > Plugin_Continue)
+	{
+		return;
+	}
+
+	player.InDrone = true;
+	player.Drone = drone;
+
+	if (seat.Type == Seat_Pilot)
+	{
+		drone.Pilot = player;
+		drone.Team = player.Team;
+		StartEngine(drone);
+	}
+
+	if (seat.UsePlayerModel)
+	{
+		CreatePlayerModel(drone, seat, player);
+	}
+
+	UpdateDroneComponentColors(drone);
+
+	SetVariantInt(1);
+	player.GetObject().Input("SetForcedTauntCam");
+	
+	// Temp
+	seat.Occupier = player;
+	seat.Occupied = true;
+	seat.AIControlled = false;
+
+	SetEntityRenderMode(player.Get(), RENDER_NONE);
+	RemoveWearables(player);
+	TF2_RemoveAllWeapons(player.Get());
+
+	SetClientViewEntity(player.Get(), seat.GetCamera().Get());
+
+	SDKHook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
+
+	Call_StartForward(DroneEntered);
+
+	Call_PushCell(drone);
+	Call_PushCell(player);
+	Call_PushCell(seat);
+
+	Call_Finish();
+}
+
 void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool resupply = true)
 {
 	player.InDrone = false;
 	if (drone)
 	{
-		drone.Pilot = null;
 		seat.Occupier = null;
 		seat.Occupied = false;
 
 		if (seat.Type == Seat_Pilot)
 		{
+			drone.Pilot = null;
 			drone.Team = TFTeam_Unassigned;
+			StopEngine(drone);
 		}
 	}
 	//seat.Occupied = false;
 	//seat.Occupier = null;
+
+	if (seat.GetPlayerModel().Valid())
+	{
+		seat.GetPlayerModel().Kill();
+	}
 
 	SetEntityRenderMode(player.Get(), RENDER_NORMAL);
 	player.ExitingHealth = player.GetClient().GetHealth();
@@ -1477,6 +1752,24 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 	Call_PushCell(seat);
 
 	Call_Finish();
+}
+
+void StartEngine(ADrone drone)
+{
+	drone.EngineOn = true;
+
+	char enginesound[64];
+	drone.GetObjectPropString("Drone.EngineSound", enginesound, sizeof enginesound);
+	EmitSoundToAll(enginesound, drone.Get(), SNDCHAN_AUTO, 100);
+}
+
+void StopEngine(ADrone drone)
+{
+	drone.EngineOn = false;
+
+	char enginesound[64];
+	drone.GetObjectPropString("Drone.EngineSound", enginesound, sizeof enginesound);
+	StopSound(drone.Get(), SNDCHAN_AUTO, enginesound);
 }
 
 Action ResetPlayerHealth(Handle timer, ADronePlayer player)
@@ -1540,7 +1833,7 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 			FDroneSeat nearestSeat = null;
 			if (!player.InDrone && PlayerAimingAtDrone(player, drone, nearestSeat))
 			{
-				if (!nearestSeat.Occupied)
+				if (!nearestSeat.Occupied && drone.Alive)
 				{
 					PlayerEnterVehicle(player, drone, nearestSeat);
 				}
@@ -1567,54 +1860,6 @@ public Action OnClientCommandKeyValues(int clientId, KeyValues kv)
 	}
 
 	return Plugin_Continue;
-}
-
-void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
-{
-	Action action = Plugin_Continue;
-	Call_StartForward(DroneEnteredValid);
-
-	Call_PushCell(drone);
-	Call_PushCell(player);
-	Call_PushCell(seat);
-
-	Call_Finish(action);
-
-	if (action > Plugin_Continue)
-	{
-		return;
-	}
-
-	player.InDrone = true;
-	player.Drone = drone;
-	drone.Pilot = player;
-	drone.Team = player.Team;
-
-	UpdateDroneComponentColors(drone);
-
-	SetVariantInt(1);
-	player.GetObject().Input("SetForcedTauntCam");
-	
-	// Temp
-	seat.Occupier = player;
-	seat.Occupied = true;
-	seat.AIControlled = false;
-
-	SetEntityRenderMode(player.Get(), RENDER_NONE);
-	RemoveWearables(player);
-	TF2_RemoveAllWeapons(player.Get());
-
-	SetClientViewEntity(player.Get(), seat.GetCamera().Get());
-
-	SDKHook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
-
-	Call_StartForward(DroneEntered);
-
-	Call_PushCell(drone);
-	Call_PushCell(player);
-	Call_PushCell(seat);
-
-	Call_Finish();
 }
 
 void UpdateDroneComponentColors(ADrone drone)
@@ -1701,7 +1946,7 @@ bool PlayerAimingAtDrone(AClient client, ADrone& currentDrone, FDroneSeat& curre
 					seatPos = seat.GetSeatPosition();
 					seatPos = FMath.OffsetVector(dronePos, droneAngle, seatPos);
 
-					if (seatPos.DistanceTo(startPos) <= 100.0)
+					if (seatPos.DistanceTo(startPos) <= 150.0)
 					{
 						currentSeat = seat;
 						break;
@@ -1737,3 +1982,36 @@ bool TraceFilter(int entity, int mask, int exclude)
 	return entity != exclude;
 }
 
+void CreatePlayerModel(ADrone drone, FDroneSeat seat, AClient client)
+{
+	FObject model;
+	model = FGameplayStatics.CreateObjectDeferred("prop_dynamic_override");
+	char playermodel[64];
+
+	client.GetPropString(Prop_Data, "m_ModelName", playermodel, sizeof playermodel);
+	model.SetKeyValue("model", playermodel);
+	FGameplayStatics.FinishSpawn(model, ConstructTransform(drone.GetPosition(), drone.GetAngles()));
+	model.SetParent(drone.GetObject());
+
+	int skin = view_as<int>(client.Team) - 2;
+	SetVariantInt(skin);
+	model.Input("skin");
+
+	char attachpoint[64];
+	seat.GetAttachPoint(attachpoint, sizeof attachpoint);
+	SetVariantString(attachpoint);
+	model.Input("SetParentAttachment");
+
+	FVector offset;
+	offset = seat.GetSeatPosition();
+	FRotator rot;
+	rot = seat.GetSeatRotation();
+	TeleportEntity(model.Get(), offset.ToFloat(), rot.ToFloat());
+
+	char anim[64];
+	seat.GetPlayerAnim(anim, sizeof anim);
+	SetVariantString(anim);
+	model.Input("SetAnimation");
+
+	seat.SetPlayerModel(model);
+}

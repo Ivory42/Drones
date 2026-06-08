@@ -19,10 +19,10 @@ methodmap AComponent < ABaseEntity
 		public get() { return this.GetObjectProp("Entity_IsDroneComponent"); }
 		public set(bool value) { this.SetObjectProp("Entity_IsDroneComponent", value); }
 	}
-	property int Modifier // Extra damage this drone takes when this component is hit
+	property float Modifier // Extra damage this drone takes when this component is hit
 	{
 		public get() { return this.GetObjectProp("Comp_DamageModTaken"); }
-		public set(int mod)	{ this.SetObjectProp("Comp_DamageModTaken", mod); }
+		public set(float mod)	{ this.SetObjectProp("Comp_DamageModTaken", mod); }
 	}
 
 	property ADrone Drone // Drone this component is attached to
@@ -727,6 +727,48 @@ methodmap FDroneSeat < StringMap
 		public set(float time) { this.SetValue("NextSwitchTime", time); }
 	}
 
+	property bool UsePlayerModel
+	{
+		public get()
+		{
+			bool value = false;
+			this.GetValue("UsePlayerModel", value);
+
+			return value;
+		}
+		public set(bool value) { this.SetValue("UsePlayerModel", value); }
+	}
+
+	public void SetPlayerAnim(const char[] sequence)
+	{
+		this.SetString("PlayerAnimation", sequence);
+	}
+	public void GetPlayerAnim(char[] sequence, int size)
+	{
+		this.GetString("PlayerAnimation", sequence, size);
+	}
+
+	public void SetAttachPoint(const char[] attach)
+	{
+		this.SetString("SeatAttachPointName", attach);
+	}
+	public void GetAttachPoint(char[] attach, int size)
+	{
+		this.GetString("SeatAttachPointName", attach, size);
+	}
+
+	public void SetPlayerModel(FObject model)
+	{
+		this.SetArray("SeatPlayerModel", model, sizeof FObject);
+	}
+	public FObject GetPlayerModel()
+	{
+		FObject model;
+		this.GetArray("SeatPlayerModel", model, sizeof FObject);
+		
+		return model;
+	}
+
 	public FObject GetCamera()
 	{
 		FObject camera;
@@ -748,6 +790,15 @@ methodmap FDroneSeat < StringMap
 		return result;
 	}
 	public void SetSeatPosition(FVector position) { this.SetArray("SeatAttachPoint", position, sizeof FVector); }
+
+	public FRotator GetSeatRotation()
+	{
+		FRotator rotation;
+		this.GetArray("SeatRotationOffset", rotation, sizeof FRotator);
+
+		return rotation;
+	}
+	public void SetSeatRotation(FRotator rotation) { this.SetArray("SeatRotationOffset", rotation, sizeof FRotator); }
 
 	public FVector GetCameraOffset()
 	{

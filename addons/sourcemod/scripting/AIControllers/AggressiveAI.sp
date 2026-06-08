@@ -267,6 +267,7 @@ void Aggressive_SimulateAttack(FDroneAI ai, FDroneSeat seat, ADrone drone, ADron
 
 stock void Aggressive_SimulateDisengaged(FDroneAI ai, FDroneSeat seat, ADrone drone, FDroneAIParams params, bool thinkTick)
 {
+	#pragma unused params
 	if (seat.Type == Seat_Pilot && thinkTick)
 	{
 		APersistentObject target = ai.CurrentTarget;

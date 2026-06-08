@@ -77,6 +77,12 @@ methodmap ADrone < AComponent
 		public set(bool value) { this.SetObjectProp("Entity_IsDrone", value); }
 	}
 
+	property bool EngineOn
+	{
+		public get() { return view_as<bool>(this.GetObjectProp("Drone_EngineOn")); }
+		public set(bool value) { this.SetObjectProp("Drone_EngineOn", value); }
+	}
+
 	property bool CanMove // Can this drone currently move
 	{
 		public get() { return this.GetObjectProp("CustomDrone_CanMove"); }
@@ -235,6 +241,18 @@ methodmap ADrone < AComponent
 	{
 		public get() { return this.GetObjectProp("Drone_HeloUpdatePitch"); }
 		public set(bool value) { this.SetObjectProp("Drone_HeloUpdatePitch", value); }
+	}
+
+	property float MaxPitch // Max pitch for drone when moving forward
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HeloForwardPitch"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HeloForwardPitch", value); }
+	}
+
+	property float MaxRoll // Max roll for drone when moving right
+	{
+		public get() { return this.GetObjectPropFloat("Drone_HeloMaxRoll"); }
+		public set(float value) { this.SetObjectPropFloat("Drone_HeloMaxRoll", value); }
 	}
 
 	property bool HeloChangeRoll // For helo drones, adjust roll when moving

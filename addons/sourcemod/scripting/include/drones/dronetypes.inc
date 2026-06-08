@@ -27,6 +27,8 @@ enum EProjType
 
 	DroneProj_Cannon, // Loose cannon
 
+	DroneProj_MiniRocket, // Rocket with a smaller model and the airtstrike's contrail
+
 	// Bombs - non functional
 	DroneProj_Bomb = 100, // Default bomb projectile - detonates on a fuse timer that is activated upon being spawned
 
