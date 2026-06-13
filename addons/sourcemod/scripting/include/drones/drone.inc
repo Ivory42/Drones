@@ -24,6 +24,7 @@ enum struct FDroneComponents
 
 	FVector MinBounds;
 	FVector MaxBounds;
+	FVector BoundsOffset;
 
 	FComponentArray Attachments;
 

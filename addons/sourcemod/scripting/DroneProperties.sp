@@ -1050,6 +1050,7 @@ Action DroneTakeDamage(ADrone drone, FObject attacker, FObject inflictor, float&
 	}
 
 	drone.Health -= RoundFloat(damage);
+	drone.Health = FMath.ClampInt(drone.Health, 0, drone.MaxHealth);
 	float healthpercent = float(drone.Health) / float(drone.MaxHealth);
 	UpdateDamageComponents(drone, healthpercent);
 
@@ -1183,7 +1184,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 
 			int buttons = client.Inputs;
 
-			char ammo[32], hudString[256];
+			char ammo[32], hudString[256], weaponstring[64];
 			char weapName[64];
 			if (activeWeapon)
 			{
@@ -1194,10 +1195,14 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 				activeWeapon.Simulate();
 			}
 
-			if (!drone.NoHud) // Do not display hud if this is true
+			if (!drone.NoHud && seat.Type != Seat_Passenger) // Do not display hud if this is true
 			{
 				SetHudTextParams(0.6, -1.0, 0.01, 255, 255, 255, 150);
-				FormatEx(hudString, sizeof hudString, "Health: %d\nWeapon: %s\n%s", droneHp, weapName, ammo);
+				if (seat.Weapons && seat.Weapons.Length > 0)
+				{
+					FormatEx(weaponstring, sizeof weaponstring, "Weapon: %s\n%s", weapName, ammo);
+				}
+				FormatEx(hudString, sizeof hudString, "Health: %d\n%s", droneHp, weaponstring);
 				ShowHudText(client.Get(), -1, hudString); // Need to change to a synchronizer
 			}
 
@@ -1214,7 +1219,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 			{
 				case Seat_Gunner: // handling weapons for this seat
 				{
-					if (buttons & IN_ATTACK)
+					if (buttons & IN_ATTACK && activeWeapon)
 					{
 						OnDroneAttack(client, activeWeapon, drone, seat);
 						buttons &= ~IN_ATTACK; // Prevent player attacking
@@ -1229,7 +1234,7 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 				}
 				case Seat_Pilot: // Mostly movement, can also control specific weapons
 				{
-					if (buttons & IN_ATTACK)
+					if (buttons & IN_ATTACK && activeWeapon)
 					{
 						OnDroneAttack(client, activeWeapon, drone, seat);
 						buttons &= ~IN_ATTACK; // Prevent player attacking
@@ -1339,6 +1344,7 @@ void FormatAmmoString(ADroneWeapon weapon, char[] buffer, int size)
 			else
 				FormatEx(buffer, size, "Ammo: %d", weapon.Ammo);
 		}
+		case WeaponState_Destroyed: FormatEx(buffer, size, "Destroyed");
 	}
 }
 
@@ -1434,6 +1440,9 @@ float GetDistanceToGround(ADrone drone)
 	float distance = 1.0;
 	FVector start, end;
 	start = drone.GetPosition();
+	float vertOffset = drone.GetObjectPropFloat("Drone.VerticalIKOffset");
+	start.Z += vertOffset;
+	start = FMath.OffsetVector(start, drone.GetAngles(), drone.GetComponents().BoundsOffset)
 	end = start;
 	end.Z -= 3000.0;
 

@@ -21,14 +21,20 @@ methodmap AComponent < ABaseEntity
 	}
 	property float Modifier // Extra damage this drone takes when this component is hit
 	{
-		public get() { return this.GetObjectProp("Comp_DamageModTaken"); }
-		public set(float mod)	{ this.SetObjectProp("Comp_DamageModTaken", mod); }
+		public get() { return this.GetObjectProp("DroneComp.DamageModTaken"); }
+		public set(float mod)	{ this.SetObjectProp("DroneComp.DamageModTaken", mod); }
 	}
 
 	property ADrone Drone // Drone this component is attached to
 	{
-		public get() { return view_as<ADrone>(this.GetObjectProp("Comp_ParentDrone")); }
-		public set(ADrone value) { this.SetObjectProp("Comp_ParentDrone", value); }
+		public get() { return view_as<ADrone>(this.GetObjectProp("DroneComp.ParentDrone")); }
+		public set(ADrone value) { this.SetObjectProp("DroneComp.ParentDrone", value); }
+	}
+
+	property EComponentState ComponentState
+	{
+		public get() { return view_as<EComponentState>(this.GetObjectProp("DroneComp.State")); }
+		public set(EComponentState state) { this.SetObjectProp("DroneComp.State", state); }
 	}
 }
 
@@ -737,6 +743,21 @@ methodmap FDroneSeat < StringMap
 			return value;
 		}
 		public set(bool value) { this.SetValue("UsePlayerModel", value); }
+	}
+
+	property AComponent AttachedComponent
+	{
+		public get()
+		{
+			FObject comp;
+			this.GetArray("ComponentAttachedTo", comp, sizeof FObject);
+
+			return view_as<AComponent>(FEntityStatics.GetEntity(comp));
+		}
+		public set(AComponent comp)
+		{
+			this.SetArray("ComponentAttachedTo", comp.GetObject(), sizeof FObject);
+		}
 	}
 
 	public void SetPlayerAnim(const char[] sequence)

@@ -24,6 +24,12 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.IsDroneWeapon = true;
 		weapon.Drone = drone;
 
+		char targetname[64];
+		kv.GetString("weapon_name", targetname, sizeof targetname);
+		weapon.GetObject().SetTargetName(targetname);
+
+		GetPropComponentValues(weapon, kv);
+
 		FDroneWeaponExtras components;
 		SetStringValues(weapon, kv);
 		
@@ -31,10 +37,27 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		{
 			components.Parent = components.Mount;
 			weapon.ComplexAngles = true;
+			weapon.SetObjectPropEnt("DroneComponent.ParentEntity", components.Parent.GetObject());
 		}
 		else // If no mount, parent to the drone
 		{
 			components.Parent = drone;
+		}
+
+		// Add this weapon and mount to our attachments
+		FDroneComponents droneComps;
+		droneComps = drone.GetComponents();
+		FComponentArray attachments = droneComps.Attachments
+		if (!attachments)
+		{
+			attachments = new FComponentArray();
+			drone.SetComponents(droneComps);
+		}
+
+		attachments.Push(weapon);
+		if (components.Mount)
+		{
+			attachments.Push(components.Mount);
 		}
 
 		bool muzzlesUseOffset = false;
@@ -142,6 +165,10 @@ bool SetupMount(KeyValues kv, ADrone drone, FDroneWeaponExtras components)
 		char attachment[64];
 		kv.GetString("mount_attach", attachment, sizeof attachment);
 
+		char targetname[64];
+		kv.GetString("mount_name", targetname, sizeof targetname);
+		mount.GetObject().SetTargetName(targetname);
+
 		FTransform spawn;
 		spawn.Position = drone.GetPosition();
 		spawn.Rotation = drone.GetAngles();
@@ -176,11 +203,12 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 	else
 	{
 		length = ExplodeString(muzzleoffsets, ";", muzzles, sizeof muzzles, sizeof muzzles[]);
+		// PrintToChatAll("Muzzles = %s", muzzleoffsets);
 	}
 
-	//char name[64];
-	//weapon.GetDisplayName(name, sizeof name);
-	//PrintToChatAll("Muzzle count on weapon %s found: %d", name, length);
+	// char name[64];
+	// weapon.GetDisplayName(name, sizeof name);
+	// PrintToChatAll("Muzzle count on weapon %s found: %d", name, length);
 
 	FTransform attach;
 	FVector offset;
@@ -198,14 +226,20 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 			}
 			else
 			{
+				// PrintToChatAll("Using offsets for muzzle");
 				muzzle = FGameplayStatics.CreateObject("info_target");
 				char vec[3][64];
 				ExplodeString(muzzles[i], " ", vec, sizeof vec, sizeof vec[]);
+				
+				// PrintToChatAll("%s %s %s", vec[0], vec[1], vec[2]);
 				offset.X = StringToFloat(vec[0]);
 				offset.Y = StringToFloat(vec[1]);
 				offset.Z = StringToFloat(vec[2]);
 
-				attach.Position = FMath.OffsetVector(weapon.GetParent().GetPosition(), weapon.GetParent().GetAngles(), offset);
+				FObject attachEntity;
+				attachEntity = GetWeaponModel(weapon);
+
+				attach.Position = FMath.OffsetVector(attachEntity.GetPosition(), attachEntity.GetAngles(), offset);
 				muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
 			}
 
@@ -229,7 +263,7 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 		muzzle = FGameplayStatics.CreateObject("info_target");
 		if (weapon.GetMuzzleTransform(attach))
 		{
-			//PrintToChatAll("Found only one muzzle");
+			// PrintToChatAll("Found only one muzzle");
 			muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
 			if (weapon.UsesParent)
 			{
@@ -244,9 +278,9 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 		else
 		{
 			// If no attachment found, resort to offset from origin
-			//PrintToChatAll("no muzzle found");
+			// PrintToChatAll("no muzzle found");
 			FObject attachEntity;
-			attachEntity = weapon.GetReceiver();
+			attachEntity = GetWeaponModel(weapon);
 			if (weapon.UsesParent)
 			{
 				AComponent parent = weapon.GetParent();
@@ -691,6 +725,7 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 
 		if (mini)
 		{
+			rocket.SetObjectProp("DroneRocket.IsMiniRocket", true);
 			int modelindex = PrecacheModel("models/items/ar2_grenade.mdl");
 			for (int i = 0; i < 4; i++)
 			{
@@ -714,15 +749,17 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 
 			trail.SetParent(rocket.GetObject());
 			rocket.SetObjectPropEnt("MiniRocket.Trail", trail);
-			SDKHook(rocket.Get(), SDKHook_Touch, OnMiniRocketHit);
 		}
 
 		if (impact)
 		{
-			SDKHook(rocket.Get(), SDKHook_ShouldCollide, OnRocketOverlap);
-			SDKHook(rocket.Get(), SDKHook_Touch, OnProjHit);
+			rocket.SetObjectProp("DroneRocket.IsImpactRocket", true);
 			ReskinRocket(rocket);
 		}
+
+		SDKHook(rocket.Get(), SDKHook_ShouldCollide, OnRocketOverlap);
+		SDKHook(rocket.Get(), SDKHook_EndTouchPost, OnRocketEndTouch);
+		SDKHook(rocket.Get(), SDKHook_Touch, OnRocketTouch);
 	}
 }
 
@@ -796,65 +833,6 @@ void CreateLaser(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn,
 	}
 }
 
-Action OnProjHit(int entity, int victim)
-{
-	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
-	FObject hit;
-	FClient client;
-
-	hit = ConstructObject(victim);
-	client = CastToClient(hit);
-	if (!client.Valid()) // Not a client
-	{
-		if (victim == 0)
-		{
-			FEntityStatics.DestroyEntity(rocket);
-			return Plugin_Handled;
-		}
-		if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
-		{
-			if (hit.Cast("prop_") || hit.Cast("func_") || hit.Cast("obj_"))
-			{
-				SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
-				FEntityStatics.DestroyEntity(rocket);
-				return Plugin_Handled;
-			}
-		}
-
-		return Plugin_Continue;
-	}
-	else
-	{
-		float damage = rocket.Damage;
-		float distance = FGameplayStatics.GetDistanceBetweenObjects(rocket.GetOwningDrone().GetObject(), hit);
-		float dmgMod = FMath.ClampFloat((512.0 / distance), 1.25, 0.528);
-		damage *= dmgMod;
-		SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
-		FEntityStatics.DestroyEntity(rocket);
-		return Plugin_Handled;
-	}
-}
-
-Action OnMiniRocketHit(int entity, int victim)
-{
-	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
-	FObject hit;
-
-	hit = ConstructObject(victim);
-	if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
-	{
-		FObject trail;
-		trail = rocket.GetObjectPropEnt("MiniRocket.Trail");
-		if (trail.Valid())
-		{
-			trail.Input("ClearParent");
-			trail.KillOnDelay(5.0);
-		}
-	}
-
-	return Plugin_Continue;
-}
-
 Action OnLaserHit(int entity, int victim)
 {
 	ABaseDroneProjectile laser = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
@@ -890,6 +868,96 @@ Action OnLaserHit(int entity, int victim)
 	}
 }
 
+Action OnRocketTouch(int entity, int victim)
+{
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
+	FObject hit;
+	FClient client;
+
+	hit = ConstructObject(victim);
+	if (victim == rocket.GetOwningDrone().Get()) // Pass through our own drone
+	{
+		int solid = rocket.GetProp(Prop_Send, "m_nSolidType");
+		rocket.SetObjectProp("DroneRocket.OriginalSolid", solid);
+		rocket.SetObjectProp("DroneRocket.IgnoreCollision", true);
+		rocket.SetProp(Prop_Send, "m_nSolidType", 0);
+		SetEntityCollisionGroup(rocket.Get(), 1);
+		RequestFrame(RocketHitOwningDronePost, rocket);
+		return Plugin_Handled;
+	}
+
+	if (rocket.GetObjectProp("DroneRocket.IsImpactRocket"))
+	{
+		client = CastToClient(hit);
+		if (!client.Valid()) // Not a client
+		{
+			if (victim == 0)
+			{
+				FEntityStatics.DestroyEntity(rocket);
+				return Plugin_Handled;
+			}
+			if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
+			{
+				if (hit.Cast("prop_") || hit.Cast("func_") || hit.Cast("obj_"))
+				{
+					SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), rocket.Damage, DMG_ENERGYBEAM, _, _, _, false);
+					FEntityStatics.DestroyEntity(rocket);
+					return Plugin_Handled;
+				}
+			}
+
+			return Plugin_Continue;
+		}
+		else
+		{
+			float damage = rocket.Damage;
+			float distance = FGameplayStatics.GetDistanceBetweenObjects(rocket.GetOwningDrone().GetObject(), hit);
+			float dmgMod = FMath.ClampFloat((512.0 / distance), 1.25, 0.528);
+			damage *= dmgMod;
+			SDKHooks_TakeDamage(victim, entity, rocket.GetOwner().Get(), damage, DMG_ENERGYBEAM, _, _, _, false);
+			FEntityStatics.DestroyEntity(rocket);
+			return Plugin_Handled;
+		}
+	}
+
+	if (rocket.GetObjectProp("DroneRocket.IsMiniRocket"))
+	{
+		if ((hit.GetProp(Prop_Send, "m_nSolidType") != 0) && !(hit.GetProp(Prop_Send, "m_usSolidFlags") & 4))
+		{
+			FObject trail;
+			trail = rocket.GetObjectPropEnt("MiniRocket.Trail");
+			if (trail.Valid())
+			{
+				trail.Input("ClearParent");
+				trail.KillOnDelay(5.0);
+			}
+		}
+	}
+
+	return Plugin_Continue;
+}
+
+void RocketHitOwningDronePost(ABaseDroneProjectile rocket)
+{
+	if (rocket)
+	{
+		float speed = rocket.WeaponLauncher.ProjectileSpeed;
+		rocket.FireProjectile(rocket.GetAngles(), speed);
+	}
+}
+
+void OnRocketEndTouch(int entity, int other)
+{
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
+	if (rocket)
+	{
+		rocket.SetObjectProp("DroneRocket.IgnoreCollision", false);
+		int solid = rocket.GetObjectProp("DroneRocket.OriginalSolid");
+		rocket.SetProp(Prop_Send, "m_nSolidType", solid);
+		SetEntityCollisionGroup(rocket.Get(), 24);
+	}
+}
+
 bool OnRocketOverlap(int rocketId, int collision, int mask, bool result)
 {
 	if (collision == 24)
@@ -897,7 +965,16 @@ bool OnRocketOverlap(int rocketId, int collision, int mask, bool result)
 		return false;
 	}
 
-	return true;
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(rocketId));
+	if (rocket)
+	{
+		if (rocket.GetObjectProp("DroneRocket.IgnoreCollision"))
+		{
+			return false;
+		}
+	}
+
+	return result;
 }
 
 bool WeaponFiresGrenades(ADroneWeapon weapon)
@@ -960,4 +1037,17 @@ FDroneFireParams GetDroneFireParams(ADrone drone, ADroneWeapon weapon, FRotator 
 	params.End = GetDroneAimPosition(drone, desiredAngle, seat);
 
 	return params;
+}
+
+FObject GetWeaponModel(ADroneWeapon weapon)
+{
+	FObject model;
+	model = weapon.GetReceiver();
+
+	if (!model.Valid())
+	{
+		model = weapon.GetParent().GetObject();
+	}
+
+	return model;
 }

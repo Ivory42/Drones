@@ -325,14 +325,6 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 	if (!drone || !drone.Valid() || !drone.IsDrone || drone.MoveType == MoveType_Physics || drone.MoveType == MoveType_Physics_NoMovement)
 		return;
 
-	if (drone.MoveType == MoveType_Hover)
-	{
-		float distance = GetDistanceToGround(drone);
-		if (distance > drone.HoverMaxHeight * 1.5)
-		{
-			return;
-		}
-	}
 	FRotator currentAngle, playerAngles;
 	currentAngle = drone.GetAngles();
 
@@ -358,6 +350,14 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 		{
 			if (drone.UsePlayerAngles)
 			{
+				if (drone.MoveType == MoveType_Hover)
+				{
+					float distance = GetDistanceToGround(drone);
+					if (distance > drone.HoverMaxHeight * 1.5)
+					{
+						return;
+					}
+				}
 				// Smoothly rotate drone in direction the player is aiming
 				if (drone.MoveType == MoveType_Helo || drone.MoveType == MoveType_Hover)
 				{
@@ -526,8 +526,9 @@ void AdjustHoverDroneAngles(ADrone drone, FRotator currentAngle)
 	{
 		// Perform an "IK" for this drone
 		FVector mins, maxs;
-		mins = ConstructVector(-1.0 * drone.HoverBackwardIK, -1.0 * drone.HoverLeftIK, 0.0);
-		maxs = ConstructVector(drone.HoverForwardIK, drone.HoverRightIK, 20.0);
+		float vertOffset = drone.GetObjectPropFloat("Drone.VerticalIKOffset");
+		mins = ConstructVector(-1.0 * drone.HoverBackwardIK, -1.0 * drone.HoverLeftIK, vertOffset);
+		maxs = ConstructVector(drone.HoverForwardIK, drone.HoverRightIK, vertOffset + 20.0);
 
 		FVector testmins, testmaxs;
 		testmins = mins;
@@ -538,6 +539,7 @@ void AdjustHoverDroneAngles(ADrone drone, FRotator currentAngle)
 
 		FVector start, end, offset;
 		offset.X = maxs.X / 2.0;
+		offset.Z = mins.Z; // Always offset by our vertical minimum
 		start = FMath.OffsetVector(drone.GetPosition(), absAngle, offset);
 		end = start;
 		end.Z -= maxDistance;

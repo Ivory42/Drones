@@ -78,6 +78,13 @@ enum EWeaponState
 	WeaponState_Custom // Custom state
 };
 
+enum EComponentState
+{
+	ComponentState_Normal,
+	
+	ComponentState_Destroyed
+}
+
 // What type of weapon this is - For projectile weapons, behavior is determined by EProjType
 enum EWeaponType
 {
