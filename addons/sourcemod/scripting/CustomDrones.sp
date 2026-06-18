@@ -44,7 +44,7 @@ public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones 2",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for Team Fortress 2",
-	version 		= 	"2.3.5"
+	version 		= 	"2.3.6"
 };
 
 public void OnPluginStart()
@@ -1595,6 +1595,7 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 {
 	FDroneSeat seat = new FDroneSeat();
 	seat.Type = view_as<ESeatType>(kv.GetNum("type")); // 0 = pilot, 1 = gunner, 2 = passenger
+	seat.FirstPerson = view_as<bool>(kv.GetNum("first_person", 0));
 	seat.Drone = drone;
 
 	// If this is not a passenger seat, let's find the associated weapons that this seat can use
@@ -1966,7 +1967,14 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
 
 	UpdateDroneComponentColors(drone);
 
-	SetVariantInt(1);
+	if (seat.FirstPerson)
+	{
+		SetVariantInt(0);
+	}
+	else
+	{
+		SetVariantInt(1);
+	}
 	player.GetObject().Input("SetForcedTauntCam");
 	
 	// Temp
@@ -2426,7 +2434,7 @@ ADrone FindBestDroneForLockOn(ADroneProjectileWeapon weapon, ADrone drone, FRota
 	FRotator targetAngle;
 	FVector targetVec, forwardVec;
 	forwardVec = viewAngles.GetForwardVector();
-	float fov = 25.0;
+	float fov = 15.0;
 
 	FObject curTarget;
 	curTarget = weapon.GetObjectPropEnt("DroneWeapon.CurrentHomingTarget");

@@ -856,6 +856,18 @@ methodmap FDroneSeat < StringMap
 		public set(bool value) { this.SetValue("UsePlayerModel", value); }
 	}
 
+	property bool FirstPerson
+	{
+		public get()
+		{
+			bool value = false;
+			this.GetValue("UseFirstPersonView", value);
+
+			return value;
+		}
+		public set(bool value) { this.SetValue("UseFirstPersonView", value); }
+	}
+
 	property AComponent AttachedComponent
 	{
 		public get()

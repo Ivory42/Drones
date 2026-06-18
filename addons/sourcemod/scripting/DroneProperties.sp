@@ -1378,10 +1378,9 @@ void ProjectileWeaponLockOn(ADroneProjectileWeapon weapon, ADrone drone, AClient
 
 	if (target && reticle.Valid())
 	{
-		weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", target.GetObject());
-
 		if (target.Alive) // New target
 		{
+			weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", target.GetObject());
 			if ((curTarget && curTarget != target) || !curTarget)
 			{
 				reticle.Input("ClearParent");
