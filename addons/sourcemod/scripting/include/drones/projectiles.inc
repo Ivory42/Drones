@@ -98,6 +98,30 @@ methodmap ABaseDroneProjectile < ABaseEntity
 		}
 	}
 
+	property bool Homing
+	{
+		public get() { return this.GetObjectProp("DroneProjectile.IsHoming"); }
+		public set(bool value) { this.SetObjectProp("DroneProjectile.IsHoming", value); }
+	}
+
+	property float HomingVelocity // Speed at which this projectile homes in on targets
+	{
+		public get() { return this.GetObjectPropFloat("DroneProjectile.HomingVelocity"); }
+		public set(float value) { this.SetObjectPropFloat("DroneProjectile.HomingVelocity", value); }
+	}
+
+	property float HomingDelay // Delay before this projectile will begin homing
+	{
+		public get() { return this.GetObjectPropFloat("DroneProjectile.HomingDelay"); }
+		public set(float value) { this.SetObjectPropFloat("DroneProjectile.HomingDelay", value); }
+	}
+
+	property float HomingMaxAngle // Max homing angle
+	{
+		public get() { return this.GetObjectPropFloat("DroneProjectile.HomingMaxAngle"); }
+		public set(float value) { this.SetObjectPropFloat("DroneProjectile.HomingMaxAngle", value); }
+	}
+
 	// The weapon which fired this projectile
 	property ADroneProjectileWeapon WeaponLauncher
 	{

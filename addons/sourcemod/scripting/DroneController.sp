@@ -16,7 +16,39 @@ void OnDroneAttack(ADronePlayer client, ADroneWeapon weapon, ADrone drone, FDron
 			case WeaponType_Projectile:
 			{
 				ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(weapon);
-				DroneFireProjectile(drone, projWep, projWep.ProjType, client);
+				bool homing = false;
+				if (projWep.LocksOn)
+				{
+					if (projWep.RequiresLockOn && !projWep.IsLockedOn)
+					{
+						char lockonSound[64];
+						projWep.GetLockFailureSound(lockonSound, sizeof lockonSound);
+						EmitSoundToClient(client.Get(), lockonSound);
+						PrintHintText(client.Get(), "Weapon requires a lock-on target!");
+						return;
+					}
+					if (projWep.IsLockedOn)
+					{
+						homing = true;
+					}
+				}
+				DroneFireProjectile(drone, projWep, projWep.ProjType, client, homing);
+			}
+			case WeaponType_Custom: // Lock-on can also apply to custom weapon types
+			{
+				ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(weapon);
+				if (projWep.LocksOn)
+				{
+					// We only check if lock on is required, everything else is handled by the sub plugin for custom weapons
+					if (projWep.RequiresLockOn && !projWep.IsLockedOn)
+					{
+						char lockonSound[64];
+						projWep.GetLockFailureSound(lockonSound, sizeof lockonSound);
+						EmitSoundToClient(client.Get(), lockonSound);
+						PrintHintText(client.Get(), "Weapon requires a lock-on target!");
+						return;
+					}
+				}
 			}
 		}
 
@@ -441,37 +473,40 @@ void OnDroneAimChanged(FRotator desiredAngle, FDroneSeat seat, ADrone drone)
 
 void CalculatePropTurnAngles(float turn, bool rightTurn, ADrone drone)
 {
-	FComponentArray components = drone.GetComponents().Attachments;
-	for (int i = 0; i < components.Length; i++)
+	if (FloatAbs(turn) > 0.2)
 	{
-		AComponent component = components.Get(i);
-		if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+		FComponentArray components = drone.GetComponents().Attachments;
+		for (int i = 0; i < components.Length; i++)
 		{
-			if (component.GetObjectProp("DroneProp.PitchWithMovement"))
+			AComponent component = components.Get(i);
+			if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
 			{
-				float factor = turn / 180.0; // get our turn rate between 0 and 1
-				bool invert = component.GetObjectProp("DroneProp.PitchTurnInverted");
-
-				// Determine which direction this component should pitch when turning
-				// When turning right, inverted will pitch negative
-				// When turning left, non-inverted will pitch negative
-				if (rightTurn)
+				if (component.GetObjectProp("DroneProp.PitchWithMovement"))
 				{
-					if (invert)
+					float factor = turn / 180.0; // get our turn rate between 0 and 1
+					bool invert = component.GetObjectProp("DroneProp.PitchTurnInverted");
+
+					// Determine which direction this component should pitch when turning
+					// When turning right, inverted will pitch negative
+					// When turning left, non-inverted will pitch negative
+					if (rightTurn)
+					{
+						if (invert)
+						{
+							factor *= -1.0;
+						}
+					}
+					else if (!invert)
 					{
 						factor *= -1.0;
 					}
-				}
-				else if (!invert)
-				{
-					factor *= -1.0;
-				}
 
-				FRotator rotation;
-				rotation = component.GetObjectPropRotator("DroneProp.TurnRotation");
-				rotation.Pitch = component.GetObjectPropFloat("DroneProp.MaxPitch") * factor;
+					FRotator rotation;
+					rotation = component.GetObjectPropRotator("DroneProp.TurnRotation");
+					rotation.Pitch = component.GetObjectPropFloat("DroneProp.MaxPitch") * factor;
 
-				component.SetObjectPropRotator("DroneProp.TurnRotation", rotation);
+					component.SetObjectPropRotator("DroneProp.TurnRotation", rotation);
+				}
 			}
 		}
 	}
@@ -694,6 +729,17 @@ void CycleNextWeapon(FDroneSeat seat)
 				seat.ActiveWeaponIndex = index;
 
 				seat.ActiveWeapon = view_as<ADroneWeapon>(seat.Weapons.Get(index));
+
+				FObject reticle;
+				reticle = seat.GetReticle();
+				if (seat.ActiveWeapon.HidesReticle)
+				{
+					HideReticle(reticle);
+				}
+				else
+				{
+					ShowReticle(reticle);
+				}
 			}
 		}
 	}

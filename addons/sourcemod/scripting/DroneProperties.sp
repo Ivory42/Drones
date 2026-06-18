@@ -1184,6 +1184,9 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 
 			int buttons = client.Inputs;
 
+			FRotator viewAngles;
+			viewAngles = client.GetEyeAngles();
+
 			char ammo[32], hudString[256], weaponstring[64];
 			char weapName[64];
 			if (activeWeapon)
@@ -1193,6 +1196,35 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 				activeWeapon.GetDisplayName(weapName, sizeof weapName);
 
 				activeWeapon.Simulate();
+
+				if (activeWeapon.Type == WeaponType_Projectile)
+				{
+					ADroneProjectileWeapon projWep = view_as<ADroneProjectileWeapon>(activeWeapon);
+					if (projWep.LocksOn)
+					{
+						ProjectileWeaponLockOn(projWep, drone, client, viewAngles);
+					}
+				}
+
+				if (seat.GetReticle().Valid())
+				{
+					FObject reticle;
+					reticle = seat.GetReticle();
+
+					FDroneFireParams params;
+					FRotator desired;
+					desired = viewAngles;
+					params = GetDroneFireParams(drone, activeWeapon, desired, seat);
+					FVector reticleVec;
+					reticleVec = Vector_MakeFromPoints(params.Start, params.End);
+					reticleVec.Normalize();
+					reticleVec.Scale(800.0);
+					reticleVec.Add(params.Start);
+
+					int interp = reticle.GetProp(Prop_Send, "m_ubInterpolationFrame");
+					TeleportEntity(reticle.Get(), reticleVec.ToFloat());
+					reticle.SetProp(Prop_Send, "m_ubInterpolationFrame", interp);
+				}
 			}
 
 			if (!drone.NoHud && seat.Type != Seat_Passenger) // Do not display hud if this is true
@@ -1211,9 +1243,6 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 			position = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), seat.GetSeatPosition());
 
 			TeleportEntity(client.Get(), position.ToFloat(), NULL_VECTOR, {0.0, 0.0, 0.0});
-
-			FRotator viewAngles;
-			viewAngles = client.GetEyeAngles();
 
 			switch (seat.Type)
 			{
@@ -1329,6 +1358,90 @@ void SimulateSeat(FDroneSeat seat, ADrone drone)
 			SimulateController(ai, seat, drone);
 		}
 	}
+}
+
+void ProjectileWeaponLockOn(ADroneProjectileWeapon weapon, ADrone drone, AClient client, FRotator viewAngles)
+{
+	ADrone target = FindBestDroneForLockOn(weapon, drone, viewAngles);
+	ADrone curTarget = view_as<ADrone>(FEntityStatics.GetEntity(weapon.GetObjectPropEnt("DroneWeapon.CurrentHomingTarget")));
+	FObject reticle;
+	reticle = weapon.GetLockReticle();
+
+	if (curTarget)
+	{
+		if (!curTarget.Alive)
+		{
+			ClearReticle(reticle);
+			weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", GetWorld());
+		}
+	}
+
+	if (target && reticle.Valid())
+	{
+		weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", target.GetObject());
+
+		if (target.Alive) // New target
+		{
+			if ((curTarget && curTarget != target) || !curTarget)
+			{
+				reticle.Input("ClearParent");
+				TeleportEntity(reticle.Get(), target.GetPosition().ToFloat());
+				reticle.SetParent(target.GetObject());
+			}
+		}
+		if (!target.Alive)
+		{
+			ClearReticle(reticle);
+			target = null;
+		}
+		else
+		{
+			char sound[64];
+			ShowReticle(reticle);
+			if (weapon.LockOnProgress < weapon.LockOnTime && weapon.TimerExpired("DroneWeapon.LockOnTimer"))
+			{
+				weapon.LockOnProgress += 0.05;
+				weapon.GetLockTickSound(sound, sizeof sound);
+				EmitSoundToClient(client.Get(), sound);
+				UpdateLockReticle(reticle, weapon.LockOnProgress / weapon.LockOnTime);
+			}
+			else if (weapon.LockOnProgress >= weapon.LockOnTime)
+			{
+				if (!weapon.IsLockedOn)
+				{
+					weapon.IsLockedOn = true;
+					weapon.GetLockSuccessSound(sound, sizeof sound);
+					EmitSoundToClient(client.Get(), sound);
+					weapon.SetObjectPropFloat("DroneWeapon.LastLockTime", GetGameTime());
+				}
+			}
+		}
+	}
+	else if (!target)
+	{
+		weapon.LockOnProgress = 0.0;
+		weapon.IsLockedOn = false;
+		weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", GetWorld());
+		ClearReticle(reticle);
+	}
+}
+
+void UpdateLockReticle(FObject reticle, float progress)
+{
+	int brightness = RoundFloat(255.0 * progress);
+	float scale = FMath.InterpFloatTo(5.0, 2.0, progress);
+
+	SetVariantInt(brightness);
+	reticle.Input("Alpha");
+	SetVariantFloat(scale);
+	reticle.Input("SetScale");
+}
+
+void ClearReticle(FObject reticle)
+{
+	HideReticle(reticle);
+	reticle.Input("ClearParent");
+	TeleportEntity(reticle.Get(), {0.0, 0.0, 0.0});
 }
 
 // Setup our ammo text for the Drone UI

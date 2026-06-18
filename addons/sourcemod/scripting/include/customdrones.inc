@@ -585,6 +585,24 @@ stock EWeaponType GetWeaponType(KeyValues kv)
 	return WeaponType_Gun; // Defaults to gun if type is invalid
 }
 
+stock ELockOnType GetWeaponLockOnType(const char[] type)
+{
+	if (StrEqual(type, "ground"))
+	{
+		return LockOn_Ground;
+	}
+	else if (StrEqual(type, "air"))
+	{
+		return LockOn_Air;
+	}
+	else if (StrEqual(type, "both"))
+	{
+		return LockOn_Both;
+	}
+
+	return LockOn_None;
+}
+
 /*
 * Create a visual bullet tracer between two positions. The spawned entities are automatically removed
 *

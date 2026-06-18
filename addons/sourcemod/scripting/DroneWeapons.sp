@@ -116,12 +116,13 @@ ADroneWeapon SetupWeapon(KeyValues kv, ADrone drone)
 		weapon.Fixed = view_as<bool>(kv.GetNum("fixed"));
 		weapon.ProjPerShot = kv.GetNum("bullets_per_shot", 1);
 		weapon.AILeadTargets = view_as<bool>(kv.GetNum("ai_predict_targets", 0));
+		weapon.HidesReticle = view_as<bool>(kv.GetNum("hide_reticle", 0));
 
 		FRotator defangle;
 		defangle = Rotator_GetFromKV(kv, "default_angle");
 		weapon.SetDefaultAngle(defangle);
 
-		if (weapon.Type == WeaponType_Projectile)
+		if (weapon.Type == WeaponType_Projectile || weapon.Type == WeaponType_Custom) // Custom can use projectiles
 		{
 			ADroneProjectileWeapon projWeapon = view_as<ADroneProjectileWeapon>(weapon);
 			SetupProjectileWeapon(projWeapon, kv);
@@ -221,6 +222,7 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 				if (weapon.GetMuzzleTransform(attach))
 				{
 					muzzle = FGameplayStatics.CreateObject("info_target");
+					attach.Position = FMath.OffsetVector(attach.Position, attach.Rotation, weapon.GetObjects().ProjOffset);
 					muzzle.Teleport(attach.Position, attach.Rotation, ConstructVector());
 				}
 			}
@@ -299,15 +301,55 @@ void SetupAttachments(ADroneWeapon weapon, const char[] muzzleoffsets, bool useO
 	}
 }
 
-//void SetupMount(KeyValues kv, ADroneWeapon weapon, ADrone drone)
-//{
-	//
-//}
-
 void SetupProjectileWeapon(ADroneProjectileWeapon weapon, KeyValues kv)
 {
 	weapon.ProjectileSpeed = kv.GetFloat("speed", 1100.0);
 	weapon.ProjType = view_as<EProjType>(kv.GetNum("proj_type"));
+	weapon.LocksOn = view_as<bool>(kv.GetNum("locks_on", 0));
+	FRotator trajOffset;
+	trajOffset = Rotator_GetFromKV(kv, "proj_trajectory_offset");
+	weapon.SetTrajectoryOffset(trajOffset);
+	weapon.FixedTrajectory = view_as<bool>(kv.GetNum("trajectory_uses_weapon", 0));
+	weapon.RequiresLockOn = view_as<bool>(kv.GetNum("require_lockon", 0));
+	if (weapon.RequiresLockOn)
+	{
+		weapon.LocksOn = true;
+	}
+
+	if (weapon.LocksOn)
+	{
+		weapon.LockOnTime = kv.GetFloat("lockon_time", 1.0);
+		weapon.HomingVelocity = kv.GetFloat("homing_velocity", 300.0);
+		weapon.HomingDelay = kv.GetFloat("homing_delay", 0.0);
+		weapon.HomingMaxAngle = kv.GetFloat("homing_max_angle", 180.0);
+		char lockontype[64];
+		kv.GetString("lockon_movetype", lockontype, sizeof lockontype, "both");
+		weapon.LockOnType = GetWeaponLockOnType(lockontype);
+		
+		FTimer timer;
+		timer = ConstructTimer(0.05, false, true, false);
+		weapon.SetTimer("DroneWeapon.LockOnTimer", timer);
+		weapon.LockOnProgress = 0.0;
+
+		char sound[64];
+		kv.GetString("lockon_tick_sound", sound, sizeof sound, "ui/message_update.wav");
+		PrecacheSound(sound);
+		weapon.SetLockTickSound(sound);
+
+		kv.GetString("lockon_success_sound", sound, sizeof sound, "ui/killsound_electro.wav");
+		PrecacheSound(sound);
+		weapon.SetLockSuccessSound(sound);
+
+		kv.GetString("lockon_failure_sound", sound, sizeof sound, "buttons/button2.wav");
+		PrecacheSound(sound);
+		weapon.SetLockFailureSound(sound);
+
+		ABaseEntity reticle = CreateReticle(weapon.Drone);
+		weapon.SetLockReticle(reticle.GetObject());
+		reticle.SetObjectProp("DroneSprite.Reticle.Weapon", weapon);
+		reticle.SetObjectProp("DroneSprite.Reticle.LockOnReticle", true);
+		SDKHook(reticle.Get(), SDKHook_SetTransmit, OnReticleReplicate);
+	}
 }
 
 void SetStringValues(ADroneWeapon weapon, KeyValues kv)
@@ -404,7 +446,7 @@ bool FilterIgnoreAll(int entity, int mask, any data)
 }
 */
 
-void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, ADronePlayer player)
+void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType projectile, ADronePlayer player, bool homing = false)
 {
 	FVector start, end;
 	FDroneSeat seat = weapon.Seat;
@@ -414,7 +456,6 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 
 	start = params.Start;
 	end = params.End;
-
 
 	// Now fire our projectiles
 	int projectiles = weapon.ProjPerShot;
@@ -432,8 +473,18 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 
 		FVector direction;
 		FRotator angle;
-		direction = Vector_Subtract(end, start);
-		angle = Vector_GetAngles(direction);
+		if (weapon.FixedTrajectory)
+		{
+			angle = weapon.Drone.GetAngles();
+			FRotator offset;
+			offset = weapon.GetTrajectoryOffset();
+			angle = AddRotators(angle, offset);
+		}
+		else
+		{
+			direction = Vector_Subtract(end, start);
+			angle = Vector_GetAngles(direction);
+		}
 
 		angle.Pitch += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
 		angle.Yaw += GetRandomFloat(-weapon.Inaccuracy, weapon.Inaccuracy);
@@ -441,21 +492,89 @@ void DroneFireProjectile(ADrone drone, ADroneProjectileWeapon weapon, EProjType 
 		FTransform spawn;
 		spawn = ConstructTransform(start, angle);
 
+		ABaseDroneProjectile proj = null;
 		switch (projectile)
 		{
-			case DroneProj_Rocket: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
-			case DroneProj_MiniRocket: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", false, true);
-			case DroneProj_Energy: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
-			case DroneProj_Sentry: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
-			case DroneProj_Grenade: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
-			case DroneProj_Cannon: CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, true);
-			case DroneProj_Impact: CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
-			case DroneProj_Orb: CreateOrb(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
-			case DroneProj_Laser: CreateLaser(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Rocket: proj = CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket");
+			case DroneProj_MiniRocket: proj = CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", false, true);
+			case DroneProj_Energy: proj = CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_energy_ball");
+			case DroneProj_Sentry: proj = CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_sentryrocket");
+			case DroneProj_Grenade: proj = CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Cannon: proj = CreateGrenade(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, true);
+			case DroneProj_Impact: proj = CreateRocket(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle, "tf_projectile_rocket", true);
+			case DroneProj_Orb: proj = CreateOrb(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+			case DroneProj_Laser: proj = CreateLaser(weapon, player.GetObject(), spawn, weapon.Damage, view_as<int>(drone.Team), angle);
+		}
+
+		if (proj)
+		{
+			if (homing)
+			{
+				FObject target;
+				target = weapon.GetObjectPropEnt("DroneWeapon.CurrentHomingTarget");
+				proj.SetObjectPropEnt("DroneProjectile.CurrentHomingTarget", target);
+				proj.Homing = true;
+				proj.HomingVelocity = weapon.HomingVelocity;
+				proj.HomingMaxAngle = weapon.HomingMaxAngle;
+				proj.HomingDelay = GetGameTime() + weapon.HomingDelay;
+				FEntityStatics.EnableEntityTick(proj, OnProjectileHoming);
+			}
 		}
 	}
 }
 
+// Temp
+FRotator AddRotators(const FRotator rot1, const FRotator rot2)
+{
+	FRotator result;
+	result = rot1;
+	result.Pitch += rot2.Pitch;
+	result.Yaw += rot2.Yaw;
+	result.Roll += rot2.Roll;
+
+	NormalizeAngles(result);
+
+	return result;
+}
+
+void OnProjectileHoming(ABaseEntity entity)
+{
+	ABaseDroneProjectile projectile = view_as<ABaseDroneProjectile>(entity);
+	if (projectile && projectile.Homing)
+	{
+		if (projectile.HomingDelay <= GetGameTime())
+		{
+			FObject target;
+			target = projectile.GetObjectPropEnt("DroneProjectile.CurrentHomingTarget");
+			if (target.Valid())
+			{
+				FVector velocity, projPos, targPos, direction, homing;
+				FRotator rotation, targAngle;
+
+				velocity = projectile.GetVelocity();
+				projPos = projectile.GetPosition();
+				targPos = target.GetPosition();
+				targPos.Z += 20.0;
+
+				direction = Vector_MakeFromPoints(projPos, targPos);
+				direction.Normalize();
+				rotation = projectile.GetAngles();
+				targAngle = Vector_GetAngles(direction);
+				float fov = FMath.GetAngle(rotation, targAngle);
+				if (fov <= projectile.HomingMaxAngle)
+				{
+					homing = direction;
+					homing.Scale(projectile.HomingVelocity);
+					float speed = velocity.Length();
+					
+					velocity.Add(homing);
+					rotation = Vector_GetAngles(velocity);
+					projectile.FireProjectile(rotation, speed);
+				}
+			}
+		}
+	}
+}
 
 // Whenever the mount takes damage, send that damage over to the weapon itself
 /*Action OnMountDamaged(int mountId, int& attackerId, int& inflictorId, float& damage, int& damagetype)
@@ -710,7 +829,7 @@ FVector GetComplexMuzzlePos(ADrone drone, ADroneWeapon weapon)
 	*/
 }
 
-void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false, bool mini = false)
+ABaseDroneProjectile CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, char[] classname, bool impact = false, bool mini = false)
 {
 	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity(classname, owner, "DroneComponents.DroneRocketEntity"));
 	if (rocket)
@@ -761,6 +880,8 @@ void CreateRocket(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn
 		SDKHook(rocket.Get(), SDKHook_EndTouchPost, OnRocketEndTouch);
 		SDKHook(rocket.Get(), SDKHook_Touch, OnRocketTouch);
 	}
+
+	return rocket;
 }
 
 void ReskinRocket(ABaseDroneProjectile rocket)
@@ -770,7 +891,7 @@ void ReskinRocket(ABaseDroneProjectile rocket)
 	rocket.SetPropFloat(Prop_Send, "m_flModelScale", 0.1);
 }
 
-void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, bool cannon = false)
+ABaseDroneProjectile CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction, bool cannon = false)
 {
 	ADroneGrenade grenade = view_as<ADroneGrenade>(FEntityStatics.CreateEntity("tf_projectile_pipe", owner, "DroneComponents.DroneGrenadeEntity"));
 	if (grenade)
@@ -790,9 +911,11 @@ void CreateGrenade(ADroneProjectileWeapon weapon, FObject owner, FTransform spaw
 
 		grenade.FireProjectile(direction, weapon.ProjectileSpeed);
 	}
+	
+	return grenade;
 }
 
-void CreateOrb(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+ABaseDroneProjectile CreateOrb(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
 {
 	ABaseDroneProjectile orb = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity("tf_projectile_mechanicalarmorb", owner, "DroneComponents.DroneOrbEntity"));
 	if (orb)
@@ -805,9 +928,11 @@ void CreateOrb(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, f
 
 		orb.FireProjectile(direction, weapon.ProjectileSpeed);
 	}
+
+	return orb;
 }
 
-void CreateLaser(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
+ABaseDroneProjectile CreateLaser(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn, float damage, int team = 0, FRotator direction)
 {
 	ABaseDroneProjectile laser = view_as<ABaseDroneProjectile>(FEntityStatics.CreateEntity("tf_projectile_energy_ring", owner, "DroneComponents.DroneEnergyRing"));
 	if (laser)
@@ -831,6 +956,8 @@ void CreateLaser(ADroneProjectileWeapon weapon, FObject owner, FTransform spawn,
 
 		SDKHook(laser.Get(), SDKHook_Touch, OnLaserHit);
 	}
+
+	return laser;
 }
 
 Action OnLaserHit(int entity, int victim)
@@ -1025,10 +1152,11 @@ FDroneFireParams GetDroneFireParams(ADrone drone, ADroneWeapon weapon, FRotator 
 	}
 
 	NormalizeAngles(desiredAngle);
+	params.Angle = desiredAngle;
 
 	if (seat)
 	{
-		params.Start = seat.GetCameraOffset();
+		params.Start = FMath.OffsetVector(drone.GetPosition(), drone.GetAngles(), seat.GetCameraOffset());
 	}
 	else
 	{
@@ -1046,7 +1174,7 @@ FObject GetWeaponModel(ADroneWeapon weapon)
 
 	if (!model.Valid())
 	{
-		model = weapon.GetParent().GetObject();
+		model = weapon.Drone.GetObject();
 	}
 
 	return model;

@@ -83,7 +83,7 @@ enum EComponentState
 	ComponentState_Normal,
 	
 	ComponentState_Destroyed
-}
+};
 
 // What type of weapon this is - For projectile weapons, behavior is determined by EProjType
 enum EWeaponType
@@ -104,5 +104,17 @@ enum ESeatType
 
 	Seat_Gunner, // Gunner seat, this seat controls the associated weapon.
 
-	Seat_Passenger, // Passenger seat, this seat has no special function.
-}
+	Seat_Passenger // Passenger seat, this seat has no special function.
+};
+
+// Enumeration for lock on types
+enum ELockOnType
+{
+	LockOn_None, // Defualt, no lock on enabled
+	
+	LockOn_Ground, // Can only lock on to ground vehicles
+
+	LockOn_Air, // Can only lock on to air vehicles
+
+	LockOn_Both // Can lock on to both types of vehicles
+};

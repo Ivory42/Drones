@@ -199,6 +199,12 @@ methodmap ADrone < AComponent
 	/*
 	* 	Drone Function
 	*/
+	
+	property ELockOnType FunctionType // Drone movement functionality. Air or ground based
+	{
+		public get() { return view_as<ELockOnType>(this.GetObjectProp("Drone.FunctionalityType")); }
+		public set(ELockOnType type) { this.SetObjectProp("Drone.FunctionalityType", type); }
+	}
 
 	property FComponentArray Weapons
 	{

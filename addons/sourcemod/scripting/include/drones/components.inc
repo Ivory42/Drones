@@ -270,6 +270,12 @@ methodmap ADroneWeapon < AComponent
 		public set(bool value) { this.SetObjectProp("DroneWeapon.FixedAngles", value); }
 	}
 
+	property bool FixedTrajectory // If true, projectiles fired from this weapon will use the weapon's angles
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.FixedTrajectoryAngles"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.FixedTrajectoryAngles", value); }
+	}
+
 	// Whether or not this weapon looks for attachments on the parent instead of the weapon's model.
 	property bool UsesParent
 	{
@@ -287,6 +293,18 @@ methodmap ADroneWeapon < AComponent
 	{
 		public get() { return this.GetObjectProp("DroneWeapon.PerShot"); }
 		public set(int value) { this.SetObjectProp("DroneWeapon.PerShot", value); }
+	}
+
+	property bool HidesReticle // If true, hide the reticle while this weapon is active
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.HideSeatReticle"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.HideSeatReticle", value); }
+	}
+
+	property ELockOnType LockOnType // Weapon lock on type
+	{
+		public get() { return view_as<ELockOnType>(this.GetObjectProp("DroneWeapon.LockOnType")); }
+		public set(ELockOnType type) { this.SetObjectProp("DroneWeapon.LockOnType", type); }
 	}
 
 	public FRotator GetDefaultAngle()
@@ -585,6 +603,99 @@ methodmap ADroneProjectileWeapon < ADroneWeapon
 		public get() { return view_as<EProjType>(this.GetObjectPropFloat("DroneWeapon.ProjectileType")); }
 		public set(EProjType type) { this.SetObjectProp("DroneWeapon.ProjectileType", type); }
 	}
+
+	property bool LocksOn // If true, this weapon can lock on to other drones
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.CanLockOn"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.CanLockOn", value); }
+	}
+
+	property bool RequiresLockOn // If true, this weapon must lock on to fire
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.RequiresLockOn"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.RequiresLockOn", value); }
+	}
+
+	property bool IsLockedOn // Whether or not this weapon is locked on
+	{
+		public get() { return this.GetObjectProp("DroneWeapon.IsLockedOn"); }
+		public set(bool value) { this.SetObjectProp("DroneWeapon.IsLockedOn", value); }
+	}
+
+	property float LockOnProgress
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.LockOnProgress"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.LockOnProgress", value); }
+	}
+
+	property float LockOnTime // Time it takes for this weapon to confirm a lock on target
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.LockOnTime"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.LockOnTime", value); }
+	}
+
+	property float HomingVelocity // Speed at which fired projectile home in on targets
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.HomingVelocity"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.HomingVelocity", value); }
+	}
+
+	property float HomingDelay // Delay before the fired projectile will begin homing
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.HomingDelay"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.HomingDelay", value); }
+	}
+
+	property float HomingMaxAngle // Max homing angle of fired projectiles
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.HomingMaxAngle"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.HomingMaxAngle", value); }
+	}
+
+	public FRotator GetTrajectoryOffset()
+	{
+		return this.GetObjectPropRotator("DroneWeapon.TrajectoryOffset");
+	}
+	public void SetTrajectoryOffset(FRotator angle)
+	{
+		this.SetObjectPropRotator("DroneWeapon.TrajectoryOffset", angle);
+	}
+
+	public void SetLockReticle(FObject reticle)
+	{
+		this.SetObjectPropEnt("DroneWeapon.LockOnReticle", reticle);
+	}
+	public FObject GetLockReticle()
+	{
+		return this.GetObjectPropEnt("DroneWeapon.LockOnReticle");
+	}
+
+	public void SetLockTickSound(const char[] sound)
+	{
+		this.SetString("DroneWeapon.LockOnTickSound", sound);
+	}
+	public void GetLockTickSound(char[] sound, int size)
+	{
+		this.GetString("DroneWeapon.LockOnTickSound", sound, size);
+	}
+
+	public void SetLockSuccessSound(const char[] sound)
+	{
+		this.SetString("DroneWeapon.LockOnSuccessSound", sound);
+	}
+	public void GetLockSuccessSound(char[] sound, int size)
+	{
+		this.GetString("DroneWeapon.LockOnSuccessSound", sound, size);
+	}
+
+	public void SetLockFailureSound(const char[] sound)
+	{
+		this.SetString("DroneWeapon.LockOnFailureSound", sound);
+	}
+	public void GetLockFailureSound(char[] sound, int size)
+	{
+		this.GetString("DroneWeapon.LockOnFailureSound", sound, size);
+	}
 }
 
 
@@ -758,6 +869,18 @@ methodmap FDroneSeat < StringMap
 		{
 			this.SetArray("ComponentAttachedTo", comp.GetObject(), sizeof FObject);
 		}
+	}
+
+	public void SetReticle(FObject reticle)
+	{
+		this.SetArray("WeaponReticle", reticle, sizeof FObject);
+	}
+	public FObject GetReticle()
+	{
+		FObject reticle;
+		this.GetArray("WeaponReticle", reticle, sizeof FObject);
+
+		return reticle;
 	}
 
 	public void SetPlayerAnim(const char[] sequence)

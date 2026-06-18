@@ -44,7 +44,7 @@ public Plugin MyInfo = {
 	name 			= 	"[TF2] Custom Drones 2",
 	author 			=	"Ivory",
 	description		= 	"Customizable drones for Team Fortress 2",
-	version 		= 	"2.3.2"
+	version 		= 	"2.3.5"
 };
 
 public void OnPluginStart()
@@ -1002,6 +1002,7 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 			drone.HeloChangePitch = view_as<bool>(config.GetNum("helo_changepitch", 0));
 			drone.HeloChangeRoll = view_as<bool>(config.GetNum("helo_changeroll", 1));
 			drone.HeloVerticalAxis = view_as<bool>(config.GetNum("helo_uservertical", 0));
+			drone.FunctionType = LockOn_Air;
 		}
 		case MoveType_Hover:
 		{
@@ -1014,11 +1015,27 @@ void SetupDrone(KeyValues config, FTransform spawn, ADrone& drone)
 			drone.HoverRightIK = config.GetFloat("hover_rightik");
 			drone.HoverLeftIK = config.GetFloat("hover_leftik");
 			drone.HoverMaxIncline = config.GetFloat("hover_maxincline");
+			drone.FunctionType = LockOn_Ground;
 		}
 		case MoveType_Physics:
 		{
 			SetupPhysicsTorque(drone, config, components, dronetag);
+			drone.FunctionType = LockOn_Ground;
 		}
+		case MoveType_Fly: drone.FunctionType = LockOn_Air;
+		default: drone.FunctionType = LockOn_Ground;
+	}
+
+	// Override functionality type
+	char functiontype[64];
+	config.GetString("function_type", functiontype, sizeof functiontype, "");
+	if (strlen(functiontype) > 1)
+	{
+		drone.FunctionType = GetWeaponLockOnType(functiontype);
+	}
+	if (drone.FunctionType == LockOn_None) // Default to ground if we somehow get none
+	{
+		drone.FunctionType = LockOn_Ground;
 	}
 
 	CreateAttachments(drone, config, components);
@@ -1631,6 +1648,10 @@ FDroneSeat SetupSeat(KeyValues kv, ADrone drone)
 		{
 			seat.ActiveWeaponIndex = 0;
 			seat.ActiveWeapon = seat.Weapons.Get(0); // Set active weapon to first index
+			ABaseEntity reticle = CreateReticle(drone);
+			seat.SetReticle(reticle.GetObject());
+			reticle.SetObjectProp("DroneSprite.Reticle.Seat", seat);
+			reticle.SetObjectProp("DroneSprite.Reticle.SeatReticle", true);
 		}
 	}
 
@@ -1721,6 +1742,29 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 		return;
 	}
 
+	if (drone.Weapons)
+	{
+		if (drone.Weapons.Length > 0)
+		{
+			for (int i = 0; i < drone.Weapons.Length; i++)
+			{
+				ADroneWeapon dweapon = drone.Weapons.Get(i);
+				if (dweapon)
+				{
+					FObject reticle;
+					reticle = dweapon.GetObjectPropEnt("DroneWeapon.LockOnReticle");
+					if (reticle.Valid())
+					{
+						ABaseEntity ret = FEntityStatics.GetEntity(reticle);
+						ret.SetObjectProp("DroneSprite.Reticle.Weapon", 0);
+						SDKUnhook(ret.Get(), SDKHook_SetTransmit, OnReticleReplicate);
+						reticle.Kill();
+					}
+				}
+			}
+		}
+	}
+
 	RemoveDestructibleParts(drone);
 
 	char name[64];
@@ -1728,29 +1772,22 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 
 	StopEngine(drone);
 
-	Action action = Plugin_Continue;
-	Call_StartForward(DroneDestroyed);
-
-	Call_PushCell(drone);
-	Call_PushArray(attacker, sizeof FObject);
-	Call_PushFloat(damage);
-	Call_PushString(name);
-	
-	Call_Finish(action);
-
 	for (int i = 0; i < drone.Seats.Length; i++)
 	{
 		FDroneSeat seat = drone.Seats.Get(i);
-		if (seat && seat.Occupied && seat.Occupier)
+		if (seat)
 		{
-			FClient occupier;
-			occupier = seat.Occupier.GetClient();
-			PlayerExitVehicle(seat.Occupier, seat, drone, false);
-			TF2_RegeneratePlayer(occupier.Get());
-			SDKHooks_TakeDamage(occupier.Get(), inflictor.Get(), attacker.Get(), 250.0);
-			//ForcePlayerSuicide(occupier.Get());
+			if (seat.Occupied && seat.Occupier)
+			{
+				FClient occupier;
+				occupier = seat.Occupier.GetClient();
+				PlayerExitVehicle(seat.Occupier, seat, drone, false);
+				TF2_RegeneratePlayer(occupier.Get());
+				SDKHooks_TakeDamage(occupier.Get(), inflictor.Get(), attacker.Get(), 250.0);
+				//ForcePlayerSuicide(occupier.Get());
 
-			RequestFrame(RemoveLingeringWeapons); // Weapons seem to get created upon resupplying and not given to the player
+				RequestFrame(RemoveLingeringWeapons); // Weapons seem to get created upon resupplying and not given to the player
+			}
 		}
 	}
 
@@ -1767,6 +1804,17 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 	FTransform spawn;
 	spawn.Position = drone.GetPosition();
 	CreateExplosion(0.0, 0.0, GetWorld(), drone.GetComponents().ExplodeParticle, drone.GetComponents().ExplodeSound, spawn);
+
+	// Forward
+	Action action = Plugin_Continue;
+	Call_StartForward(DroneDestroyed);
+
+	Call_PushCell(drone);
+	Call_PushArray(attacker, sizeof FObject);
+	Call_PushFloat(damage);
+	Call_PushString(name);
+	
+	Call_Finish(action);
 
 	if (action == Plugin_Continue)
 	{
@@ -1907,6 +1955,15 @@ void PlayerEnterVehicle(ADronePlayer player, ADrone drone, FDroneSeat seat)
 		CreatePlayerModel(drone, seat, player);
 	}
 
+	if (seat.GetReticle().Valid())
+	{
+		SDKHook(seat.GetReticle().Get(), SDKHook_SetTransmit, OnReticleReplicate);
+		if (seat.ActiveWeapon && !seat.ActiveWeapon.HidesReticle)
+		{
+			seat.GetReticle().Input("ShowSprite");
+		}
+	}
+
 	UpdateDroneComponentColors(drone);
 
 	SetVariantInt(1);
@@ -1955,6 +2012,12 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 	if (seat.GetPlayerModel().Valid())
 	{
 		seat.GetPlayerModel().Kill();
+	}
+
+	if (seat.GetReticle().Valid())
+	{
+		SDKUnhook(seat.GetReticle().Get(), SDKHook_SetTransmit, OnReticleReplicate);
+		seat.GetReticle().Input("HideSprite");
 	}
 
 	SetEntityRenderMode(player.Get(), RENDER_NORMAL);
@@ -2285,4 +2348,160 @@ void CreatePlayerModel(ADrone drone, FDroneSeat seat, AClient client)
 	model.Input("SetAnimation");
 
 	seat.SetPlayerModel(model);
+}
+
+ABaseEntity CreateReticle(ADrone drone, char[] material = "materials/sprites/reticle.vmt")
+{
+	ABaseEntity reticle = FEntityStatics.CreateEntity("env_sprite", drone.GetObject(), "DroneSprite.Reticle");
+	PrecacheModel(material);
+	reticle.SetKeyValue("model", material);
+	reticle.SetModel(material);
+
+	reticle.SetKeyValueFloat("scale", 0.5);
+	reticle.SetKeyValueInt("renderamt", 255);
+	reticle.SetKeyValueInt("rendermode", 1);
+
+	FTransform spawn;
+	spawn.Position = drone.GetPosition();
+	FEntityStatics.FinishSpawningEntity(reticle, spawn);
+
+	reticle.GetObject().Input("HideSprite");
+
+	SetEdictFlags(reticle.Get(), GetEdictFlags(reticle.Get()) & ~FL_EDICT_ALWAYS);
+
+	return reticle;
+}
+
+Action OnReticleReplicate(int entityId, int clientId)
+{
+	ABaseEntity reticle = FEntityStatics.GetEntityFromIndex(entityId);
+	if (reticle)
+	{
+		FDroneSeat seat = null;
+		if (reticle.GetObjectProp("DroneSprite.Reticle.SeatReticle"))
+		{
+			seat = reticle.GetObjectProp("DroneSprite.Reticle.Seat");
+		}
+		if (reticle.GetObjectProp("DroneSprite.Reticle.LockOnReticle"))
+		{
+			ADroneWeapon weapon = reticle.GetObjectProp("DroneSprite.Reticle.Weapon");
+			if (weapon && weapon.Seat && weapon.Seat.ActiveWeapon == weapon)
+			{
+				seat = weapon.Seat;
+			}
+		}
+		if (seat && !seat.AIControlled)
+		{
+			if (seat.Occupied && seat.Occupier)
+			{
+				if (clientId == seat.Occupier.Get())
+				{
+					return Plugin_Continue;
+				}
+			}
+		}
+	}
+	return Plugin_Handled;
+}
+
+void HideReticle(FObject reticle)
+{
+	if (reticle.Valid())
+	{
+		reticle.Input("HideSprite");
+	}
+}
+
+void ShowReticle(FObject reticle)
+{
+	if (reticle.Valid())
+	{
+		reticle.Input("ShowSprite");
+	}
+}
+
+ADrone FindBestDroneForLockOn(ADroneProjectileWeapon weapon, ADrone drone, FRotator viewAngles)
+{
+	ADrone target = null;
+	FRotator targetAngle;
+	FVector targetVec, forwardVec;
+	forwardVec = viewAngles.GetForwardVector();
+	float fov = 25.0;
+
+	FObject curTarget;
+	curTarget = weapon.GetObjectPropEnt("DroneWeapon.CurrentHomingTarget");
+
+	if (weapon.IsLockedOn)
+	{
+		if (!curTarget.Valid())
+		{
+			weapon.IsLockedOn = false;
+			weapon.LockOnProgress = 0.0;
+		}
+
+		float lastLockTime = weapon.GetObjectPropFloat("DroneWeapon.LastLockTime");
+		targetVec = Vector_Subtract(curTarget.GetPosition(), weapon.GetPosition());
+		targetAngle = FMath.CalcRotator(forwardVec, targetVec);
+		float angle = FMath.GetAngle(viewAngles, targetAngle);
+		if (angle > fov && GetGameTime() - lastLockTime >= 5.0) // 5 second target lock
+		{
+			return null;
+		}
+
+		return view_as<ADrone>(FEntityStatics.GetEntity(curTarget));
+	}
+
+	ADrone test = null;
+	float distance = 8192.0;
+	float bestfov = fov;
+	int entity = -1;
+	while ((entity = FindEntityByClassname(entity, "prop_physics_multiplayer")) != -1)
+	{
+		test = view_as<ADrone>(FEntityStatics.GetEntityFromIndex(entity));
+		if (test && test.IsDrone && test.Team != drone.Team && test.Alive && CanLockOn(weapon.LockOnType, test))
+		{
+			targetVec = Vector_Subtract(test.GetPosition(), weapon.GetPosition());
+			targetAngle = FMath.CalcRotator(forwardVec, targetVec);
+			float angle = FMath.GetAngle(viewAngles, targetAngle);
+			//PrintCenterTextAll("FOV = %.1f", angle);
+			if (angle > fov)
+			{
+				continue;
+			}
+
+			if (angle <= bestfov)
+			{
+				// Now check distance
+				float testdist = FGameplayStatics.GetDistanceBetweenObjects(drone.GetObject(), test.GetObject());
+				if (testdist < distance)
+				{
+					bestfov = angle;
+					target = test;
+				}
+			}
+		}
+	}
+
+	if (target && target.Get() != curTarget.Get()) // We have a new target, reset progress
+	{
+		weapon.LockOnProgress = 0.0;
+		PrintCenterTextAll("New target found");
+	}
+
+	return target;
+}
+
+bool CanLockOn(ELockOnType type, ADrone target)
+{
+	if (type == LockOn_None)
+	{
+		return false;
+	}
+
+	if (type == LockOn_Both)
+	{
+		return true;
+	}
+	
+	return type == target.FunctionType;
 }
