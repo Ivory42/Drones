@@ -2485,7 +2485,6 @@ ADrone FindBestDroneForLockOn(ADroneProjectileWeapon weapon, ADrone drone, FRota
 	if (target && target.Get() != curTarget.Get()) // We have a new target, reset progress
 	{
 		weapon.LockOnProgress = 0.0;
-		PrintCenterTextAll("New target found");
 	}
 
 	return target;
