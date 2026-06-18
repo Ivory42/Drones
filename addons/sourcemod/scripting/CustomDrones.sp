@@ -407,6 +407,16 @@ public void EntManager_OnEntityDestroyed(ABaseEntity entity)
 		char name[64];
 		weapon.GetInternalName(name, sizeof name);
 
+		FObject reticle;
+		reticle = weapon.GetObjectPropEnt("DroneWeapon.LockOnReticle");
+		if (reticle.Valid())
+		{
+			ABaseEntity ret = FEntityStatics.GetEntity(reticle);
+			ret.SetObjectProp("DroneSprite.Reticle.Weapon", 0);
+			SDKUnhook(ret.Get(), SDKHook_SetTransmit, OnReticleReplicate);
+			reticle.Kill();
+		}
+
 		//PrintToChatAll("Weapon deleted: %d\nName: %s\nEntity ID: %d", weapon.Get(), name, entity);
 		Call_StartForward(DroneWeaponRemoved);
 
@@ -1743,28 +1753,7 @@ void KillDrone(ADrone drone, FObject attacker, FObject inflictor, float damage, 
 		return;
 	}
 
-	if (drone.Weapons)
-	{
-		if (drone.Weapons.Length > 0)
-		{
-			for (int i = 0; i < drone.Weapons.Length; i++)
-			{
-				ADroneWeapon dweapon = drone.Weapons.Get(i);
-				if (dweapon)
-				{
-					FObject reticle;
-					reticle = dweapon.GetObjectPropEnt("DroneWeapon.LockOnReticle");
-					if (reticle.Valid())
-					{
-						ABaseEntity ret = FEntityStatics.GetEntity(reticle);
-						ret.SetObjectProp("DroneSprite.Reticle.Weapon", 0);
-						SDKUnhook(ret.Get(), SDKHook_SetTransmit, OnReticleReplicate);
-						reticle.Kill();
-					}
-				}
-			}
-		}
-	}
+	ClearDroneWeaponReticles(drone);
 
 	RemoveDestructibleParts(drone);
 
@@ -2511,4 +2500,30 @@ bool CanLockOn(ELockOnType type, ADrone target)
 	}
 	
 	return type == target.FunctionType;
+}
+
+void ClearDroneWeaponReticles(ADrone drone)
+{
+	if (drone.Weapons)
+	{
+		if (drone.Weapons.Length > 0)
+		{
+			for (int i = 0; i < drone.Weapons.Length; i++)
+			{
+				ADroneWeapon dweapon = drone.Weapons.Get(i);
+				if (dweapon)
+				{
+					FObject reticle;
+					reticle = dweapon.GetObjectPropEnt("DroneWeapon.LockOnReticle");
+					if (reticle.Valid())
+					{
+						ABaseEntity ret = FEntityStatics.GetEntity(reticle);
+						ret.SetObjectProp("DroneSprite.Reticle.Weapon", 0);
+						SDKUnhook(ret.Get(), SDKHook_SetTransmit, OnReticleReplicate);
+						reticle.Kill();
+					}
+				}
+			}
+		}
+	}
 }
