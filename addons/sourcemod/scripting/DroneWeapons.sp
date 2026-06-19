@@ -319,6 +319,7 @@ void SetupProjectileWeapon(ADroneProjectileWeapon weapon, KeyValues kv)
 	if (weapon.LocksOn)
 	{
 		weapon.LockOnTime = kv.GetFloat("lockon_time", 1.0);
+		weapon.LockOnFOV = kv.GetFloat("lockon_fov", 10.0);
 		weapon.HomingVelocity = kv.GetFloat("homing_velocity", 300.0);
 		weapon.HomingDelay = kv.GetFloat("homing_delay", 0.0);
 		weapon.HomingMaxAngle = kv.GetFloat("homing_max_angle", 180.0);

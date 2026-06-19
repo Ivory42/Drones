@@ -2423,7 +2423,7 @@ ADrone FindBestDroneForLockOn(ADroneProjectileWeapon weapon, ADrone drone, FRota
 	FRotator targetAngle;
 	FVector targetVec, forwardVec;
 	forwardVec = viewAngles.GetForwardVector();
-	float fov = 15.0;
+	float fov = weapon.LockOnFOV;
 
 	FObject curTarget;
 	curTarget = weapon.GetObjectPropEnt("DroneWeapon.CurrentHomingTarget");

@@ -634,6 +634,12 @@ methodmap ADroneProjectileWeapon < ADroneWeapon
 		public set(float value) { this.SetObjectPropFloat("DroneWeapon.LockOnTime", value); }
 	}
 
+	property float LockOnFOV // FOV to look for valid lock on targets
+	{
+		public get() { return this.GetObjectPropFloat("DroneWeapon.LockOnFOV"); }
+		public set(float value) { this.SetObjectPropFloat("DroneWeapon.LockOnFOV", value); }
+	}
+
 	property float HomingVelocity // Speed at which fired projectile home in on targets
 	{
 		public get() { return this.GetObjectPropFloat("DroneWeapon.HomingVelocity"); }
