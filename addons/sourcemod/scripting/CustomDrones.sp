@@ -1405,7 +1405,7 @@ AComponent CreateDroneTrail(ADrone drone, KeyValues config)
 		PrecacheModel(texture);
 		component.SetKeyValue("spritename", texture);
 		component.SetKeyValueInt("renderamt", config.GetNum("brightness"));
-		component.SetKeyValue("rendermode", "1");
+		component.SetKeyValueInt("rendermode", config.GetNum("rendermode", 1));
 		component.SetKeyValue("lifetime", life);
 		component.SetKeyValue("startwidth", start);
 		component.SetKeyValue("endwidth", end);
