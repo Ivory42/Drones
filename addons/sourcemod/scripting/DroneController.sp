@@ -190,19 +190,22 @@ void OnDroneMoveForward(ADrone drone, float axisValue, FVector input)
 
 	// Prop rotations
 	FComponentArray components = drone.GetComponents().Attachments;
-	for (int i = 0; i < components.Length; i++)
+	if (components && components.Length > 0)
 	{
-		AComponent component = components.Get(i);
-		if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+		for (int i = 0; i < components.Length; i++)
 		{
-			if (component.GetObjectProp("DroneProp.PitchWithMovement"))
+			AComponent component = components.Get(i);
+			if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
 			{
-				FRotator rotation;
-				rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
+				if (component.GetObjectProp("DroneProp.PitchWithMovement"))
+				{
+					FRotator rotation;
+					rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
 
-				float maxpitch = component.GetObjectProp("DroneProp.MaxPitch");
-				rotation.Pitch = maxpitch * axisValue;
-				component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+					float maxpitch = component.GetObjectProp("DroneProp.MaxPitch");
+					rotation.Pitch = maxpitch * axisValue;
+					component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+				}
 			}
 		}
 	}
@@ -253,19 +256,22 @@ void OnDroneMoveRight(ADrone drone, float axisValue, FVector input)
 
 		// Prop rotations
 		FComponentArray components = drone.GetComponents().Attachments;
-		for (int i = 0; i < components.Length; i++)
+		if (components && components.Length > 0)
 		{
-			AComponent component = components.Get(i);
-			if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
+			for (int i = 0; i < components.Length; i++)
 			{
-				if (component.GetObjectProp("DroneProp.RollWithMovement"))
+				AComponent component = components.Get(i);
+				if (component && IsEntityOfType(component, "DroneComponent.DronePropAttachment"))
 				{
-					FRotator rotation;
-					rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
-					float maxroll = component.GetObjectProp("DroneProp.MaxRoll");
-					rotation.Roll = maxroll * axisValue;
+					if (component.GetObjectProp("DroneProp.RollWithMovement"))
+					{
+						FRotator rotation;
+						rotation = component.GetObjectPropRotator("DroneProp.MovementRotation");
+						float maxroll = component.GetObjectProp("DroneProp.MaxRoll");
+						rotation.Roll = maxroll * axisValue;
 
-					component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+						component.SetObjectPropRotator("DroneProp.MovementRotation", rotation);
+					}
 				}
 			}
 		}
@@ -476,6 +482,11 @@ void CalculatePropTurnAngles(float turn, bool rightTurn, ADrone drone)
 	if (FloatAbs(turn) > 0.2)
 	{
 		FComponentArray components = drone.GetComponents().Attachments;
+		if (!components || components.Length <= 0)
+		{
+			return;
+		}
+
 		for (int i = 0; i < components.Length; i++)
 		{
 			AComponent component = components.Get(i);
@@ -516,6 +527,11 @@ void UpdatePropRotations(FRotator current, FRotator droneAngle, ADrone drone)
 {
 	// Prop rotations
 	FComponentArray components = drone.GetComponents().Attachments;
+	if (!components || components.Length <= 0)
+	{
+		return;
+	}
+	
 	for (int i = 0; i < components.Length; i++)
 	{
 		AComponent component = components.Get(i);

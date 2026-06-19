@@ -1832,9 +1832,9 @@ void RemoveDestructibleParts(ADrone drone)
 	FComponentArray components;
 	components = drone.GetComponents().Attachments;
 	
-	if (components)
+	if (components && components.Length > 0)
 	{
-		for (int i = components.Length - 1; i >= 0; i--)
+		for (int i = components.Length - 1; i >= 0; i--) // reverse order
 		{
 			AComponent component = components.Get(i);
 			if (component.GetObjectProp("DroneProp.DestroyOnDeath"))
