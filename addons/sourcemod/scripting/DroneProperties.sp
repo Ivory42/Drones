@@ -1421,7 +1421,11 @@ void ProjectileWeaponLockOn(ADroneProjectileWeapon weapon, ADrone drone, AClient
 		weapon.LockOnProgress = 0.0;
 		weapon.IsLockedOn = false;
 		weapon.SetObjectPropEnt("DroneWeapon.CurrentHomingTarget", GetWorld());
-		ClearReticle(reticle);
+
+		if (reticle.Valid())
+		{
+			ClearReticle(reticle);
+		}
 	}
 }
 
