@@ -186,7 +186,7 @@ int Native_PlayerExitDrone(Handle plugin, int args)
 	FDroneSeat seat = view_as<FDroneSeat>(GetNativeCell(2));
 	ADrone drone = view_as<ADrone>(GetNativeCell(3));
 
-	if (!seat.Occupied && !seat.AIControlled)
+	if (seat.Occupied && !seat.AIControlled)
 	{
 		PlayerExitVehicle(client, seat, drone);
 	}
