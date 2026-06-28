@@ -2027,7 +2027,9 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 
 	if (resupply)
 	{
-		CreateTimer(0.1, ResetPlayerHealth, player, TIMER_FLAG_NO_MAPCHANGE);
+		// Pass the userid (not the AClient handle): if the player disconnects during the
+		// 0.1s delay the handle is freed, so the callback re-resolves from userid instead.
+		CreateTimer(0.1, ResetPlayerHealth, GetClientUserId(player.Get()), TIMER_FLAG_NO_MAPCHANGE);
 	}
 
 	SDKUnhook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
@@ -2099,8 +2101,18 @@ void StopEngine(ADrone drone)
 	}
 }
 
-Action ResetPlayerHealth(Handle timer, ADronePlayer player)
+Action ResetPlayerHealth(Handle timer, int userid)
 {
+	// Re-resolve from userid: the player may have disconnected during the 0.1s delay,
+	// which frees the AClient handle and would make the GetPosition() below a use-after-free.
+	int clientId = GetClientOfUserId(userid);
+	if (clientId < 1 || !IsClientInGame(clientId))
+		return Plugin_Continue;
+
+	ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClient(ConstructClient(clientId)));
+	if (!player)
+		return Plugin_Continue;
+
 	//TF2_RegeneratePlayer(player.Get());
 	FVector position;
 	position = player.GetPosition();

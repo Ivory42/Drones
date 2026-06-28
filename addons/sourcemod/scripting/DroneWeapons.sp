@@ -1010,7 +1010,7 @@ Action OnRocketTouch(int entity, int victim)
 		rocket.SetObjectProp("DroneRocket.IgnoreCollision", true);
 		rocket.SetProp(Prop_Send, "m_nSolidType", 0);
 		SetEntityCollisionGroup(rocket.Get(), 1);
-		RequestFrame(RocketHitOwningDronePost, rocket);
+		RequestFrame(RocketHitOwningDronePost, rocket.Get());
 		return Plugin_Handled;
 	}
 
@@ -1065,8 +1065,11 @@ Action OnRocketTouch(int entity, int victim)
 	return Plugin_Continue;
 }
 
-void RocketHitOwningDronePost(ABaseDroneProjectile rocket)
+void RocketHitOwningDronePost(int entity)
 {
+	// Re-resolve by index: the projectile may have been destroyed before this deferred
+	// frame ran, which would leave a freed handle (use-after-free on WeaponLauncher).
+	ABaseDroneProjectile rocket = view_as<ABaseDroneProjectile>(FEntityStatics.GetEntityFromIndex(entity));
 	if (rocket)
 	{
 		float speed = rocket.WeaponLauncher.ProjectileSpeed;
