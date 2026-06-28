@@ -2374,6 +2374,7 @@ Action OnReticleReplicate(int entityId, int clientId)
 	ABaseEntity reticle = FEntityStatics.GetEntityFromIndex(entityId);
 	if (reticle)
 	{
+		SetEdictFlags(reticle.Get(), GetEdictFlags(reticle.Get()) & ~FL_EDICT_ALWAYS);
 		FDroneSeat seat = null;
 		if (reticle.GetObjectProp("DroneSprite.Reticle.SeatReticle"))
 		{

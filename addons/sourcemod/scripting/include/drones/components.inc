@@ -758,12 +758,12 @@ methodmap FDroneSeat < StringMap
 	{
 		public get()
 		{
-			ADronePlayer client;
-			this.GetValue("ClientInSeat", client);
+			FClient client;
+			this.GetArray("ClientInSeat", client, sizeof FClient);
 
-			return client;
+			return view_as<ADronePlayer>(FEntityStatics.GetClient(client));
 		}
-		public set(ADronePlayer client) { this.SetValue("ClientInSeat", client); }
+		public set(ADronePlayer client) { this.SetArray("ClientInSeat", client.GetClient(), sizeof FClient); }
 	}
 
 	property bool Occupied // Whether or not this seat already has a client occupying it
