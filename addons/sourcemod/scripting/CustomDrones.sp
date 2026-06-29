@@ -2027,7 +2027,9 @@ void PlayerExitVehicle(ADronePlayer player, FDroneSeat seat, ADrone drone, bool 
 
 	if (resupply)
 	{
-		CreateTimer(0.1, ResetPlayerHealth, player, TIMER_FLAG_NO_MAPCHANGE);
+		FClient client;
+		client = player.GetClient();
+		CreateTimer(0.1, ResetPlayerHealth, client.GetReference(), TIMER_FLAG_NO_MAPCHANGE);
 	}
 
 	SDKUnhook(player.Get(), SDKHook_OnTakeDamageAlive, OnPlayerTakeDamage);
@@ -2099,18 +2101,24 @@ void StopEngine(ADrone drone)
 	}
 }
 
-Action ResetPlayerHealth(Handle timer, ADronePlayer player)
+Action ResetPlayerHealth(Handle timer, int ref)
 {
-	//TF2_RegeneratePlayer(player.Get());
-	FVector position;
-	position = player.GetPosition();
+	FClient client;
+	client.SetReference(ref);
 
-	FRotator rotation;
-	rotation = player.GetAngles();
-	TF2_RespawnPlayer(player.Get());
-	TeleportEntity(player.Get(), position.ToFloat(), rotation.ToFloat(), NULL_VECTOR);
+	ADronePlayer player = view_as<ADronePlayer>(FEntityStatics.GetClient(client));
+	if (player)
+	{
+		FVector position;
+		position = player.GetPosition();
 
-	SetEntityHealth(player.Get(), player.ExitingHealth);
+		FRotator rotation;
+		rotation = player.GetAngles();
+		TF2_RespawnPlayer(player.Get());
+		TeleportEntity(player.Get(), position.ToFloat(), rotation.ToFloat(), NULL_VECTOR);
+
+		SetEntityHealth(player.Get(), player.ExitingHealth);
+	}
 
 	return Plugin_Continue;
 }
